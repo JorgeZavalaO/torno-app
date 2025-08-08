@@ -6,12 +6,15 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "grant:admin": "tsx prisma/grant-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.13.0",
+    "@radix-ui/react-checkbox": "^1.3.2",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",
     "@stackframe/stack": "^2.8.28",
     "class-variance-authority": "^0.7.1",

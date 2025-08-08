@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,61 +10,28 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 type Role = { id: string; name: string; description?: string | null };
-export default function RolesClient({ initialItems, canWrite }: { initialItems: Role[]; canWrite: boolean }) {
-  const [items, setItems] = useState<Role[]>(initialItems);
-  const [open, setOpen] = useState(false);
-  const router = useRouter();
+type Actions = {
+  createRole: (fd: FormData) => Promise<void>;
+  updateRole: (fd: FormData) => Promise<void>;
+  deleteRole: (fd: FormData) => Promise<void>;
+};
 
-  async function refresh() {
-    const r = await fetch("/api/roles", { cache: "no-store" });
-    setItems(await r.json());
-    router.refresh();
-  }
-
-  async function createRole(formData: FormData) {
-    const body = Object.fromEntries(formData) as Record<string, unknown>;
-    await fetch("/api/roles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    setOpen(false);
-    await refresh();
-  }
-
-  async function updateRole(id: string, patch: Partial<Role>) {
-    await fetch(`/api/roles/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
-    await refresh();
-  }
-
-  async function deleteRole(id: string) {
-    await fetch(`/api/roles/${id}`, { method: "DELETE" });
-    await refresh();
-  }
+export default function RolesClient({
+  initialItems,
+  canWrite,
+  actions,
+}: {
+  initialItems: Role[];
+  canWrite: boolean;
+  actions: Actions;
+}) {
+  const [items] = useState<Role[]>(initialItems); // se revalida con server actions (revalidatePath)
 
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Roles</h1>
-        {canWrite && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button>Nuevo rol</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Crear rol</DialogTitle></DialogHeader>
-              <form action={async (fd) => createRole(fd)} className="space-y-4">
-                <div className="grid gap-2">
-                  <Label>Nombre</Label>
-                  <Input name="name" required />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Descripción</Label>
-                  <Textarea name="description" />
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Crear</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
+        {canWrite && <CreateDialog onAction={actions.createRole} />}
       </div>
 
       <Card className="p-4">
@@ -81,14 +47,29 @@ export default function RolesClient({ initialItems, canWrite }: { initialItems: 
             {items.map((r) => (
               <TableRow key={r.id}>
                 <TableCell>
-                  <InlineEdit value={r.name} onSave={(v) => updateRole(r.id, { name: v })} editable={canWrite} />
+                  <InlineEdit
+                    name="name"
+                    id={r.id}
+                    value={r.name}
+                    onAction={actions.updateRole}
+                    editable={canWrite}
+                  />
                 </TableCell>
                 <TableCell>
-                  <InlineEdit value={r.description ?? ""} onSave={(v) => updateRole(r.id, { description: v })} editable={canWrite} />
+                  <InlineEdit
+                    name="description"
+                    id={r.id}
+                    value={r.description ?? ""}
+                    onAction={actions.updateRole}
+                    editable={canWrite}
+                  />
                 </TableCell>
                 <TableCell>
                   {canWrite ? (
-                    <Button variant="destructive" onClick={() => deleteRole(r.id)}>Eliminar</Button>
+                    <form action={actions.deleteRole}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <Button variant="destructive" type="submit">Eliminar</Button>
+                    </form>
                   ) : <span className="text-muted-foreground">—</span>}
                 </TableCell>
               </TableRow>
@@ -103,16 +84,56 @@ export default function RolesClient({ initialItems, canWrite }: { initialItems: 
   );
 }
 
-function InlineEdit({ value, onSave, editable }: { value: string; onSave: (v: string) => void; editable: boolean }) {
-  const [v, setV] = useState(value);
+function CreateDialog({ onAction }: { onAction: (fd: FormData) => Promise<void> }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild><Button>Nuevo rol</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Crear rol</DialogTitle></DialogHeader>
+        <form action={onAction} className="space-y-4">
+          <div className="grid gap-2">
+            <Label>Nombre</Label>
+            <Input name="name" required />
+          </div>
+          <div className="grid gap-2">
+            <Label>Descripción</Label>
+            <Textarea name="description" />
+          </div>
+          <DialogFooter><Button type="submit">Crear</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InlineEdit({
+  id, name, value, onAction, editable,
+}: {
+  id: string;
+  name: "name" | "description";
+  value: string;
+  onAction: (fd: FormData) => Promise<void>;
+  editable: boolean;
+}) {
   const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(value);
+
   if (!editable) return <span>{value || "-"}</span>;
+
   return editing ? (
-    <div className="flex gap-2">
+    <form
+      action={async (fd) => {
+        fd.append("id", id);
+        fd.append(name, v);
+        await onAction(fd);
+        setEditing(false);
+      }}
+      className="flex gap-2"
+    >
       <Input value={v} onChange={(e) => setV(e.target.value)} />
-      <Button onClick={() => { onSave(v); setEditing(false); }}>Guardar</Button>
-      <Button variant="secondary" onClick={() => { setV(value); setEditing(false); }}>Cancelar</Button>
-    </div>
+      <Button type="submit">Guardar</Button>
+      <Button type="button" variant="secondary" onClick={() => { setV(value); setEditing(false); }}>Cancelar</Button>
+    </form>
   ) : (
     <div className="flex items-center gap-2">
       <span>{value || "-"}</span>
