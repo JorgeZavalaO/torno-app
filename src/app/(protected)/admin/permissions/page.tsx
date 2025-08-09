@@ -14,8 +14,10 @@ export default async function PermissionsPage() {
   const canRead = await userHasPermission(user.email, "permissions.read");
   if (!canRead) redirect("/");
 
-  const permissions = await prisma.permission.findMany({ orderBy: { createdAt: "desc" } });
-  const canWrite = await userHasPermission(user.email, "permissions.write");
+  const [permissions, canWrite] = await Promise.all([
+    prisma.permission.findMany({ orderBy: { createdAt: "desc" } }),
+    userHasPermission(user.email, "permissions.write"),
+  ]);
 
   return (
     <PermissionsClient

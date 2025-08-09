@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { prisma } from "@/app/lib/prisma";
 import UsersClient from "./users.client";
-import { assignRoleToUser, removeUserRole } from "./actions";
+import { assignRoleToUser, removeUserRole, createUser, updateUser, deleteUser } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ export default async function UsersPage() {
       orderBy: { createdAt: "desc" },
       include: { roles: { include: { role: true } } },
     }),
-    prisma.role.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.role.findMany({ orderBy: { name: "asc" } }),
     userHasPermission(me.email, "users.assignRoles"),
   ]);
 
@@ -35,7 +35,7 @@ export default async function UsersPage() {
       initialUsers={shapedUsers}
       roles={roles}
       canAssign={canAssign}
-      actions={{ assignRoleToUser, removeUserRole }}
+  actions={{ assignRoleToUser, removeUserRole, createUser, updateUser, deleteUser }}
     />
   );
 }

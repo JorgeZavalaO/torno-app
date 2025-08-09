@@ -14,8 +14,10 @@ export default async function RolesPage() {
   const canRead = await userHasPermission(user.email, "roles.read");
   if (!canRead) redirect("/");
 
-  const roles = await prisma.role.findMany({ orderBy: { createdAt: "desc" } });
-  const canWrite = await userHasPermission(user.email, "roles.write");
+  const [roles, canWrite] = await Promise.all([
+    prisma.role.findMany({ orderBy: { createdAt: "desc" } }),
+    userHasPermission(user.email, "roles.write"),
+  ]);
 
   return (
     <RolesClient

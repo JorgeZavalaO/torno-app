@@ -9,15 +9,10 @@ type SearchParams = { roleId?: string };
 
 export const dynamic = "force-dynamic";
 
-export default async function RolePermissionsPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>; // Next 15: Promise para tipado estricto
-}) {
+export default async function RolePermissionsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const me = await getCurrentUser();
   if (!me) redirect("/handler/sign-in");
 
-  // permisos de lectura y escritura
   const [canRead, canWrite] = await Promise.all([
     userHasPermission(me.email, "permissions.read"),
     userHasPermission(me.email, "permissions.write"),
@@ -30,19 +25,10 @@ export default async function RolePermissionsPage({
     select: { id: true, name: true, description: true },
   });
 
-  // Si no hay roleId selecciona el primero (si existe)
   const selectedRoleId = sp.roleId ?? roles[0]?.id;
+  const initial = selectedRoleId
+    ? await loadRolePermissions(selectedRoleId)
+    : { role: null, permissions: [], assignedIds: [] };
 
-  const initial =
-    selectedRoleId
-      ? await loadRolePermissions(selectedRoleId) // server action reutilizada sin fetch
-      : { role: null, permissions: [], assignedIds: [] as string[] };
-
-  return (
-    <RolePermissionsClient
-      roles={roles}
-      initial={initial}
-      canWrite={canWrite}
-    />
-  );
+  return <RolePermissionsClient roles={roles} initial={initial} canWrite={canWrite} />;
 }

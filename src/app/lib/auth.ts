@@ -1,6 +1,6 @@
 import "server-only";
-import { prisma } from "@/app/lib/prisma"; // usa tu helper de Prisma singleton
-import { stackServerApp } from "@/stack";   // generado por el wizard
+import { prisma } from "@/app/lib/prisma";
+import { stackServerApp } from "@/stack";
 
 export type SessionUser = {
   stackUserId: string;
@@ -9,13 +9,12 @@ export type SessionUser = {
 };
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  // Devuelve el usuario actual (o null). Puedes pasar { or: "redirect" } si quieres forzar login.
   const user = await stackServerApp.getUser();
   if (!user?.primaryEmail) return null;
 
   const sessionUser: SessionUser = {
     stackUserId: user.id,
-    email: user.primaryEmail,       // OJO: en Stack/Neon es primaryEmail
+    email: user.primaryEmail,
     displayName: user.displayName ?? null,
   };
 
@@ -34,3 +33,5 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
   return sessionUser;
 }
+
+export const auth = getCurrentUser;
