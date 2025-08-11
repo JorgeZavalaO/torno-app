@@ -32,6 +32,12 @@ const allNavItems: (NavItem & { requiredPerm?: string })[] = [
     icon: "Key", 
     requiredPerm: "permissions.read" 
   },
+  { href: "/admin/parametros",
+    label: "Parámetros",
+    icon: "Sliders",
+    requiredPerm: "settings.costing.read"
+  },
+
   { 
     href: "/clientes", 
     label: "Clientes", 
