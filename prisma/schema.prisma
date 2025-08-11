@@ -66,3 +66,17 @@ model UserRole {
 
   @@id([userId, roleId])
 }
+
+model Cliente {
+  id               String   @id @default(uuid())
+  nombre           String
+  ruc              String   @unique
+  email            String?
+  telefono         String?
+  direccion        String?
+  contactoNombre   String?
+  contactoTelefono String?
+  activo           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

@@ -14,3 +14,14 @@ export async function assertCanReadPermissions() { const u = await assertAuthent
 export async function assertCanWritePermissions() { const u = await assertAuthenticated(); if (!await userHasPermission(u.email, "permissions.write")) throw new Error("No autorizado"); return u; }
 
 export async function assertCanAssignRoles() { const u = await assertAuthenticated(); if (!await userHasPermission(u.email, "users.assignRoles")) throw new Error("No autorizado"); return u; }
+
+export async function assertCanReadClients() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "clients.read")) throw new Error("No autorizado");
+  return u;
+}
+export async function assertCanWriteClients() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "clients.write")) throw new Error("No autorizado");
+  return u;
+}

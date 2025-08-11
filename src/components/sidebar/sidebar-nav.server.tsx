@@ -33,6 +33,12 @@ const allNavItems: (NavItem & { requiredPerm?: string })[] = [
     requiredPerm: "permissions.read" 
   },
   { 
+    href: "/clientes", 
+    label: "Clientes", 
+    icon: "Users2", 
+    requiredPerm: "clients.read" 
+  },
+  { 
     href: "/inventario", 
     label: "Inventario", 
     icon: "Package", 
