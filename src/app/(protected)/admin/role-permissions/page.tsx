@@ -1,13 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
-import { prisma } from "@/app/lib/prisma";
 import RolePermissionsClient from "./role-permissions.client";
-import { loadRolePermissions } from "./actions";
+import { getRolesByNameCached } from "@/app/server/queries/roles";
+import { getRolePermissionsBundleCached } from "@/app/server/queries/role-permissions";
 
 type SearchParams = { roleId?: string };
-
-export const dynamic = "force-dynamic";
 
 export default async function RolePermissionsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const me = await getCurrentUser();
@@ -19,16 +17,13 @@ export default async function RolePermissionsPage({ searchParams }: { searchPara
   ]);
   if (!canRead) redirect("/");
 
-  const sp = await searchParams;
-  const roles = await prisma.role.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, description: true },
-  });
+  const roles = await getRolesByNameCached();
+  const resolvedParams = await searchParams;
+  const selectedRoleId = resolvedParams.roleId ?? roles[0]?.id;
 
-  const selectedRoleId = sp.roleId ?? roles[0]?.id;
   const initial = selectedRoleId
-    ? await loadRolePermissions(selectedRoleId)
-    : { role: null, permissions: [], assignedIds: [] };
+    ? await getRolePermissionsBundleCached(selectedRoleId)
+    : { role: null, permissions: [], assignedIds: [] as string[] };
 
   return <RolePermissionsClient roles={roles} initial={initial} canWrite={canWrite} />;
 }

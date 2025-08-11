@@ -1,6 +1,6 @@
-import { userHasPermission } from "@/app/lib/rbac";
 import { getCurrentUser } from "@/app/lib/auth";
 import SidebarNavClient, { NavItem } from "./sidebar-nav.client";
+import { getUserPermissionSet } from "@/app/lib/rbac";
 
 const allNavItems: (NavItem & { requiredPerm?: string })[] = [
   { 
@@ -23,6 +23,12 @@ const allNavItems: (NavItem & { requiredPerm?: string })[] = [
   { 
     href: "/admin/permissions", 
     label: "Permisos", 
+    icon: "Key", 
+    requiredPerm: "permissions.read" 
+  },
+  { 
+    href: "/admin/role-permissions", 
+    label: "role-permissions", 
     icon: "Key", 
     requiredPerm: "permissions.read" 
   },
@@ -62,20 +68,12 @@ export default async function SidebarNavServer() {
   const me = await getCurrentUser();
   if (!me) return null;
 
-  const allowed: NavItem[] = [];
-  
-  for (const item of allNavItems) {
-    if (!item.requiredPerm) {
-      // Item público después del login
-      allowed.push(item);
-      continue;
-    }
-    
-    const hasPermission = await userHasPermission(me.email, item.requiredPerm);
-    if (hasPermission) {
-      allowed.push(item);
-    }
-  }
+ // ✅ Un solo roundtrip
+  const permSet = await getUserPermissionSet(me.email);
+
+  const allowed: NavItem[] = allNavItems
+    .filter(item => !item.requiredPerm || permSet.has(item.requiredPerm))
+    .map(({ href, label, icon }) => ({ href, label, icon }));
 
   return <SidebarNavClient items={allowed} brand="TornoApp" />;
 }

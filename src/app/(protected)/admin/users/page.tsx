@@ -1,11 +1,10 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
-import { prisma } from "@/app/lib/prisma";
 import UsersClient from "./users.client";
 import { assignRoleToUser, removeUserRole, createUser, updateUser, deleteUser } from "./actions";
-
-export const dynamic = "force-dynamic";
+import { getUsersWithRolesCached } from "@/app/server/queries/users";
+import { getRolesByNameCached } from "@/app/server/queries/roles";
 
 export default async function UsersPage() {
   const me = await getCurrentUser();
@@ -15,11 +14,8 @@ export default async function UsersPage() {
   if (!canRead) redirect("/");
 
   const [users, roles, canAssign] = await Promise.all([
-    prisma.userProfile.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { roles: { include: { role: true } } },
-    }),
-    prisma.role.findMany({ orderBy: { name: "asc" } }),
+    getUsersWithRolesCached(),
+    getRolesByNameCached(),
     userHasPermission(me.email, "users.assignRoles"),
   ]);
 
@@ -35,7 +31,7 @@ export default async function UsersPage() {
       initialUsers={shapedUsers}
       roles={roles}
       canAssign={canAssign}
-  actions={{ assignRoleToUser, removeUserRole, createUser, updateUser, deleteUser }}
+      actions={{ assignRoleToUser, removeUserRole, createUser, updateUser, deleteUser }}
     />
   );
 }

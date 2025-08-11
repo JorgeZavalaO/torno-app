@@ -1,6 +1,7 @@
 import "server-only";
-import { prisma } from "@/app/lib/prisma";
+import { cache } from "react";
 import { stackServerApp } from "@/stack";
+import { prisma } from "@/app/lib/prisma";
 
 export type SessionUser = {
   stackUserId: string;
@@ -8,30 +9,26 @@ export type SessionUser = {
   displayName?: string | null;
 };
 
-export async function getCurrentUser(): Promise<SessionUser | null> {
+// ✅ Solo lectura y memoizado por request
+export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const user = await stackServerApp.getUser();
   if (!user?.primaryEmail) return null;
 
-  const sessionUser: SessionUser = {
+  return {
     stackUserId: user.id,
-    email: user.primaryEmail,
+    email: user.primaryEmail.toLowerCase(),
     displayName: user.displayName ?? null,
   };
+});
+
+// 🔹 (Opcional) Llamar SOLO después de sign-in, no en cada render
+export async function syncUserProfileOnce(): Promise<void> {
+  const u = await getCurrentUser();
+  if (!u) return;
 
   await prisma.userProfile.upsert({
-    where: { email: sessionUser.email },
-    create: {
-      email: sessionUser.email,
-      stackUserId: sessionUser.stackUserId,
-      displayName: sessionUser.displayName,
-    },
-    update: {
-      stackUserId: sessionUser.stackUserId,
-      displayName: sessionUser.displayName,
-    },
+    where: { email: u.email },
+    create: { email: u.email, stackUserId: u.stackUserId, displayName: u.displayName ?? null },
+    update: { stackUserId: u.stackUserId, displayName: u.displayName ?? null },
   });
-
-  return sessionUser;
 }
-
-export const auth = getCurrentUser;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useMemo, useState } from "react";
+import React, { useTransition, useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from "@/components/ui/table";
@@ -250,6 +250,14 @@ function BulkAssignModal({
   const [tempAssigned, setTempAssigned] = useState<Set<string>>(new Set(assigned));
   const [filter, setFilter] = useState("");
 
+  // Al abrir el modal o cambiar de rol, sincronizar selección con el estado actual
+  // También si "assigned" cambia por un refresh
+  React.useEffect(() => {
+    if (open) {
+      setTempAssigned(new Set(assigned));
+    }
+  }, [open, assigned, role?.id]);
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return permissions;
@@ -365,6 +373,14 @@ export default function RolePermissionsClient({
   const [filter, setFilter] = useState("");
   const [assigned, setAssigned] = useState<Set<string>>(new Set(initial.assignedIds));
 
+  // 🔧 Resetea el estado local cuando cambia el rol “servidor”
+  useEffect(() => {
+    setRoleId(initial.role?.id ?? "");
+    setAssigned(new Set(initial.assignedIds));
+    setFilter("");
+  // si assignedIds cambia, también resincroniza
+  }, [initial.role?.id, JSON.stringify(initial.assignedIds)]);
+
   // Estados para modales
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -377,14 +393,22 @@ export default function RolePermissionsClient({
   function onSelectRole(id: string) {
     const next = new URLSearchParams(sp?.toString());
     if (id) next.set("roleId", id); else next.delete("roleId");
+
+    // 🔧 Evita que se “vean” permisos del rol previo mientras navega
     setRoleId(id);
+    setAssigned(new Set());
+    setFilter("");
+
     router.push(`/admin/role-permissions?${next.toString()}`);
   }
 
+  // filtered = sobre initial.permissions (catálogo global) OK
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return initial.permissions;
-    return initial.permissions.filter(p => p.code.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+    return initial.permissions.filter(p =>
+      p.code.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+    );
   }, [filter, initial.permissions]);
 
   async function toggle(pid: string, nextChecked: boolean) {
@@ -489,6 +513,7 @@ export default function RolePermissionsClient({
   const totalPermissionCount = initial.permissions.length;
 
   return (
+    // key por rol para reiniciar estados al cambiar de rol seleccionado
     <div className="mx-auto max-w-6xl p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -685,6 +710,7 @@ export default function RolePermissionsClient({
       />
 
       <BulkAssignModal
+      
         open={bulkModalOpen}
         onOpenChange={setBulkModalOpen}
         role={currentRole ? {

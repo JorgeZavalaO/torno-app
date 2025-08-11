@@ -1,4 +1,4 @@
-import { auth } from "@/app/lib/auth";
+import { getCurrentUser } from "@/app/lib/auth";
 import { redirect } from "next/navigation";
 import SidebarNavServer from "@/components/sidebar/sidebar-nav.server";
 
@@ -42,7 +42,7 @@ function BackgroundPattern() {
 }
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const me = await auth();
+  const me = await getCurrentUser();
   if (!me) redirect("/handler/sign-in");
   
   return (

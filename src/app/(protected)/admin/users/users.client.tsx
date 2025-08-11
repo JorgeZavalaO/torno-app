@@ -18,7 +18,7 @@ import { Users, UserPlus, Search, Mail, Shield, X, Plus, Filter, Trash2 } from "
 type Role = { id: string; name: string; description?: string | null };
 type User = { id: string; email: string; displayName?: string | null; roles: { id: string; name: string }[] };
 type Actions = {
-  assignRoleToUser: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+  assignRoleToUser: (fd: FormData) => Promise<{ ok: boolean; message?: string; user?: { id: string; email: string; displayName: string | null } }>;
   removeUserRole: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   createUser?: (fd: FormData) => Promise<{ ok: boolean; message?: string; user?: { id: string; email: string; displayName: string | null } }>;
   updateUser?: (fd: FormData) => Promise<{ ok: boolean; message?: string; user?: { id: string; email: string; displayName: string | null } }>;
@@ -99,18 +99,27 @@ export default function UsersClient({
 
   const handleAssignRole = (fd: FormData) => {
     if (!(email && roleName)) return;
-    
+
     startTransition(async () => {
       fd.set("email", email);
       fd.set("roleName", roleName!);
       const res = await actions.assignRoleToUser(fd);
-      
+
       if (res.ok) {
         toast.success(res.message ?? "Rol asignado correctamente");
+        // 🔽 Mutación local inmediata
+        const role = roles.find(r => r.name === roleName);
+        if (res.user && role) {
+          setUsers(prev =>
+            prev.map(u => {
+              if (u.id !== res.user!.id) return u;
+              const already = u.roles.some(r => r.id === role.id);
+              return already ? u : { ...u, roles: [...u.roles, { id: role.id, name: role.name }] };
+            })
+          );
+        }
         setEmail("");
         setRoleName(undefined);
-        // Opcional: podríamos actualizar roles localmente si tuviéramos el user id
-        // Para simplicidad, no se actualiza aquí porque la acción no devuelve el usuario
       } else {
         toast.error(res.message ?? "Error al asignar el rol");
       }

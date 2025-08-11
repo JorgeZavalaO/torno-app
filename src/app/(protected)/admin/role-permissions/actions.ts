@@ -1,8 +1,9 @@
 "use server";
 
 import { prisma } from "@/app/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { assertCanWritePermissions, assertCanReadPermissions } from "@/app/lib/guards";
+import { cacheTags } from "@/app/lib/cache-tags";
 
 type LoadResult = {
   role: { id: string; name: string; description: string | null } | null;
@@ -34,16 +35,16 @@ export async function grantPermissionToRole(formData: FormData): Promise<ActionR
   if (!roleId || !permissionId) return { ok: false, message: "Datos inválidos" };
 
   try {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId, permissionId } },
-      create: { roleId, permissionId },
-      update: {},
-    });
-    revalidatePath("/admin/role-permissions");
-    return { ok: true, message: "Permiso asignado" };
-  } catch {
-    return { ok: false, message: "No se pudo asignar" };
+    await prisma.rolePermission.create({ data: { roleId, permissionId } });
+  } catch (e: unknown) {
+    if (typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code !== "P2002") {
+      return { ok: false, message: "No se pudo asignar" }; 
+    }
   }
+
+  revalidateTag(cacheTags.rolePerms(roleId));
+  revalidatePath("/admin/role-permissions", "page");
+  return { ok: true, message: "Permiso asignado" };
 }
 
 export async function revokePermissionFromRole(formData: FormData): Promise<ActionResult> {
@@ -53,14 +54,14 @@ export async function revokePermissionFromRole(formData: FormData): Promise<Acti
   if (!roleId || !permissionId) return { ok: false, message: "Datos inválidos" };
 
   try {
-    await prisma.rolePermission.delete({
-      where: { roleId_permissionId: { roleId, permissionId } },
-    });
-    revalidatePath("/admin/role-permissions");
-    return { ok: true, message: "Permiso removido" };
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId, permissionId } } });
   } catch {
-    return { ok: false, message: "No se pudo remover" };
+    // si no existe, idempotente
   }
+
+  revalidateTag(cacheTags.rolePerms(roleId));
+  revalidatePath("/admin/role-permissions", "page");
+  return { ok: true, message: "Permiso removido" };
 }
 
 export async function setRolePermissions(formData: FormData): Promise<ActionResult> {
@@ -69,17 +70,36 @@ export async function setRolePermissions(formData: FormData): Promise<ActionResu
   const ids = String(formData.get("permissionIds") ?? ""); // CSV
   if (!roleId) return { ok: false, message: "Datos inválidos" };
 
-  const keep = ids ? ids.split(",").filter(Boolean) : [];
+  const keep = ids ? ids.split(",").map(s => s.trim()).filter(Boolean) : [];
 
   try {
+    const existing = await prisma.rolePermission.findMany({
+      where: { roleId },
+      select: { permissionId: true },
+    });
+
+    const existingSet = new Set(existing.map(e => e.permissionId));
+    const keepSet = new Set(keep);
+
+    const toAdd = keep.filter(id => !existingSet.has(id));
+    const toRemove = [...existingSet].filter(id => !keepSet.has(id));
+
+    if (toAdd.length === 0 && toRemove.length === 0) {
+      return { ok: true, message: "Sin cambios" };
+    }
+
     await prisma.$transaction([
-      prisma.rolePermission.deleteMany({ where: { roleId } }),
-      prisma.rolePermission.createMany({
-        data: keep.map(permissionId => ({ roleId, permissionId })),
-        skipDuplicates: true,
-      }),
+      ...(toRemove.length
+        ? [prisma.rolePermission.deleteMany({ where: { roleId, permissionId: { in: toRemove } } })]
+        : []),
+      ...(toAdd.length
+        ? [prisma.rolePermission.createMany({ data: toAdd.map(permissionId => ({ roleId, permissionId })), skipDuplicates: true })]
+        : []),
     ]);
-    revalidatePath("/admin/role-permissions");
+
+    revalidateTag(cacheTags.rolePerms(roleId));
+    revalidatePath("/admin/role-permissions", "page");
+
     return { ok: true, message: "Permisos actualizados" };
   } catch {
     return { ok: false, message: "No se pudo actualizar el set" };
