@@ -40,10 +40,10 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
     rentPerHour: toNum(quote.rentPerHour),
     breakdown: quote.breakdown,
     cliente: {
-      id: quote.cliente.id,
-      nombre: quote.cliente.nombre,
-      ruc: quote.cliente.ruc,
-      email: quote.cliente.email ?? undefined,
+      id: quote.cliente!.id,
+      nombre: quote.cliente!.nombre,
+      ruc: quote.cliente!.ruc,
+      email: quote.cliente!.email ?? undefined,
     },
   };
 

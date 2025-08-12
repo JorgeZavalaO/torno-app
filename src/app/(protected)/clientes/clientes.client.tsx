@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Trash2 } from "lucide-react";
+import { Search, Trash2, FileText } from "lucide-react";
 import ClienteModal from "./cliente-modal";
 import ImportModal from "./import-modal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Client = {
   id: string; nombre: string; ruc: string; email?: string | null; telefono?: string | null;
@@ -29,6 +30,9 @@ export default function ClientesClient({
 }: { initialItems: Client[]; canWrite: boolean; actions: Actions }) {
   const [items, setItems] = useState<Client[]>(initialItems);
   const [q, setQ] = useState("");
+  const [quotesOpen, setQuotesOpen] = useState<{ open: boolean; client?: Client | null }>({ open: false, client: null });
+  const [quotes, setQuotes] = useState<Array<{ id: string; createdAt: string; status: string; total: number; unitPrice: number }>>([]);
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
 
   // Defer del input para evitar bloques de UI en listas grandes
   const dq = useDeferredValue(q);
@@ -42,6 +46,21 @@ export default function ClientesClient({
   }, [dq, items]);
 
   const handleDeleted = (id: string) => setItems(prev => prev.filter(c => c.id !== id));
+
+  const openQuotes = async (client: Client) => {
+    setQuotesOpen({ open: true, client });
+    setLoadingQuotes(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}/quotes`);
+      if (!res.ok) throw new Error("Error al cargar cotizaciones");
+      const data = await res.json();
+      setQuotes(data);
+  } catch {
+      toast.error("No se pudieron cargar las cotizaciones");
+    } finally {
+      setLoadingQuotes(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -77,7 +96,7 @@ export default function ClientesClient({
           </TableHeader>
           <TableBody>
             {filtered.map((c) => (
-              <Row key={c.id} c={c} canWrite={canWrite} actions={actions} onDeleted={handleDeleted} />
+              <Row key={c.id} c={c} canWrite={canWrite} actions={actions} onDeleted={handleDeleted} onOpenQuotes={openQuotes} />
             ))}
             {filtered.length === 0 && (
               <TableRow>
@@ -89,15 +108,22 @@ export default function ClientesClient({
           </TableBody>
         </Table>
       </Card>
+      <QuotesModal
+        state={quotesOpen}
+        onOpenChange={(open) => setQuotesOpen((s) => ({ ...s, open }))}
+        quotes={quotes}
+        loading={loadingQuotes}
+      />
     </div>
   );
 }
 
 const Row = memo(function Row({
-  c, canWrite, actions, onDeleted,
+  c, canWrite, actions, onDeleted, onOpenQuotes,
 }: {
   c: Client; canWrite: boolean; actions: Actions;
   onDeleted: (id: string) => void;
+  onOpenQuotes: (client: Client) => void;
 }) {
   const [isPending, start] = useTransition();
 
@@ -145,6 +171,15 @@ const Row = memo(function Row({
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => onOpenQuotes(c)}
+              aria-label={`Ver cotizaciones de ${c.nombre}`}
+              title={`Ver cotizaciones de ${c.nombre}`}
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={doDelete}
               disabled={isPending}
               className="text-destructive"
@@ -159,3 +194,55 @@ const Row = memo(function Row({
     </TableRow>
   );
 });
+
+// Modal para listar cotizaciones del cliente
+function QuotesModal({ state, onOpenChange, quotes, loading }: {
+  state: { open: boolean; client?: Client | null };
+  onOpenChange: (open: boolean) => void;
+  quotes: Array<{ id: string; createdAt: string; status: string; total: number; unitPrice: number }>;
+  loading: boolean;
+}) {
+  return (
+    <Dialog open={state.open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Cotizaciones de {state.client?.nombre}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Cargando…</div>
+          ) : quotes.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Sin cotizaciones</div>
+          ) : (
+            <div className="border rounded-md overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quotes.map((q) => (
+                    <TableRow key={q.id}>
+                      <TableCell className="font-mono text-xs">
+                        <a className="underline" href={`/cotizador/${q.id}`}>
+                          {q.id.slice(0,8)}
+                        </a>
+                      </TableCell>
+                      <TableCell>{new Date(q.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{q.status}</TableCell>
+                      <TableCell className="text-right">{q.total.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

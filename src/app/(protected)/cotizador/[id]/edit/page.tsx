@@ -52,9 +52,9 @@ export default async function EditQuotePage(props: { params: Promise<{ id: strin
     validUntil: quote.validUntil ?? null,
     notes: quote.notes ?? null,
     cliente: {
-      id: quote.cliente.id,
-      nombre: quote.cliente.nombre,
-      ruc: quote.cliente.ruc,
+      id: quote.cliente!.id,
+      nombre: quote.cliente!.nombre,
+      ruc: quote.cliente!.ruc,
     },
   };
 

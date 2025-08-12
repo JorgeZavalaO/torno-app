@@ -5,5 +5,8 @@ export const cacheTags = {
   rolePerms: (roleId: string) => `role-perms:${roleId}`,
   clients: "clients:list", 
   costing: "costing:params",
-  quotes: "quotes:list", 
+  quotes: "quotes:list",
+  inventoryProducts: "inventory:products",
+  inventoryMovs: "inventory:movs",
+  inventoryKardex: (sku: string) => `inventory:kardex:${sku}`,
 };

@@ -154,3 +154,47 @@ model Cotizacion {
   @@index([clienteId])
   @@index([status, createdAt])
 }
+
+enum CategoriaProducto {
+  MATERIA_PRIMA
+  HERRAMIENTA_CORTE
+  CONSUMIBLE
+  REPUESTO
+}
+
+enum TipoMovimiento {
+  INGRESO_COMPRA
+  INGRESO_AJUSTE
+  SALIDA_AJUSTE
+  SALIDA_OT
+}
+
+model Producto {
+  sku         String            @id
+  nombre      String
+  categoria   CategoriaProducto
+  uom         String            // unidad de medida (ISO o texto corto)
+  costo       Decimal           @db.Decimal(12,2) // costo de referencia (último ingreso o estándar)
+  stockMinimo Decimal?          @db.Decimal(12,3)
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  movimientos  Movimiento[]
+}
+
+model Movimiento {
+  id            String        @id @default(uuid())
+  productoId    String
+  tipo          TipoMovimiento
+  cantidad      Decimal       @db.Decimal(12,3) // ⚠️ Convención: salidas se guardan como NEGATIVO
+  costoUnitario Decimal       @db.Decimal(12,2) // costo por unidad al momento del movimiento
+  refTabla      String?
+  refId         String?
+  nota          String?
+  fecha         DateTime      @default(now())
+
+  producto      Producto      @relation(fields: [productoId], references: [sku])
+
+  @@index([productoId, fecha])
+}

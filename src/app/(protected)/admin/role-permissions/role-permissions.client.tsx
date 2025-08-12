@@ -378,8 +378,7 @@ export default function RolePermissionsClient({
     setRoleId(initial.role?.id ?? "");
     setAssigned(new Set(initial.assignedIds));
     setFilter("");
-  // si assignedIds cambia, también resincroniza
-  }, [initial.role?.id, JSON.stringify(initial.assignedIds)]);
+  }, [initial.role?.id, initial.assignedIds]);
 
   // Estados para modales
   const [roleModalOpen, setRoleModalOpen] = useState(false);
