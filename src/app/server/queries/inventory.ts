@@ -33,11 +33,18 @@ export const getProductsWithStock = cache(
       if (!lastCostMap.has(mov.productoId)) lastCostMap.set(mov.productoId, toNum(mov.costoUnitario));
     }
 
-    return products.map(p => {
+  return products.map(p => {
       const stock = stockMap.get(p.sku) ?? 0;
       const lastCost = lastCostMap.get(p.sku) ?? toNum(p.costo);
       return {
-        ...p,
+    sku: p.sku,
+    nombre: p.nombre,
+    categoria: p.categoria,
+    uom: p.uom,
+    costo: toNum(p.costo),
+    stockMinimo: p.stockMinimo != null ? toNum(p.stockMinimo) : null,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
         stock,
         lastCost,
         stockValue: Number((stock * lastCost).toFixed(2)),

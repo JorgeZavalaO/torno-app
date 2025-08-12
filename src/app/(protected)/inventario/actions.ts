@@ -6,8 +6,10 @@ import { prisma } from "@/app/lib/prisma";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanReadInventory, assertCanWriteInventory } from "@/app/lib/guards";
+import { generateSKU } from "./sku";
 
-type Result = { ok: true; message?: string } | { ok: false; message: string };
+type Result = { ok: true; message?: string; sku?: string; imported?: number } | { ok: false; message: string };
+type r = Result;
 
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 
@@ -18,6 +20,11 @@ const ProductSchema = z.object({
   uom: z.string().min(1),
   costo: z.coerce.number().min(0),
   stockMinimo: z.coerce.number().min(0).optional().nullable(),
+});
+
+// Schema modificado para la creación donde SKU es opcional (se generará automáticamente)
+const CreateProductSchema = ProductSchema.omit({ sku: true }).extend({
+  sku: z.string().min(1).optional(),
 });
 
 const MovementSchema = z.object({
@@ -40,20 +47,24 @@ export async function pingInventory(): Promise<void> {
   await assertCanReadInventory();
 }
 
-export async function createProduct(fd: FormData): Promise<Result> {
+export async function createProduct(fd: FormData): Promise<r> {
   await assertCanWriteInventory();
-  const parsed = ProductSchema.safeParse({
-    sku: fd.get("sku"),
+  const parsed = CreateProductSchema.safeParse({
+    sku: fd.get("sku") || undefined,
     nombre: fd.get("nombre"),
     categoria: fd.get("categoria"),
     uom: fd.get("uom"),
     costo: fd.get("costo"),
     stockMinimo: fd.get("stockMinimo") ?? null,
   });
+  
   if (!parsed.success) return { ok: false, message: "Datos inválidos del producto" };
-  const { sku, nombre, categoria, uom, costo, stockMinimo } = parsed.data;
+  const { nombre, categoria, uom, costo, stockMinimo } = parsed.data;
 
   try {
+    // Generar SKU automáticamente si no se proporciona
+    const sku = parsed.data.sku || await generateSKU(categoria);
+    
     await prisma.producto.create({
       data: {
         sku, nombre, categoria, uom,
@@ -62,7 +73,7 @@ export async function createProduct(fd: FormData): Promise<Result> {
       },
     });
     bumpAll();
-    return { ok: true, message: "Producto creado" };
+    return { ok: true, message: "Producto creado", sku };
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { ok: false, message: "SKU ya existe" };
@@ -72,7 +83,7 @@ export async function createProduct(fd: FormData): Promise<Result> {
   }
 }
 
-export async function updateProduct(fd: FormData): Promise<Result> {
+export async function updateProduct(fd: FormData): Promise<r> {
   await assertCanWriteInventory();
   const parsed = ProductSchema.safeParse({
     sku: fd.get("sku"),
@@ -102,7 +113,7 @@ export async function updateProduct(fd: FormData): Promise<Result> {
   }
 }
 
-export async function deleteProduct(sku: string): Promise<Result> {
+export async function deleteProduct(sku: string): Promise<r> {
   await assertCanWriteInventory();
   // No eliminar si tiene movimientos
   const count = await prisma.movimiento.count({ where: { productoId: sku } });
@@ -118,7 +129,7 @@ export async function deleteProduct(sku: string): Promise<Result> {
   }
 }
 
-export async function createMovement(fd: FormData): Promise<Result> {
+export async function createMovement(fd: FormData): Promise<r> {
   await assertCanWriteInventory();
   const parsed = MovementSchema.safeParse({
     productoId: fd.get("productoId"),
@@ -176,5 +187,67 @@ export async function createMovement(fd: FormData): Promise<Result> {
   } catch (e) {
     console.error(e);
     return { ok: false, message: "No se pudo registrar el movimiento" };
+  }
+}
+
+// Nueva función para importar productos desde CSV
+export async function importProducts(file: File): Promise<r> {
+  await assertCanWriteInventory();
+  
+  try {
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim());
+    
+    // Verificar cabecera
+    const headers = lines[0].trim().split(',');
+    const expectedHeaders = ['Nombre', 'Categoría', 'UOM', 'Costo', 'StockMinimo'];
+    
+    if (!expectedHeaders.every(header => headers.includes(header))) {
+      return { 
+        ok: false, 
+        message: `Formato de CSV inválido. Las columnas deben ser: ${expectedHeaders.join(', ')}` 
+      };
+    }
+    
+    // Procesar filas de datos (ignorar cabecera)
+    const dataRows = lines.slice(1);
+    let importedCount = 0;
+    
+    for (const row of dataRows) {
+      if (!row.trim()) continue;
+      
+      const columns = row.split(',');
+      if (columns.length < 4) continue; // Mínimo necesario: nombre, categoría, uom, costo
+      
+      const [nombre, categoria, uom, costo, stockMinimo] = columns;
+      
+      // Validar categoría
+      if (!['MATERIA_PRIMA', 'HERRAMIENTA_CORTE', 'CONSUMIBLE', 'REPUESTO'].includes(categoria)) {
+        continue;
+      }
+      
+      // Generar SKU automático
+      const sku = await generateSKU(categoria);
+      
+      // Crear producto
+      await prisma.producto.create({
+        data: {
+          sku,
+          nombre: nombre.trim(),
+          categoria: categoria as "MATERIA_PRIMA" | "HERRAMIENTA_CORTE" | "CONSUMIBLE" | "REPUESTO",
+          uom: uom.trim(),
+          costo: D(parseFloat(costo) || 0),
+          stockMinimo: stockMinimo?.trim() ? D(parseFloat(stockMinimo)) : null,
+        },
+      });
+      
+      importedCount++;
+    }
+    
+    bumpAll();
+    return { ok: true, message: "Productos importados correctamente", imported: importedCount };
+  } catch (e) {
+    console.error("Error al importar productos:", e);
+    return { ok: false, message: "Error al procesar el archivo CSV" };
   }
 }

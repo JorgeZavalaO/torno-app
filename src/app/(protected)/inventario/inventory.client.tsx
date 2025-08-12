@@ -7,10 +7,11 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, Boxes, ArrowDownToLine, ArrowUpFromLine, Search } from "lucide-react";
+import { Plus, Package, Boxes, ArrowDownToLine, ArrowUpFromLine, Search, FileUp } from "lucide-react";
 import { toast } from "sonner";
 import { NewProductDialog } from "./new-product-dialog";
 import { NewMovementDialog } from "./new-movement-dialog";
+import { ImportProductsDialog } from "./import-products-dialog";
 
 type ProductRow = {
   sku: string;
@@ -43,10 +44,11 @@ type MovementRow = {
 type ProductOption = { sku: string; nombre: string; uom: string };
 
 type Actions = {
-  createProduct: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+  createProduct: (fd: FormData) => Promise<{ ok: boolean; message?: string; sku?: string }>;
   updateProduct: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   deleteProduct: (sku: string) => Promise<{ ok: boolean; message?: string }>;
   createMovement: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+  importProducts: (file: File) => Promise<{ ok: boolean; message?: string; imported?: number }>;
 };
 
 export default function InventoryClient({
@@ -65,6 +67,7 @@ export default function InventoryClient({
   const [q, setQ] = useState("");
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [showNewMovement, setShowNewMovement] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -88,6 +91,7 @@ export default function InventoryClient({
           <div className="flex gap-2">
             <Button onClick={() => setShowNewMovement(true)} className="gap-2"><Boxes className="h-4 w-4" /> Nuevo movimiento</Button>
             <Button variant="outline" onClick={() => setShowNewProduct(true)} className="gap-2"><Plus className="h-4 w-4" /> Nuevo producto</Button>
+            <Button variant="outline" onClick={() => setShowImport(true)} className="gap-2"><FileUp className="h-4 w-4" /> Importar productos</Button>
           </div>
         )}
       </div>
@@ -219,6 +223,7 @@ export default function InventoryClient({
         <>
           <NewProductDialog open={showNewProduct} onOpenChange={setShowNewProduct} onSuccess={(msg) => toast.success(msg)} actions={actions} />
           <NewMovementDialog open={showNewMovement} onOpenChange={setShowNewMovement} products={productOptions} onSuccess={(msg) => toast.success(msg)} actions={actions} />
+          <ImportProductsDialog open={showImport} onOpenChange={setShowImport} onSuccess={(msg) => toast.success(msg)} actions={actions} />
         </>
       )}
     </div>

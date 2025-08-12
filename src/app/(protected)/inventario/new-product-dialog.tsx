@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { unidadesMedida } from "./uoms";
 
 const categories = [
   "MATERIA_PRIMA","HERRAMIENTA_CORTE","CONSUMIBLE","REPUESTO"
@@ -18,9 +19,8 @@ export function NewProductDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSuccess: (msg: string) => void;
-  actions: { createProduct: (fd: FormData) => Promise<{ok:boolean; message?:string}> };
+  actions: { createProduct: (fd: FormData) => Promise<{ok:boolean; message?:string; sku?: string}> };
 }) {
-  const [sku, setSku] = useState("");
   const [nombre, setNombre] = useState("");
   const [categoria, setCategoria] = useState<(typeof categories)[number]>("MATERIA_PRIMA");
   const [uom, setUom] = useState("pz");
@@ -29,23 +29,22 @@ export function NewProductDialog({
   const [pending, start] = useTransition();
 
   const reset = () => {
-    setSku(""); setNombre(""); setCategoria("MATERIA_PRIMA"); setUom("pz"); setCosto(0); setStockMinimo("");
+    setNombre(""); setCategoria("MATERIA_PRIMA"); setUom("pz"); setCosto(0); setStockMinimo("");
   };
 
   const submit = () => {
-    if (!sku || !nombre) return toast.error("Completa SKU y nombre");
+    if (!nombre) return toast.error("Completa el nombre del producto");
     const fd = new FormData();
-    fd.set("sku", sku.trim());
     fd.set("nombre", nombre.trim());
     fd.set("categoria", categoria);
-    fd.set("uom", uom.trim());
+    fd.set("uom", uom);
     fd.set("costo", String(costo));
     if (stockMinimo !== "") fd.set("stockMinimo", String(stockMinimo));
 
     start(async () => {
       const r = await actions.createProduct(fd);
       if (r.ok) {
-        onSuccess(r.message ?? "Producto creado");
+        onSuccess(`${r.message ?? "Producto creado"} (${r.sku})`);
         onOpenChange(false);
         reset();
         location.reload();
@@ -58,15 +57,11 @@ export function NewProductDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nuevo producto</DialogTitle>
-          <DialogDescription>Registra un nuevo SKU en inventario</DialogDescription>
+          <DialogDescription>Registra un nuevo SKU en inventario (se generará automáticamente)</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>SKU</Label>
-            <Input value={sku} onChange={e=>setSku(e.target.value)} />
-          </div>
-          <div>
+          <div className="md:col-span-2">
             <Label>Nombre</Label>
             <Input value={nombre} onChange={e=>setNombre(e.target.value)} />
           </div>
@@ -80,8 +75,15 @@ export function NewProductDialog({
             </Select>
           </div>
           <div>
-            <Label>UOM</Label>
-            <Input value={uom} onChange={e=>setUom(e.target.value)} placeholder="pz, kg, m..." />
+            <Label>Unidad de medida</Label>
+            <Select value={uom} onValueChange={setUom}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {unidadesMedida.map(um => (
+                  <SelectItem key={um.value} value={um.value}>{um.label} ({um.value})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Costo de referencia</Label>

@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getProductsWithStock, getRecentMovements } from "@/app/server/queries/inventory";
 import InventoryClient from "./inventory.client";
-import { pingInventory, createProduct, updateProduct, deleteProduct, createMovement } from "./actions";
+import { pingInventory, createProduct, updateProduct, deleteProduct, createMovement, importProducts } from "./actions";
 import { prisma } from "@/app/lib/prisma";
 
 export default async function InventoryPage() {
@@ -23,11 +23,7 @@ export default async function InventoryPage() {
     getRecentMovements(50),
   ]);
 
-  const products = productsFromDb.map((p) => ({
-    ...p,
-    costo: p.costo.toNumber(),
-    stockMinimo: p.stockMinimo?.toNumber() ?? null,
-  }));
+  const products = productsFromDb;
 
   // Para selects: lista de SKUs
   const productOptions = await prisma.producto.findMany({
@@ -41,7 +37,7 @@ export default async function InventoryPage() {
       products={products}
       recentMovs={recents}
       productOptions={productOptions}
-      actions={{ createProduct, updateProduct, deleteProduct, createMovement }}
+      actions={{ createProduct, updateProduct, deleteProduct, createMovement, importProducts }}
     />
   );
 }
