@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, Boxes, ArrowDownToLine, ArrowUpFromLine, Search, FileUp } from "lucide-react";
+import { Plus, Package, Boxes, ArrowDownToLine, ArrowUpFromLine, Search, FileUp, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { NewProductDialog } from "./new-product-dialog";
 import { NewMovementDialog } from "./new-movement-dialog";
 import { ImportProductsDialog } from "./import-products-dialog";
+import Link from "next/link";
 
 type ProductRow = {
   sku: string;
@@ -68,14 +69,34 @@ export default function InventoryClient({
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [showNewMovement, setShowNewMovement] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  // estado nuevo
+  const [showLowOnly, setShowLowOnly] = useState(false);
 
+  // conteo global (no filtrado por búsqueda)
+  const lowCount = products.filter(
+    p => p.stockMinimo != null && Number(p.stock) < Number(p.stockMinimo)
+  ).length;
+
+  // opcional: toast cuando hay bajos
+  useEffect(() => {
+    if (lowCount > 0) {
+      // usa sonner
+      // toast.warning(`${lowCount} productos con stock bajo`);
+    }
+  }, [lowCount]);
+
+  // ajusta 'filtered'
   const filtered = useMemo(() => {
+    const base = showLowOnly
+      ? products.filter(p => p.stockMinimo != null && Number(p.stock) < Number(p.stockMinimo))
+      : products;
+
     const s = q.trim().toLowerCase();
-    if (!s) return products;
-    return products.filter(p =>
+    if (!s) return base;
+    return base.filter(p =>
       p.nombre.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s)
     );
-  }, [q, products]);
+  }, [q, products, showLowOnly]);
 
   const totalStockValue = filtered.reduce((acc, p) => acc + Number(p.stockValue), 0);
   const fmt = (n: number, c = "PEN") => new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n);
@@ -87,13 +108,32 @@ export default function InventoryClient({
           <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
           <p className="text-muted-foreground">Productos, stock y movimientos</p>
         </div>
-        {canWrite && (
-          <div className="flex gap-2">
-            <Button onClick={() => setShowNewMovement(true)} className="gap-2"><Boxes className="h-4 w-4" /> Nuevo movimiento</Button>
-            <Button variant="outline" onClick={() => setShowNewProduct(true)} className="gap-2"><Plus className="h-4 w-4" /> Nuevo producto</Button>
-            <Button variant="outline" onClick={() => setShowImport(true)} className="gap-2"><FileUp className="h-4 w-4" /> Importar productos</Button>
+        <div className="flex gap-2 items-center">
+          {/* Botón para ver solo stock bajo */}
+          <div className="relative">
+            <Button
+              variant={showLowOnly ? "default" : "outline"}
+              size="icon"
+              onClick={() => setShowLowOnly(v => !v)}
+              title={showLowOnly ? "Ver todos" : "Ver solo stock bajo"}
+            >
+              <Bell className="h-4 w-4" />
+            </Button>
+            {lowCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] px-1 rounded-full bg-red-600 text-white text-xs flex items-center justify-center">
+                {lowCount}
+              </span>
+            )}
           </div>
-        )}
+
+          {canWrite && (
+            <>
+              <Button onClick={() => setShowNewMovement(true)} className="gap-2"><Boxes className="h-4 w-4" /> Nuevo movimiento</Button>
+              <Button variant="outline" onClick={() => setShowNewProduct(true)} className="gap-2"><Plus className="h-4 w-4" /> Nuevo producto</Button>
+              <Button variant="outline" onClick={() => setShowImport(true)} className="gap-2"><FileUp className="h-4 w-4" /> Importar productos</Button>
+            </>
+          )}
+        </div>
       </div>
 
       <Tabs defaultValue="productos">
@@ -143,7 +183,11 @@ export default function InventoryClient({
                   const low = p.stockMinimo != null && Number(p.stock) < Number(p.stockMinimo);
                   return (
                     <TableRow key={p.sku}>
-                      <TableCell className="font-mono">{p.sku}</TableCell>
+                      <TableCell className="font-mono">
+                        <Link href={`/inventario/${encodeURIComponent(p.sku)}`} className="underline-offset-2 hover:underline">
+                          {p.sku}
+                        </Link>
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{p.nombre}</div>
                         <div className="text-xs text-muted-foreground">{p.uom}</div>
