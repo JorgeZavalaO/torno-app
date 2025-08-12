@@ -37,7 +37,11 @@ const allNavItems: (NavItem & { requiredPerm?: string })[] = [
     icon: "Sliders",
     requiredPerm: "settings.costing.read"
   },
-
+  { href: "/cotizador",
+    label: "Cotizador",
+    icon: "Calculator",
+    requiredPerm: "quotes.read"
+  },
   { 
     href: "/clientes", 
     label: "Clientes", 

@@ -1,0 +1,422 @@
+"use client";
+
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
+import { Save, Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { QuoteStatusBadge } from "./quote-status-badge";
+import Link from "next/link";
+
+type Client = { id: string; nombre: string; ruc: string };
+type CostingParams = Record<string, string | number>;
+
+type QuoteDetail = {
+  id: string;
+  createdAt: Date;
+  status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
+  currency: string;
+  clienteId: string;
+  qty: number;
+  materials: unknown;
+  hours: unknown;
+  kwh: unknown;
+  validUntil?: Date | null;
+  notes?: string | null;
+  cliente: {
+    id: string;
+    nombre: string;
+    ruc: string;
+  };
+};
+
+type UpdateQuoteAction = (quoteId: string, fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+
+interface EditQuoteClientProps {
+  quote: QuoteDetail;
+  clients: Client[];
+  params: CostingParams;
+  action: UpdateQuoteAction;
+}
+
+export function EditQuoteClient({ quote, clients, params, action }: EditQuoteClientProps) {
+  const currency = String(params.currency || "PEN");
+  const [clienteId, setClienteId] = useState<string>(quote.clienteId);
+  const [qty, setQty] = useState<number>(quote.qty);
+  const [materials, setMaterials] = useState<number>(Number(quote.materials) || 0);
+  const [hours, setHours] = useState<number>(Number(quote.hours) || 0);
+  const [kwh, setKwh] = useState<number>(Number(quote.kwh) || 0);
+  const [validUntil, setValidUntil] = useState<string>("");
+  const [notes, setNotes] = useState<string>(quote.notes || "");
+  const [pending, startTransition] = useTransition();
+
+  const gi = Number(params.gi ?? 0);
+  const margin = Number(params.margin ?? 0);
+  const hourlyRate = Number(params.hourlyRate ?? 0);
+  const kwhRate = Number(params.kwhRate ?? 0);
+  const depr = Number(params.deprPerHour ?? 0);
+  const tooling = Number(params.toolingPerPiece ?? 0);
+  const rent = Number(params.rentPerHour ?? 0);
+
+  const calculation = useMemo(() => {
+    const labor = hourlyRate * hours;
+    const energy = kwhRate * kwh;
+    const depreciation = depr * hours;
+    const toolingCost = tooling * qty;
+    const rentCost = rent * hours;
+    const direct = materials + labor + energy + depreciation + toolingCost + rentCost;
+    const giAmount = direct * gi;
+    const subtotal = direct + giAmount;
+    const marginAmount = subtotal * margin;
+    const total = subtotal + marginAmount;
+    const unitPrice = qty > 0 ? total / qty : total;
+    
+    return { 
+      labor, energy, depreciation, toolingCost, rentCost, 
+      direct, giAmount, subtotal, marginAmount, total, unitPrice 
+    };
+  }, [materials, hours, kwh, qty, gi, margin, hourlyRate, kwhRate, depr, tooling, rent]);
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat(undefined, { 
+      style: "currency", 
+      currency 
+    }).format(amount);
+
+  const formatDate = (date: Date) =>
+    date.toISOString().slice(0, 10);
+
+  const handleSubmit = () => {
+    if (!clienteId) return toast.error("Selecciona un cliente");
+    if (qty < 1) return toast.error("La cantidad mínima es 1");
+
+    const formData = new FormData();
+    formData.set("clienteId", clienteId);
+    formData.set("qty", String(qty));
+    formData.set("materials", String(materials));
+    formData.set("hours", String(hours));
+    formData.set("kwh", String(kwh));
+    if (validUntil) formData.set("validUntil", validUntil);
+    if (notes) formData.set("notes", notes);
+
+    startTransition(async () => {
+      const result = await action(quote.id, formData);
+      if (result.ok) {
+        toast.success("Cotización actualizada exitosamente");
+        window.location.href = `/cotizador/${quote.id}`;
+      } else {
+        toast.error(result.message ?? "Error al actualizar la cotización");
+      }
+    });
+  };
+
+  const canEdit = quote.status !== "APPROVED";
+
+  // Establecer fecha de vigencia inicial
+  useEffect(() => {
+    if (quote.validUntil) {
+      setValidUntil(formatDate(quote.validUntil));
+    }
+  }, [quote.validUntil]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`/cotizador/${quote.id}`}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Editar Cotización #{quote.id.slice(0, 8)}
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              <QuoteStatusBadge status={quote.status} />
+              <span className="text-muted-foreground">•</span>
+              <span className="text-muted-foreground">
+                Cliente: {quote.cliente.nombre}
+              </span>
+            </div>
+          </div>
+        </div>
+        {canEdit && (
+          <Button onClick={handleSubmit} disabled={pending} size="lg">
+            {pending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Guardar cambios
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {/* Advertencia si no se puede editar */}
+      {!canEdit && (
+        <Card className="p-4 border-yellow-200 bg-yellow-50">
+          <div className="flex items-center gap-2 text-yellow-800">
+            <AlertTriangle className="h-5 w-5" />
+            <div>
+              <div className="font-medium">Cotización no editable</div>
+              <div className="text-sm text-yellow-700">
+                Las cotizaciones aprobadas no pueden ser modificadas.
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Formulario */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="p-6">
+            <div className="space-y-6">
+              <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                Información General
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cliente">Cliente *</Label>
+                  <Select 
+                    value={clienteId} 
+                    onValueChange={setClienteId} 
+                    disabled={pending || !canEdit}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar cliente..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          <div>
+                            <div className="font-medium">{client.nombre}</div>
+                            <div className="text-sm text-muted-foreground">
+                              RUC: {client.ruc}
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="validUntil">Vigente hasta</Label>
+                  <Input
+                    id="validUntil"
+                    type="date"
+                    value={validUntil}
+                    onChange={(e) => setValidUntil(e.target.value)}
+                    disabled={pending || !canEdit}
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="space-y-6">
+              <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                Parámetros de Producción
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="qty">Cantidad (piezas) *</Label>
+                  <Input
+                    id="qty"
+                    type="number"
+                    min={1}
+                    value={qty}
+                    onChange={(e) => setQty(Number(e.target.value))}
+                    disabled={pending || !canEdit}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="materials">Materiales ({currency})</Label>
+                  <Input
+                    id="materials"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={materials}
+                    onChange={(e) => setMaterials(Number(e.target.value))}
+                    disabled={pending || !canEdit}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="hours">Horas de torno</Label>
+                  <Input
+                    id="hours"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={hours}
+                    onChange={(e) => setHours(Number(e.target.value))}
+                    disabled={pending || !canEdit}
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-span-3">
+                  <Label htmlFor="kwh">Consumo energético (kWh)</Label>
+                  <Input
+                    id="kwh"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={kwh}
+                    onChange={(e) => setKwh(Number(e.target.value))}
+                    disabled={pending || !canEdit}
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="space-y-4">
+              <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                Observaciones
+              </h3>
+              <Textarea
+                placeholder="Notas adicionales sobre la cotización..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={pending || !canEdit}
+                rows={4}
+              />
+            </div>
+          </Card>
+        </div>
+
+        {/* Panel de cálculo */}
+        <div className="space-y-6">
+          <Card className="p-6">
+            <div className="space-y-4">
+              <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                Parámetros del Sistema
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Gastos indirectos:</span>
+                  <span className="font-medium">{(gi * 100).toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Margen de ganancia:</span>
+                  <span className="font-medium">{(margin * 100).toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Tarifa por hora:</span>
+                  <span className="font-medium">{formatCurrency(hourlyRate)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Tarifa kWh:</span>
+                  <span className="font-medium">{formatCurrency(kwhRate)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Depreciación/hora:</span>
+                  <span className="font-medium">{formatCurrency(depr)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Herramientas/pieza:</span>
+                  <span className="font-medium">{formatCurrency(tooling)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Alquiler/hora:</span>
+                  <span className="font-medium">{formatCurrency(rent)}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="space-y-4">
+              <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                Desglose de Costos
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Materiales</span>
+                  <span>{formatCurrency(materials)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Mano de obra</span>
+                  <span>{formatCurrency(calculation.labor)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Energía</span>
+                  <span>{formatCurrency(calculation.energy)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Depreciación</span>
+                  <span>{formatCurrency(calculation.depreciation)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Herramientas</span>
+                  <span>{formatCurrency(calculation.toolingCost)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Alquiler</span>
+                  <span>{formatCurrency(calculation.rentCost)}</span>
+                </div>
+                
+                <Separator className="my-2" />
+                
+                <div className="flex justify-between font-medium">
+                  <span>Costo directo</span>
+                  <span>{formatCurrency(calculation.direct)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Gastos indirectos</span>
+                  <span>{formatCurrency(calculation.giAmount)}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(calculation.subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Margen</span>
+                  <span>{formatCurrency(calculation.marginAmount)}</span>
+                </div>
+                
+                <Separator className="my-2" />
+                
+                <div className="flex justify-between font-semibold text-base">
+                  <span>Total</span>
+                  <span>{formatCurrency(calculation.total)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Precio unitario</span>
+                  <span>{formatCurrency(calculation.unitPrice)}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
