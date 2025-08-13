@@ -7,15 +7,14 @@ import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { NotificationBubble } from "@/components/ui/notification-bubble";
 import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart, Plus } from "lucide-react";
+import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart } from "lucide-react";
 import { PriorityBadge } from "@/components/ot/priority-badge";
-import { PrioritySelect } from "@/components/ot/priority-select";
+import { NewOTDialog } from "@/components/ot/new-ot-dialog";
 import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
 import { StatusBadge } from "@/components/ot/status-badge";
 
@@ -109,7 +108,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
           {shortageCount > 0 && <NotificationBubble count={shortageCount} title="OTs con faltantes de material" />}
         </div>
         {canWrite && (
-          <NewOTButton 
+          <NewOTDialog 
             products={products}
             clients={clients}
             onCreate={handleCreateOT}
@@ -343,215 +342,6 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
-
-// Estado badge reutilizado desde components/ot/status-badge
-
-function NewOTButton({ 
-  products,
-  clients,
-  onCreate, 
-  isCreating = false 
-}: {
-  products: Product[]; 
-  clients: ClientOption[];
-  onCreate: (payload: CreateOTPayload) => Promise<void>;
-  isCreating?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [piezas, setPiezas] = useState<{sku?: string; descripcion?: string; qty: number}[]>([{ qty: 1 }]);
-  const [materiales, setMateriales] = useState<{sku: string; qty: number}[]>([]);
-  const [notas, setNotas] = useState("");
-  const [clienteId, setClienteId] = useState<string|undefined>(undefined);
-  const [prioridad, setPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">("MEDIUM");
-  const [acabado, setAcabado] = useState<string>("");
-  const [autoSC, setAutoSC] = useState(true);
-
-  const handleSubmit = async () => {
-    if (piezas.length === 0) {
-      toast.error("Agrega al menos una pieza a fabricar");
-      return;
-    }
-    if (materiales.length === 0) {
-      toast.error("Agrega al menos un material a utilizar");
-      return;
-    }
-
-    try {
-      await onCreate({
-        piezas: piezas.map(p => ({ sku: p.sku, descripcion: p.descripcion?.trim() || undefined, qty: p.qty })).filter(p => (p.sku || p.descripcion) && p.qty > 0),
-        materiales: materiales.filter(m => m.qty > 0),
-        notas: notas.trim() || undefined,
-        clienteId,
-        prioridad,
-        acabado: acabado.trim() || undefined,
-        autoSC,
-      });
-      setIsOpen(false);
-      setPiezas([{ qty: 1 }]);
-      setMateriales([]);
-      setNotas("");
-      setClienteId(undefined);
-      setPrioridad("MEDIUM");
-      setAcabado("");
-      setAutoSC(true);
-    } catch {
-      toast.error("Error al crear la OT");
-    }
-  };
-  const addPieza = () => setPiezas(prev => [...prev, { qty: 1 }]);
-  const updatePieza = (index: number, field: 'sku' | 'descripcion' | 'qty', value: string | number) => {
-    const next = [...piezas];
-    // @ts-expect-error typed union
-    next[index][field] = value;
-    setPiezas(next);
-  };
-  const removePieza = (index: number) => setPiezas(piezas.filter((_, i) => i !== index));
-
-
-  const addMaterial = () => {
-    setMateriales([...materiales, { sku: "", qty: 1 }]);
-  };
-
-  const updateMaterial = (index: number, field: 'sku' | 'qty', value: string | number) => {
-    const newMateriales = [...materiales];
-    newMateriales[index] = { ...newMateriales[index], [field]: value };
-    setMateriales(newMateriales);
-  };
-
-  const removeMaterial = (index: number) => {
-    setMateriales(materiales.filter((_, i) => i !== index));
-  };
-
-  if (!isOpen) {
-    return (
-      <Button onClick={() => setIsOpen(true)} disabled={isCreating}>
-        <Plus className="h-4 w-4 mr-2" />
-        Nueva OT
-      </Button>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-3xl max-h-[80vh] overflow-y-auto m-4">
-        <div className="p-6 space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold">Nueva Orden de Trabajo</h2>
-            <Button variant="ghost" size="sm" onClick={() => setIsOpen(false)}>×</Button>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ClientSelect clients={clients} value={clienteId} onChange={setClienteId} />
-              <PrioritySelect value={prioridad} onChange={setPrioridad} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Piezas a fabricar</label>
-              <div className="space-y-2 mt-1">
-                {piezas.map((p, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-4">
-                      <select
-                        value={p.sku || ""}
-                        onChange={(e) => updatePieza(i, 'sku', e.target.value || "")}
-                        className="w-full h-9 border rounded-md px-2"
-                      >
-                        <option value="">Código (opcional)</option>
-                        {products.map(prod => (
-                          <option key={prod.sku} value={prod.sku}>{prod.sku}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-6">
-                      <Input
-                        placeholder="Descripción de la pieza"
-                        value={p.descripcion || ""}
-                        onChange={(e) => updatePieza(i, 'descripcion', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Input type="number" min="1" value={p.qty} onChange={(e)=>updatePieza(i,'qty', Number(e.target.value))} />
-                    </div>
-                    <div className="col-span-12 flex justify-end">
-                      <Button size="sm" variant="ghost" onClick={()=>removePieza(i)}>×</Button>
-                    </div>
-                  </div>
-                ))}
-                <Button size="sm" variant="outline" onClick={addPieza}><Plus className="h-3 w-3 mr-1"/> Agregar pieza</Button>
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Notas</label>
-              <Input
-                value={notas}
-                onChange={(e) => setNotas(e.target.value)}
-                placeholder="Descripción de la orden..."
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">Tipo de acabado</label>
-                <Input value={acabado} onChange={(e)=>setAcabado(e.target.value)} placeholder="Ej: anodizado, pintura, pulido..." />
-              </div>
-              <label className="flex items-center gap-2 text-sm mt-6">
-                <Checkbox checked={autoSC} onCheckedChange={(v)=>setAutoSC(Boolean(v))} />
-                Crear solicitud de compra automática si faltan materiales
-              </label>
-            </div>
-            
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-medium">Materiales</label>
-                <Button size="sm" variant="outline" onClick={addMaterial}>
-                  <Plus className="h-3 w-3 mr-1" />
-                  Agregar
-                </Button>
-              </div>
-              
-              <div className="space-y-2">
-                {materiales.map((m, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <select
-                      value={m.sku}
-                      onChange={(e) => updateMaterial(i, 'sku', e.target.value)}
-                      className="flex-1 px-3 py-2 border rounded-md"
-                    >
-                      <option value="">Selecciona producto...</option>
-                      {products.map(p => (
-                        <option key={p.sku} value={p.sku}>
-                          {p.nombre} ({p.sku})
-                        </option>
-                      ))}
-                    </select>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={m.qty}
-                      onChange={(e) => updateMaterial(i, 'qty', Number(e.target.value))}
-                      className="w-20"
-                    />
-                    <Button size="sm" variant="ghost" onClick={() => removeMaterial(i)}>
-                      ×
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isCreating}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSubmit} disabled={isCreating || materiales.length === 0}>
-              {isCreating ? "Creando..." : "Crear OT"}
-            </Button>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }

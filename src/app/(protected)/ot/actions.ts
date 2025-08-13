@@ -72,25 +72,40 @@ export async function createOT(fd: FormData): Promise<R> {
   if (!parsed.success) return { ok: false, message: "Datos inválidos de OT" };
 
   const codigo = await generateOTCode();
+  // Sanitizar piezas: permitir códigos digitados que NO existen en producto -> se guardan como descripción
+  const candidateSkus = Array.from(new Set(parsed.data.piezas.map(p => p.productoId).filter(Boolean))) as string[];
+  const existing = candidateSkus.length
+    ? await prisma.producto.findMany({ where: { sku: { in: candidateSkus } }, select: { sku: true } })
+    : [];
+  const existingSet = new Set(existing.map(p => p.sku));
+  const piezasSanitized = parsed.data.piezas.map(p => {
+    if (p.productoId && !existingSet.has(p.productoId)) {
+      // código digitado no corresponde a un producto -> mover a descripción si no existe ya
+      const desc = p.descripcion?.trim() ? p.descripcion.trim() : p.productoId;
+      return { productoId: null as string | null, descripcion: desc, qtyPlan: p.qtyPlan };
+    }
+    return { productoId: p.productoId ?? null, descripcion: p.descripcion ?? null, qtyPlan: p.qtyPlan };
+  });
+
   const o = await prisma.ordenTrabajo.create({
-  data: ({
+    data: ({
       codigo,
       estado: "OPEN",
       prioridad: (parsed.data.prioridad ?? "MEDIUM"),
       clienteId: parsed.data.clienteId ?? null,
       cotizacionId: parsed.data.cotizacionId ?? null,
       notas: parsed.data.notas ?? null,
-  acabado: parsed.data.acabado ?? null,
+      acabado: parsed.data.acabado ?? null,
       materiales: {
         create: parsed.data.materiales.map(m => ({
           productoId: m.productoId,
           qtyPlan: D(m.qtyPlan),
         })),
       },
-  piezas: {
-        create: parsed.data.piezas.map(p => ({
-          productoId: p.productoId ?? null,
-          descripcion: p.descripcion ?? null,
+      piezas: {
+        create: piezasSanitized.map(p => ({
+          productoId: p.productoId,
+          descripcion: p.descripcion,
           qtyPlan: D(p.qtyPlan),
         })),
       },

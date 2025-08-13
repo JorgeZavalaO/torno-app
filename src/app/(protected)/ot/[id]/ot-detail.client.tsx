@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { ArrowLeft, Play, Check, ShoppingCart, Copy } from "lucide-react";
+import { ArrowLeft, Play, Check, ShoppingCart, Copy, Link as LinkIcon, FileText, Clock, Package, Wrench, Edit3, Plus } from "lucide-react";
 import { PriorityBadge } from "@/components/ot/priority-badge";
 import { StatusBadge } from "@/components/ot/status-badge";
 import { PrioritySelect } from "@/components/ot/priority-select";
@@ -20,7 +20,8 @@ type Product = { sku: string; nombre: string; uom: string };
 type Mat = { id: string; productoId: string; nombre: string; uom: string; qtyPlan: number; qtyEmit: number; qtyPend: number };
 type Mov = { id: string; fecha: string|Date; sku: string; nombre: string; uom: string; tipo: string; cantidad: number; costoUnitario: number; importe: number; nota?: string };
 type Parte = { id: string; fecha: string|Date; horas: number; maquina?: string; nota?: string; usuario: string };
-type Detail = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; prioridad: "LOW"|"MEDIUM"|"HIGH"|"URGENT"; creadaEn: string|Date; clienteNombre: string|null; notas?: string; materiales: Mat[]; kardex: Mov[]; partes: Parte[] };
+type Pieza = { id: string; productoId?: string; descripcion?: string; qtyPlan: number; qtyHecha: number };
+type Detail = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; prioridad: "LOW"|"MEDIUM"|"HIGH"|"URGENT"; creadaEn: string|Date; clienteNombre: string|null; notas?: string; materiales: Mat[]; piezas: Pieza[]; kardex: Mov[]; partes: Parte[] };
 
 type Actions = {
   issueMaterials: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
@@ -182,9 +183,10 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
         </Alert>
       )}
 
-      <Tabs defaultValue="materiales">
+    <Tabs defaultValue="materiales">
         <TabsList>
           <TabsTrigger value="materiales">Materiales</TabsTrigger>
+      <TabsTrigger value="piezas">Piezas</TabsTrigger>
           <TabsTrigger value="kardex">Kardex</TabsTrigger>
           <TabsTrigger value="partes">Partes</TabsTrigger>
         </TabsList>
@@ -287,6 +289,61 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
                     <TableCell className={"text-right " + (m.qtyPend>0 ? "text-red-600 font-medium" : "")}>{m.qtyPend}</TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        {/* Piezas */}
+        <TabsContent value="piezas" className="space-y-4">
+          <Card className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead>Pieza</TableHead>
+                  <TableHead className="text-center">Tipo</TableHead>
+                  <TableHead className="text-right">Plan</TableHead>
+                  <TableHead className="text-right">Hecho</TableHead>
+                  <TableHead className="text-right">% Avance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {detail.piezas.map(p => {
+                  const pct = p.qtyPlan>0 ? Math.min(100, (p.qtyHecha / p.qtyPlan) * 100) : 0;
+                  const linked = !!p.productoId;
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell className="max-w-64">
+                        <div className="flex items-center gap-2">
+                          {linked ? <LinkIcon className="h-4 w-4 text-green-600" /> : <FileText className="h-4 w-4 text-blue-600" />}
+                          <span className="truncate" title={p.descripcion || p.productoId}>{p.descripcion || p.productoId || '—'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${linked?'bg-green-50 text-green-700 border-green-300':'bg-blue-50 text-blue-700 border-blue-300'}`}>
+                          {linked ? 'Producto' : 'Libre'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{p.qtyPlan}</TableCell>
+                      <TableCell className="text-right font-mono">{p.qtyHecha}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="text-xs font-medium tabular-nums">{pct.toFixed(0)}%</div>
+                          <div className="w-24 h-2 rounded bg-muted overflow-hidden">
+                            <div className={`h-full ${pct===100?'bg-green-600':'bg-primary'}`} style={{ width: pct+"%" }} />
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {detail.piezas.length===0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                      Sin piezas definidas en esta OT
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </Card>

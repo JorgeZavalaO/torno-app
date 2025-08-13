@@ -207,6 +207,7 @@ model Movimiento {
   producto      Producto      @relation(fields: [productoId], references: [sku])
 
   @@index([productoId, fecha])
+  @@index([refTabla, refId, fecha])
 }
 enum EstadoSC {
   PENDING_ADMIN
@@ -250,7 +251,10 @@ model SolicitudCompra {
   items         SCItem[]
   ordenCompra   OrdenCompra?
 
+  ot            OrdenTrabajo? @relation(fields: [otId], references: [id], onDelete: SetNull)
+
   @@index([estado, createdAt])
+  @@index([otId])
 }
 
 model SCItem {
@@ -327,6 +331,7 @@ model OrdenTrabajo {
   materiales       OTMaterial[]
   piezas           OTPieza[]
   partesProduccion ParteProduccion[]
+  solicitudesCompra SolicitudCompra[]
 
   @@index([estado, creadaEn])
 }
@@ -339,8 +344,9 @@ model OTPieza {
   qtyPlan    Decimal      @db.Decimal(12,3)
   qtyHecha   Decimal      @db.Decimal(12,3) @default(0)
 
-  ot         OrdenTrabajo @relation(fields: [otId], references: [id])
-  producto   Producto?    @relation(fields: [productoId], references: [sku])
+  ot               OrdenTrabajo      @relation(fields: [otId], references: [id])
+  producto         Producto?         @relation(fields: [productoId], references: [sku])
+  partesProduccion ParteProduccion[]
 
   @@index([otId])
 }
@@ -367,8 +373,15 @@ model ParteProduccion {
   nota     String?
   fecha    DateTime    @default(now())
 
-  ot       OrdenTrabajo @relation(fields: [otId], references: [id])
-  usuario  UserProfile  @relation(fields: [userId], references: [id])
+  piezaId    String?
+  qtyBuenas  Decimal?    @db.Decimal(12,3) @default(0)
+  qtyScrap   Decimal?    @db.Decimal(12,3) @default(0)
+  motivoScrap String?
+
+  ot         OrdenTrabajo @relation(fields: [otId], references: [id])
+  usuario    UserProfile  @relation(fields: [userId], references: [id])
+  pieza      OTPieza?     @relation(fields: [piezaId], references: [id])
 
   @@index([otId, fecha])
+  @@index([piezaId])
 }
