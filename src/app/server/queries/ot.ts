@@ -64,6 +64,7 @@ export async function getOTDetailFull(id: string) {
     where: { id },
     include: {
       materiales: { include: { producto: { select: { nombre: true, uom: true } } } },
+      piezas: { include: { producto: { select: { nombre: true } } } },
       cliente: { select: { nombre: true } },
     },
   });
@@ -87,9 +88,10 @@ export async function getOTDetailFull(id: string) {
     estado: ot.estado,
   prioridad: ot.prioridad,
     creadaEn: ot.creadaEn,
-    clienteNombre: ot.cliente?.nombre ?? null,
-    notas: ot.notas ?? undefined,
-    materiales: ot.materiales.map(m => ({
+  acabado: ot.acabado ?? undefined,
+  clienteNombre: ot.cliente?.nombre ?? null,
+  notas: ot.notas ?? undefined,
+  materiales: ot.materiales.map((m) => ({
       id: m.id,
       productoId: m.productoId,
       nombre: m.producto.nombre,
@@ -97,6 +99,13 @@ export async function getOTDetailFull(id: string) {
       qtyPlan: Number(m.qtyPlan),
       qtyEmit: Number(m.qtyEmit),
       qtyPend: Math.max(0, Number(m.qtyPlan) - Number(m.qtyEmit)),
+    })),
+  piezas: ot.piezas.map((p) => ({
+      id: p.id,
+      productoId: p.productoId ?? undefined,
+      descripcion: p.descripcion ?? p.producto?.nombre ?? undefined,
+      qtyPlan: Number(p.qtyPlan),
+      qtyHecha: Number(p.qtyHecha),
     })),
     kardex: kardex.map(k => ({
       id: k.id,

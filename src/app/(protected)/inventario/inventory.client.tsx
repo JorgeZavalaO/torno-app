@@ -31,7 +31,7 @@ type ProductRow = {
 type MovementRow = {
   id: string;
   fecha: string | Date;
-  tipo: "INGRESO_COMPRA"|"INGRESO_AJUSTE"|"SALIDA_AJUSTE"|"SALIDA_OT";
+  tipo: "INGRESO_COMPRA"|"INGRESO_AJUSTE"|"SALIDA_AJUSTE"|"SALIDA_OT"|"INGRESO_OT";
   productoId: string;
   productoNombre: string;
   categoria: ProductRow["categoria"];

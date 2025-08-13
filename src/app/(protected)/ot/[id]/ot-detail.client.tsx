@@ -413,5 +413,3 @@ function AddMat({ products, onAdd }:{
     </>
   );
 }
-
-// StatusBadge compartido en components/ot/status-badge

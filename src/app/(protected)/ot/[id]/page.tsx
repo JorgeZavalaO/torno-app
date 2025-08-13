@@ -31,8 +31,8 @@ export default async function OTDetailPage({ params }: { params: Promise<{ id: s
       canWrite={canWrite}
       detail={detail}
       products={products}
-  actions={{ issueMaterials, logProduction, createSCFromShortages, setOTState, addMaterial, updateOTMeta }}
-  clients={clients}
+      actions={{ issueMaterials, logProduction, createSCFromShortages, setOTState, addMaterial, updateOTMeta }}
+      clients={clients}
     />
   );
 }

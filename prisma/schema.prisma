@@ -172,6 +172,7 @@ enum TipoMovimiento {
   INGRESO_AJUSTE
   SALIDA_AJUSTE
   SALIDA_OT
+  INGRESO_OT
 }
 
 model Producto {
@@ -189,6 +190,7 @@ model Producto {
   scItems      SCItem[]
   ocItems      OCItem[]
   otMateriales OTMaterial[]
+  otPiezas     OTPieza[]
 }
 
 model Movimiento {
@@ -317,14 +319,30 @@ model OrdenTrabajo {
   clienteId     String?
   cotizacionId  String?
   notas         String?
+  acabado       String?
   creadaEn      DateTime   @default(now())
   actualizadaEn DateTime   @updatedAt
   cliente          Cliente?         @relation(fields: [clienteId], references: [id])
   cotizacion       Cotizacion?      @relation(fields: [cotizacionId], references: [id])
   materiales       OTMaterial[]
+  piezas           OTPieza[]
   partesProduccion ParteProduccion[]
 
   @@index([estado, creadaEn])
+}
+
+model OTPieza {
+  id         String       @id @default(uuid())
+  otId       String
+  productoId String?
+  descripcion String?
+  qtyPlan    Decimal      @db.Decimal(12,3)
+  qtyHecha   Decimal      @db.Decimal(12,3) @default(0)
+
+  ot         OrdenTrabajo @relation(fields: [otId], references: [id])
+  producto   Producto?    @relation(fields: [productoId], references: [sku])
+
+  @@index([otId])
 }
 
 model OTMaterial {
