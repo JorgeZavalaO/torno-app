@@ -12,4 +12,7 @@ export const cacheTags = {
   purchasesSC: "purchases:sc",
   purchasesOC: "purchases:oc",
   providers: "purchases:providers",
+  workorders: "workorders:list",
+  workorder: (id: string) => `workorders:${id}`,
+  worklogs: (otId: string) => `workorders:logs:${otId}`,
 };

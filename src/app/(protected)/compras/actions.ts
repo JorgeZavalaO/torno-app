@@ -261,6 +261,14 @@ export async function createOC(fd: FormData): Promise<Result> {
 const OCReceiveSchema = z.object({
   ocId: z.string().uuid(),
   facturaUrl: z.string().url().optional(),
+  items: z
+    .array(
+      z.object({
+        productoId: z.string().min(1),
+        cantidad: z.coerce.number().positive(),
+      })
+    )
+    .optional(),
 });
 
 export async function receiveOC(fd: FormData): Promise<Result> {
@@ -268,10 +276,15 @@ export async function receiveOC(fd: FormData): Promise<Result> {
   const parsed = OCReceiveSchema.safeParse({
     ocId: fd.get("ocId"),
     facturaUrl: (fd.get("facturaUrl") || undefined) as string | undefined,
+    items: (() => {
+      const raw = fd.get("items");
+      if (!raw) return undefined;
+      try { return JSON.parse(String(raw)); } catch { return undefined; }
+    })(),
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos de recepción" };
 
-  const { ocId, facturaUrl } = parsed.data;
+  const { ocId, facturaUrl, items } = parsed.data;
 
   const oc = await prisma.ordenCompra.findUnique({
     where: { id: ocId },
@@ -280,33 +293,88 @@ export async function receiveOC(fd: FormData): Promise<Result> {
   if (!oc) return { ok: false, message: "OC no encontrada" };
   if (oc.estado !== "OPEN") return { ok: false, message: "La OC no está abierta" };
 
+  // Calcular cantidades pedidas por producto y recibidas previas por producto
+  const orderedBySku = oc.items.reduce<Record<string, number>>((acc, it) => {
+    acc[it.productoId] = (acc[it.productoId] ?? 0) + Number(it.cantidad);
+    return acc;
+  }, {});
+
+  const prevMovs = await prisma.movimiento.findMany({
+    where: { refTabla: "OC", refId: oc.codigo },
+    select: { productoId: true, cantidad: true },
+  });
+  const receivedBySku = prevMovs.reduce<Record<string, number>>((acc, m) => {
+    acc[m.productoId] = (acc[m.productoId] ?? 0) + Number(m.cantidad);
+    return acc;
+  }, {});
+  const pendingBySku = Object.fromEntries(
+    Object.entries(orderedBySku).map(([sku, total]) => [sku, Number(total) - Number(receivedBySku[sku] ?? 0)])
+  );
+
+  // Resolver recepción total vs parcial
+  const isPartialPayload = Array.isArray(items) && items.length > 0;
+
   await prisma.$transaction(async (tx) => {
-    // 1) Movimientos de inventario (INGRESO_COMPRA) por cada item
-    for (const it of oc.items) {
-      await tx.movimiento.create({
-        data: {
-          productoId: it.productoId,
-          tipo: "INGRESO_COMPRA",
-          cantidad: it.cantidad,        // positivo
-          costoUnitario: it.costoUnitario,
-          refTabla: "OC",
-          refId: oc.codigo,
-          nota: "Recepción OC",
-        },
-      });
-      // 2) Actualizar costo de referencia del producto con el último ingreso
-      await tx.producto.update({
-        where: { sku: it.productoId },
-        data: { costo: it.costoUnitario },
-      });
+    if (!isPartialPayload) {
+      // Recepción total: ingresar todo lo pendiente de cada renglón
+      for (const it of oc.items) {
+        await tx.movimiento.create({
+          data: {
+            productoId: it.productoId,
+            tipo: "INGRESO_COMPRA",
+            cantidad: it.cantidad, // positivo
+            costoUnitario: it.costoUnitario,
+            refTabla: "OC",
+            refId: oc.codigo,
+            nota: "Recepción OC (total)",
+          },
+        });
+        await tx.producto.update({ where: { sku: it.productoId }, data: { costo: it.costoUnitario } });
+      }
+    } else {
+      // Recepción parcial: validar contra pendientes por SKU
+      // Construir mapa de costo por SKU (usa el último costoUnitario de la OC para ese SKU)
+      const costBySku = oc.items.reduce<Record<string, number>>((acc, it) => {
+        acc[it.productoId] = Number(it.costoUnitario);
+        return acc;
+      }, {});
+
+      for (const entry of items!) {
+        const sku = entry.productoId;
+        const qty = Number(entry.cantidad);
+        const pending = Number(pendingBySku[sku] ?? 0);
+        if (!(sku in orderedBySku)) {
+          throw new Error(`Producto no pertenece a la OC: ${sku}`);
+        }
+        if (qty <= 0) {
+          throw new Error(`Cantidad inválida para ${sku}`);
+        }
+        if (qty > pending) {
+          throw new Error(`Cantidad supera lo pendiente para ${sku}`);
+        }
+        await tx.movimiento.create({
+          data: {
+            productoId: sku,
+            tipo: "INGRESO_COMPRA",
+            cantidad: new Prisma.Decimal(qty),
+            costoUnitario: new Prisma.Decimal(costBySku[sku] ?? 0),
+            refTabla: "OC",
+            refId: oc.codigo,
+            nota: "Recepción OC (parcial)",
+          },
+        });
+        await tx.producto.update({ where: { sku }, data: { costo: new Prisma.Decimal(costBySku[sku] ?? 0) } });
+        pendingBySku[sku] = pending - qty;
+      }
     }
 
-    // 3) Marcar OC como RECEIVED (MVP). Si quieres manejo de cierre, puedes dejar RECEIVED y luego CLOSED tras factura.
+    // Determinar si quedó completamente recepcionada
+    const remainsPending = Object.values(pendingBySku).some((v) => Number(v) > 0);
     await tx.ordenCompra.update({
       where: { id: oc.id },
       data: {
-        estado: "RECEIVED",
-        facturaUrl: facturaUrl || null,
+        estado: remainsPending ? "OPEN" : "RECEIVED",
+        facturaUrl: facturaUrl ?? oc.facturaUrl ?? null,
         fecha: new Date(),
       },
     });

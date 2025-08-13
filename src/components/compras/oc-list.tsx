@@ -64,10 +64,12 @@ export function OCList({ rows, canWrite, actions }: { rows: OCRow[]; canWrite: b
                 <TableCell className="text-center">
                   {canWrite && o.estado === "OPEN" && (
                     <OCReceive
-                      onReceive={async (facturaUrl?: string) => {
+                      order={o}
+                      onReceive={async ({ facturaUrl, items }) => {
                         const fd = new FormData();
                         fd.set("ocId", o.id);
                         if (facturaUrl) fd.set("facturaUrl", facturaUrl);
+                        if (items && items.length > 0) fd.set("items", JSON.stringify(items));
                         const r = await actions.receiveOC(fd);
                         if (r.ok) {
                           toast.success(r.message || "Recepción registrada");

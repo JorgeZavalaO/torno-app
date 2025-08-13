@@ -66,3 +66,14 @@ export async function assertCanWritePurchases() {
   if (!await userHasPermission(u.email, "purchases.write")) throw new Error("No autorizado");
   return u;
 }
+
+export async function assertCanReadWorkorders() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "workorders.read")) throw new Error("No autorizado");
+  return u;
+}
+export async function assertCanWriteWorkorders() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "workorders.write")) throw new Error("No autorizado");
+  return u;
+}
