@@ -13,16 +13,21 @@ import { NotificationBubble } from "@/components/ui/notification-bubble";
 import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart, Plus } from "lucide-react";
+import { PriorityBadge } from "@/components/ot/priority-badge";
+import { PrioritySelect } from "@/components/ot/priority-select";
+import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
+import { StatusBadge } from "@/components/ot/status-badge";
 
 type Product = { sku: string; nombre: string; uom: string };
 type MatRow = { id: string; productoId: string; nombre: string; uom: string; qtyPlan: number; qtyEmit: number; qtyPend: number; stock: number; faltante: number };
-type OT = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; creadaEn: string|Date; clienteNombre: string|null; notas?: string; materiales: MatRow[]; hasShortage: boolean };
+type OT = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; prioridad: "LOW"|"MEDIUM"|"HIGH"|"URGENT"; creadaEn: string|Date; clienteId: string|null; clienteNombre: string|null; notas?: string; materiales: MatRow[]; hasShortage: boolean };
 
 type CreateOTPayload = {
   materiales: { sku: string; qty: number }[];
   clienteId?: string;
   cotizacionId?: string;
   notas?: string;
+  prioridad?: "LOW"|"MEDIUM"|"HIGH"|"URGENT";
 };
 
 type Actions = {
@@ -33,21 +38,31 @@ type Actions = {
   createSCFromShortages: (otId: string) => Promise<{ok:boolean; message?:string; id?:string}>;
 };
 
-export default function OTClient({ canWrite, rows, products, actions }:{
-  canWrite: boolean; rows: OT[]; products: Product[]; actions: Actions;
+export default function OTClient({ canWrite, rows, products, actions, clients }:{
+  canWrite: boolean; rows: OT[]; products: Product[]; actions: Actions; clients: ClientOption[];
 }) {
   const [q, setQ] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [filterPrioridad, setFilterPrioridad] = useState<"ALL"|"LOW"|"MEDIUM"|"HIGH"|"URGENT">("ALL");
+  const [filterClienteId, setFilterClienteId] = useState<string|undefined>(undefined);
+  const [sortBy, setSortBy] = useState<"fecha"|"prioridad">("fecha");
   
   const filtered = useMemo(()=>{
     const s = q.trim().toLowerCase();
-    if(!s) return rows;
-    return rows.filter(o =>
-      o.codigo.toLowerCase().includes(s) ||
-      (o.clienteNombre ?? "").toLowerCase().includes(s) ||
-      o.materiales.some(m => m.nombre.toLowerCase().includes(s) || m.productoId.toLowerCase().includes(s))
+    let out = rows.filter(o =>
+      (!s || o.codigo.toLowerCase().includes(s) || (o.clienteNombre ?? "").toLowerCase().includes(s) || o.materiales.some(m => m.nombre.toLowerCase().includes(s) || m.productoId.toLowerCase().includes(s))) &&
+      (filterPrioridad === "ALL" || o.prioridad === filterPrioridad) &&
+      (!filterClienteId || o.clienteId === filterClienteId)
     );
-  }, [q, rows]);
+    // sort
+    if (sortBy === "prioridad") {
+      const rank = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
+      out = [...out].sort((a,b)=> (rank[a.prioridad] - rank[b.prioridad]) || (new Date(b.creadaEn).getTime() - new Date(a.creadaEn).getTime()));
+    } else {
+      out = [...out].sort((a,b)=> new Date(b.creadaEn).getTime() - new Date(a.creadaEn).getTime());
+    }
+    return out;
+  }, [q, rows, filterPrioridad, filterClienteId, sortBy]);
 
   const shortageCount = useMemo(()=> rows.filter(r => r.hasShortage).length, [rows]);
   const inProgressCount = useMemo(()=> rows.filter(r => r.estado === "IN_PROGRESS").length, [rows]);
@@ -57,10 +72,13 @@ export default function OTClient({ canWrite, rows, products, actions }:{
     setIsCreating(true);
     try {
       const fd = new FormData();
-      fd.set("materiales", JSON.stringify(payload.materiales));
+      // map from sku to productoId
+      const mats = payload.materiales.map(m => ({ productoId: m.sku, qtyPlan: m.qty }));
+      fd.set("materiales", JSON.stringify(mats));
       if (payload.clienteId) fd.set("clienteId", payload.clienteId);
       if (payload.cotizacionId) fd.set("cotizacionId", payload.cotizacionId);
       if (payload.notas) fd.set("notas", payload.notas);
+      if (payload.prioridad) fd.set("prioridad", payload.prioridad);
       
       const r = await actions.createOT(fd);
       if (r.ok) { 
@@ -83,7 +101,8 @@ export default function OTClient({ canWrite, rows, products, actions }:{
         </div>
         {canWrite && (
           <NewOTButton 
-            products={products} 
+            products={products}
+            clients={clients}
             onCreate={handleCreateOT}
             isCreating={isCreating}
           />
@@ -154,15 +173,47 @@ export default function OTClient({ canWrite, rows, products, actions }:{
 
         <TabsContent value="lista" className="space-y-4">
           {/* Search Bar */}
-          <Card className="p-4">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar por código, cliente o material..." 
-                value={q} 
-                onChange={e=>setQ(e.target.value)}
-                className="pl-10"
-              />
+          <Card className="p-4 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-end">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar por código, cliente o material..." 
+                  value={q} 
+                  onChange={e=>setQ(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Prioridad</label>
+                <div className="flex flex-wrap gap-2">
+                  {(["ALL","URGENT","HIGH","MEDIUM","LOW"] as const).map(p => (
+                    <button key={p} onClick={()=>setFilterPrioridad(p)}
+                      className={`h-9 px-3 rounded-md border text-sm ${filterPrioridad===p?"bg-primary text-primary-foreground border-primary":"hover:bg-muted"}`}>
+                      {p==="ALL"?"Todas":p==="URGENT"?"Urgente":p==="HIGH"?"Alta":p==="MEDIUM"?"Media":"Baja"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <ClientSelect clients={clients} value={filterClienteId} onChange={setFilterClienteId} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Ordenar por</label>
+                <select className="w-full h-9 border rounded-md px-2" value={sortBy} onChange={e=>setSortBy(e.target.value as "fecha"|"prioridad")}>
+                  <option value="fecha">Fecha (recientes primero)</option>
+                  <option value="prioridad">Prioridad</option>
+                </select>
+              </div>
+              <div className="flex gap-2 lg:justify-end">
+                <Button variant="outline" size="sm" onClick={()=>{ setQ(""); setFilterPrioridad("ALL"); setFilterClienteId(undefined); setSortBy("fecha"); }}>Limpiar</Button>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><Badge variant="outline">Total</Badge> {rows.length}</span>
+              <span className="inline-flex items-center gap-1"><Badge className="bg-red-100 text-red-800">Faltantes</Badge> {rows.filter(r=>r.hasShortage).length}</span>
+              <span className="inline-flex items-center gap-1"><Badge className="bg-blue-100 text-blue-800">Abiertas</Badge> {rows.filter(r=>r.estado==="OPEN").length}</span>
+              <span className="inline-flex items-center gap-1"><Badge className="bg-indigo-100 text-indigo-800">En proceso</Badge> {rows.filter(r=>r.estado==="IN_PROGRESS").length}</span>
             </div>
           </Card>
 
@@ -173,6 +224,7 @@ export default function OTClient({ canWrite, rows, products, actions }:{
                 <TableRow className="bg-muted/40">
                   <TableHead>Código</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead className="text-center">Prioridad</TableHead>
                   <TableHead>Materiales</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
@@ -193,6 +245,9 @@ export default function OTClient({ canWrite, rows, products, actions }:{
                       <div className="font-medium">
                         {o.clienteNombre ?? <span className="text-muted-foreground">Sin cliente</span>}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <PriorityBadge prioridad={o.prioridad} />
                     </TableCell>
                     <TableCell>
                       <div className="space-y-2">
@@ -227,7 +282,15 @@ export default function OTClient({ canWrite, rows, products, actions }:{
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <OTBadge estado={o.estado} warn={o.hasShortage} />
+                      <div className="inline-flex items-center gap-2">
+                        <StatusBadge estado={o.estado} />
+                        {o.hasShortage && (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Faltantes
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -259,9 +322,9 @@ export default function OTClient({ canWrite, rows, products, actions }:{
                     </TableCell>
                   </TableRow>
                 ))}
-                {filtered.length === 0 && (
+        {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+          <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                       {q ? "No se encontraron OTs que coincidan con la búsqueda" : "No hay órdenes de trabajo"}
                     </TableCell>
                   </TableRow>
@@ -275,48 +338,24 @@ export default function OTClient({ canWrite, rows, products, actions }:{
   );
 }
 
-function OTBadge({ estado, warn }: { estado: OT["estado"]; warn?: boolean }) {
-  const classes: Record<OT["estado"], string> = {
-    DRAFT: "bg-gray-100 text-gray-800",
-    OPEN: "bg-blue-100 text-blue-800",
-    IN_PROGRESS: "bg-indigo-100 text-indigo-800",
-    DONE: "bg-green-100 text-green-800",
-    CANCELLED: "bg-red-100 text-red-800",
-  };
-  
-  const labels: Record<OT["estado"], string> = {
-    DRAFT: "Borrador",
-    OPEN: "Abierta",
-    IN_PROGRESS: "En Proceso",
-    DONE: "Terminada",
-    CANCELLED: "Cancelada",
-  };
-  
-  return (
-    <div className="inline-flex items-center gap-2">
-      <Badge className={classes[estado]}>{labels[estado]}</Badge>
-      {warn && (
-        <Badge variant="destructive" className="text-xs">
-          <AlertTriangle className="h-3 w-3 mr-1" />
-          Faltantes
-        </Badge>
-      )}
-    </div>
-  );
-}
+// Estado badge reutilizado desde components/ot/status-badge
 
 function NewOTButton({ 
-  products, 
+  products,
+  clients,
   onCreate, 
   isCreating = false 
 }: {
   products: Product[]; 
+  clients: ClientOption[];
   onCreate: (payload: CreateOTPayload) => Promise<void>;
   isCreating?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [materiales, setMateriales] = useState<{sku: string; qty: number}[]>([]);
   const [notas, setNotas] = useState("");
+  const [clienteId, setClienteId] = useState<string|undefined>(undefined);
+  const [prioridad, setPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">("MEDIUM");
 
   const handleSubmit = async () => {
     if (materiales.length === 0) {
@@ -328,10 +367,14 @@ function NewOTButton({
       await onCreate({
         materiales: materiales.filter(m => m.qty > 0),
         notas: notas.trim() || undefined,
+        clienteId,
+        prioridad,
       });
       setIsOpen(false);
       setMateriales([]);
       setNotas("");
+      setClienteId(undefined);
+      setPrioridad("MEDIUM");
     } catch {
       toast.error("Error al crear la OT");
     }
@@ -370,6 +413,10 @@ function NewOTButton({
           </div>
           
           <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ClientSelect clients={clients} value={clienteId} onChange={setClienteId} />
+              <PrioritySelect value={prioridad} onChange={setPrioridad} />
+            </div>
             <div>
               <label className="text-sm font-medium">Notas</label>
               <Input

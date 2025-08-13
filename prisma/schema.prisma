@@ -302,10 +302,18 @@ enum EstadoOT {
   CANCELLED
 }
 
+enum PrioridadOT {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model OrdenTrabajo {
   id            String     @id @default(uuid())
   codigo        String     @unique
   estado        EstadoOT   @default(DRAFT)
+  prioridad     PrioridadOT @default(MEDIUM)
   clienteId     String?
   cotizacionId  String?
   notas         String?

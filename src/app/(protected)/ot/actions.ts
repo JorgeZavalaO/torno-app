@@ -42,6 +42,7 @@ const CreateOTSchema = z.object({
   clienteId: z.string().optional(),
   cotizacionId: z.string().optional(),
   notas: z.string().max(500).optional(),
+  prioridad: z.enum(["LOW","MEDIUM","HIGH","URGENT"]).optional(),
   materiales: z.array(z.object({
     productoId: z.string().min(1),
     qtyPlan: z.coerce.number().positive(),
@@ -54,6 +55,7 @@ export async function createOT(fd: FormData): Promise<R> {
     clienteId: (fd.get("clienteId") || undefined) as string | undefined,
     cotizacionId: (fd.get("cotizacionId") || undefined) as string | undefined,
     notas: (fd.get("notas") || undefined) as string | undefined,
+    prioridad: (fd.get("prioridad") || undefined) as "LOW" | "MEDIUM" | "HIGH" | "URGENT" | undefined,
     materiales: JSON.parse(String(fd.get("materiales") || "[]")),
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos de OT" };
@@ -63,6 +65,7 @@ export async function createOT(fd: FormData): Promise<R> {
     data: {
       codigo,
       estado: "OPEN",
+      prioridad: (parsed.data.prioridad ?? "MEDIUM"),
       clienteId: parsed.data.clienteId ?? null,
       cotizacionId: parsed.data.cotizacionId ?? null,
       notas: parsed.data.notas ?? null,
@@ -85,6 +88,38 @@ export async function setOTState(id: string, estado: "DRAFT"|"OPEN"|"IN_PROGRESS
   await prisma.ordenTrabajo.update({ where: { id }, data: { estado } });
   bumpAll(id);
   return { ok: true, message: "Estado actualizado" };
+}
+
+/* ---------------- Update OT metadata (cliente/prioridad) ---------------- */
+const UpdateMetaSchema = z.object({
+  otId: z.string().uuid(),
+  clienteId: z.string().nullable().optional(),
+  prioridad: z.enum(["LOW","MEDIUM","HIGH","URGENT"]).optional(),
+  notas: z.string().max(500).optional(),
+});
+
+export async function updateOTMeta(fd: FormData): Promise<R> {
+  await assertCanWriteWorkorders();
+  const rawCliente = fd.get("clienteId");
+  const parsed = UpdateMetaSchema.safeParse({
+    otId: fd.get("otId"),
+    clienteId: rawCliente === "" ? null : (rawCliente || undefined),
+    prioridad: (fd.get("prioridad") || undefined) as "LOW"|"MEDIUM"|"HIGH"|"URGENT"|undefined,
+    notas: (fd.get("notas") || undefined) as string | undefined,
+  });
+  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
+
+  const { otId, clienteId, prioridad, notas } = parsed.data;
+  await prisma.ordenTrabajo.update({
+    where: { id: otId },
+    data: {
+      clienteId: typeof clienteId === "string" ? clienteId : clienteId === null ? null : undefined,
+      prioridad: prioridad ?? undefined,
+      notas: notas === undefined ? undefined : (notas || null),
+    },
+  });
+  bumpAll(otId);
+  return { ok: true, message: "OT actualizada" };
 }
 
 const AddMatSchema = z.object({

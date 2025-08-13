@@ -7,27 +7,20 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { 
-  ArrowLeft, 
-  Play, 
-  Check, 
-  AlertTriangle, 
-  Package, 
-  ShoppingCart, 
-  Clock, 
-  User,
-  Plus
-} from "lucide-react";
+import { ArrowLeft, Play, Check, ShoppingCart, Copy } from "lucide-react";
+import { PriorityBadge } from "@/components/ot/priority-badge";
+import { StatusBadge } from "@/components/ot/status-badge";
+import { PrioritySelect } from "@/components/ot/priority-select";
+import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
 
 type Product = { sku: string; nombre: string; uom: string };
 type Mat = { id: string; productoId: string; nombre: string; uom: string; qtyPlan: number; qtyEmit: number; qtyPend: number };
 type Mov = { id: string; fecha: string|Date; sku: string; nombre: string; uom: string; tipo: string; cantidad: number; costoUnitario: number; importe: number; nota?: string };
 type Parte = { id: string; fecha: string|Date; horas: number; maquina?: string; nota?: string; usuario: string };
-type Detail = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; creadaEn: string|Date; clienteNombre: string|null; notas?: string; materiales: Mat[]; kardex: Mov[]; partes: Parte[] };
+type Detail = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; prioridad: "LOW"|"MEDIUM"|"HIGH"|"URGENT"; creadaEn: string|Date; clienteNombre: string|null; notas?: string; materiales: Mat[]; kardex: Mov[]; partes: Parte[] };
 
 type Actions = {
   issueMaterials: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
@@ -35,10 +28,11 @@ type Actions = {
   createSCFromShortages: (otId: string) => Promise<{ok:boolean; message?:string}>;
   setOTState: (id: string, estado: Detail["estado"]) => Promise<{ok:boolean; message?:string}>;
   addMaterial: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
+  updateOTMeta: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
 };
 
-export default function OTDetailClient({ canWrite, detail, products, actions }:{
-  canWrite: boolean; detail: Detail; products: Product[]; actions: Actions;
+export default function OTDetailClient({ canWrite, detail, products, actions, clients }:{
+  canWrite: boolean; detail: Detail; products: Product[]; actions: Actions; clients: ClientOption[];
 }) {
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [horas, setHoras] = useState<number>(1);
@@ -46,6 +40,28 @@ export default function OTDetailClient({ canWrite, detail, products, actions }:{
   const [nota, setNota] = useState("");
   const hasAny = useMemo(()=> Object.values(qtys).some(v => Number(v) > 0), [qtys]);
   const faltantes = useMemo(()=> detail.materiales.filter(m=>m.qtyPend>0), [detail.materiales]);
+
+  const [editClienteId, setEditClienteId] = useState<string|undefined>(undefined);
+  const [editPrioridad, setEditPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">(detail.prioridad);
+  const [editNotas, setEditNotas] = useState<string>(detail.notas ?? "");
+
+  const totales = useMemo(()=>{
+    const plan = detail.materiales.reduce((s,m)=> s + Number(m.qtyPlan), 0);
+    const emit = detail.materiales.reduce((s,m)=> s + Number(m.qtyEmit), 0);
+    const pend = detail.materiales.reduce((s,m)=> s + Number(m.qtyPend), 0);
+    return { plan, emit, pend };
+  }, [detail.materiales]);
+
+  const saveMeta = async () => {
+    const fd = new FormData();
+    fd.set("otId", detail.id);
+    if (editClienteId !== undefined) fd.set("clienteId", editClienteId ?? "");
+    fd.set("prioridad", editPrioridad);
+  fd.set("notas", editNotas.trim());
+    const r = await actions.updateOTMeta(fd);
+    if (r.ok) { toast.success(r.message || "OT actualizada"); location.reload(); }
+    else toast.error(r.message);
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -59,65 +75,102 @@ export default function OTDetailClient({ canWrite, detail, products, actions }:{
           </div>
           <div className="flex items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">OT {detail.codigo}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight">OT {detail.codigo}</h1>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title="Copiar código"
+                  onClick={async ()=>{ await navigator.clipboard.writeText(String(detail.codigo)); toast.success("Código copiado"); }}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
               <div className="text-lg text-muted-foreground">
                 {detail.clienteNombre ?? <span className="italic">Sin cliente asignado</span>}
               </div>
             </div>
-            <OTStatusBadge estado={detail.estado} />
+            <StatusBadge estado={detail.estado} />
+            <PriorityBadge prioridad={detail.prioridad} />
           </div>
-          {detail.notas && (
-            <div className="mt-2 text-sm text-muted-foreground bg-muted p-2 rounded">
-              {detail.notas}
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-sm text-muted-foreground mb-1">
+              <span>Avance de materiales</span>
+              <span>{totales.emit} / {totales.plan}</span>
+            </div>
+            <ProgressBar value={totales.emit} max={Math.max(1, totales.plan)} variant={totales.pend>0?"default":"success"} />
+          </div>
+          {canWrite && (
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <ClientSelect clients={clients} value={editClienteId} onChange={setEditClienteId} />
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <PrioritySelect value={editPrioridad} onChange={setEditPrioridad} />
+                </div>
+                <Button size="sm" onClick={saveMeta}>Guardar</Button>
+              </div>
             </div>
           )}
+          <div className="mt-2">
+            <label className="text-sm text-muted-foreground">Notas</label>
+            <Input value={editNotas} onChange={e=>setEditNotas(e.target.value)} placeholder="Notas, indicaciones o referencias..." />
+          </div>
         </div>
         {canWrite && (
-          <div className="flex gap-2 items-center">
-            <Button 
-              variant="outline" 
-              onClick={async ()=>{ 
-                const r = await actions.setOTState(detail.id, "IN_PROGRESS"); 
-                if(r.ok) location.reload(); 
-                else toast.error(r.message);
-              }} 
-              disabled={detail.estado!=="OPEN"}
-              className="flex items-center gap-2"
-            >
-              <Play className="h-4 w-4" />
-              Iniciar
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={async ()=>{ 
-                const r = await actions.setOTState(detail.id, "DONE"); 
-                if(r.ok) location.reload();
-                else toast.error(r.message);
-              }} 
-              disabled={detail.estado==="DONE"}
-              className="flex items-center gap-2"
-            >
-              <Check className="h-4 w-4" />
-              Terminar
-            </Button>
-            {faltantes.length > 0 && (
+          <div className="flex flex-col items-end gap-2">
+            {/* Stepper simple de estados */}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {(["OPEN","IN_PROGRESS","DONE"] as const).map((s, idx) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className={`h-6 px-2 rounded-full border ${detail.estado===s?"bg-primary text-primary-foreground border-primary":""}`}>
+                    <div className="h-full flex items-center">{s === "OPEN" ? "Abierta" : s === "IN_PROGRESS" ? "En proceso" : "Terminada"}</div>
+                  </div>
+                  {idx<2 && <div className="w-8 h-[2px] bg-muted" />}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 items-center">
               <Button 
-                variant="destructive" 
+                variant="outline" 
                 onClick={async ()=>{ 
-                  const r = await actions.createSCFromShortages(detail.id); 
-                  if(r.ok) {
-                    toast.success("Solicitud de compra creada para faltantes");
-                    location.reload();
-                  } else {
-                    toast.error(r.message || "Error al crear SC");
-                  }
-                }}
+                  const r = await actions.setOTState(detail.id, "IN_PROGRESS"); 
+                  if(r.ok) location.reload(); 
+                  else toast.error(r.message);
+                }} 
+                disabled={detail.estado!=="OPEN"}
                 className="flex items-center gap-2"
               >
-                <ShoppingCart className="h-4 w-4" />
-                Crear SC Faltantes
+                <Play className="h-4 w-4" />
+                Iniciar
               </Button>
-            )}
+              <Button 
+                variant="outline" 
+                onClick={async ()=>{ 
+                  const r = await actions.setOTState(detail.id, "DONE"); 
+                  if(r.ok) location.reload();
+                  else toast.error(r.message);
+                }} 
+                disabled={detail.estado==="DONE"}
+                className="flex items-center gap-2"
+              >
+                <Check className="h-4 w-4" />
+                Terminar
+              </Button>
+              {faltantes.length > 0 && (
+                <Button 
+                  variant="destructive" 
+                  onClick={async ()=>{ 
+                    const r = await actions.createSCFromShortages(detail.id); 
+                    if(r.ok) {
+                      toast.success("Solicitud de compra creada para faltantes");
+                      location.reload();
+                    } else {
+                      toast.error(r.message || "Error al crear SC");
+                    }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Crear SC Faltantes
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -140,7 +193,22 @@ export default function OTDetailClient({ canWrite, detail, products, actions }:{
         <TabsContent value="materiales" className="space-y-4">
           {canWrite && (
             <Card className="p-3 space-y-2">
-              <div className="text-sm text-muted-foreground">Emitir materiales</div>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">Emitir materiales</div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={()=>setQtys({})}>Limpiar</Button>
+                  <Button size="sm" variant="secondary" onClick={async ()=>{
+                    const items = detail.materiales.filter(m=>m.qtyPend>0).map(m=>({ productoId: m.productoId, cantidad: Number(m.qtyPend) }));
+                    if (items.length===0) return toast.info("No hay pendientes");
+                    const fd = new FormData();
+                    fd.set("otId", detail.id);
+                    fd.set("items", JSON.stringify(items));
+                    const r = await actions.issueMaterials(fd);
+                    if (r.ok) { toast.success(r.message || "Emitido todo"); location.reload(); }
+                    else toast.error(r.message);
+                  }}>Emitir todo pendiente</Button>
+                </div>
+              </div>
               <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground">
                 <div className="col-span-6">Producto</div>
                 <div className="col-span-3 text-right">Pendiente</div>
@@ -159,7 +227,6 @@ export default function OTDetailClient({ canWrite, detail, products, actions }:{
                 ))}
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={()=>setQtys({})}>Limpiar</Button>
                 <Button size="sm" onClick={async ()=>{
                   if (!hasAny) return toast.error("Indica cantidades a emitir");
                   const items = Object.entries(qtys).filter(([,v])=>Number(v)>0).map(([productoId, cantidad])=>({ productoId, cantidad:Number(cantidad) }));
@@ -347,15 +414,4 @@ function AddMat({ products, onAdd }:{
   );
 }
 
-function OTStatusBadge({ estado }: { estado: Detail["estado"] }) {
-  const config: Record<Detail["estado"], { label: string; className: string }> = {
-    DRAFT: { label: "Borrador", className: "bg-gray-100 text-gray-800" },
-    OPEN: { label: "Abierta", className: "bg-blue-100 text-blue-800" },
-    IN_PROGRESS: { label: "En Proceso", className: "bg-indigo-100 text-indigo-800" },
-    DONE: { label: "Terminada", className: "bg-green-100 text-green-800" },
-    CANCELLED: { label: "Cancelada", className: "bg-red-100 text-red-800" },
-  };
-
-  const { label, className } = config[estado];
-  return <Badge className={className}>{label}</Badge>;
-}
+// StatusBadge compartido en components/ot/status-badge

@@ -10,7 +10,7 @@ export const getOTsCached = cache(
       orderBy: { creadaEn: "desc" },
       include: {
         materiales: { include: { producto: { select: { nombre: true, uom: true } } } },
-        cliente: { select: { nombre: true } },
+        cliente: { select: { id: true, nombre: true } },
       },
       take: 100,
     });
@@ -21,7 +21,7 @@ export const getOTsCached = cache(
       : [];
     const stockMap = new Map(sums.map(s => [s.productoId, toNum(s._sum.cantidad)]));
 
-    return ots.map(o => {
+  return ots.map(o => {
       const materiales = o.materiales.map(m => {
         const plan = toNum(m.qtyPlan);
         const emit = toNum(m.qtyEmit);
@@ -45,8 +45,10 @@ export const getOTsCached = cache(
         id: o.id,
         codigo: o.codigo,
         estado: o.estado,
+        prioridad: o.prioridad,
         creadaEn: o.creadaEn,
-        clienteNombre: o.cliente?.nombre ?? null,
+  clienteId: o.cliente?.id ?? null,
+  clienteNombre: o.cliente?.nombre ?? null,
         notas: o.notas ?? undefined,
         materiales,
         hasShortage,
@@ -83,6 +85,7 @@ export async function getOTDetailFull(id: string) {
     id: ot.id,
     codigo: ot.codigo,
     estado: ot.estado,
+  prioridad: ot.prioridad,
     creadaEn: ot.creadaEn,
     clienteNombre: ot.cliente?.nombre ?? null,
     notas: ot.notas ?? undefined,
