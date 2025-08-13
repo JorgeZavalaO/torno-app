@@ -24,6 +24,8 @@ model UserProfile {
 
   // Relación a roles
   roles UserRole[]
+
+  solicitudesCompra SolicitudCompra[]
 }
 
 model Role {
@@ -181,6 +183,8 @@ model Producto {
   updatedAt   DateTime          @updatedAt
 
   movimientos  Movimiento[]
+  scItems      SCItem[]
+  ocItems      OCItem[]
 }
 
 model Movimiento {
@@ -197,4 +201,91 @@ model Movimiento {
   producto      Producto      @relation(fields: [productoId], references: [sku])
 
   @@index([productoId, fecha])
+}
+enum EstadoSC {
+  PENDING_ADMIN
+  PENDING_GERENCIA
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum EstadoOC {
+  OPEN
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+model Proveedor {
+  id        String        @id @default(uuid())
+  nombre    String
+  ruc       String        @unique
+  contacto  String?
+  email     String?
+  telefono  String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  ordenes   OrdenCompra[]
+}
+
+model SolicitudCompra {
+  id            String      @id @default(uuid())
+  solicitanteId String      // UserProfile.id
+  otId          String?     // opcional para enlazar a OT
+  estado        EstadoSC    @default(PENDING_ADMIN)
+  totalEstimado Decimal?    @db.Decimal(12,2)
+  notas         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  solicitante   UserProfile @relation(fields: [solicitanteId], references: [id])
+  items         SCItem[]
+  ordenCompra   OrdenCompra?
+
+  @@index([estado, createdAt])
+}
+
+model SCItem {
+  id            String   @id @default(uuid())
+  scId          String
+  productoId    String   // Producto.sku
+  cantidad      Decimal  @db.Decimal(12,3)
+  costoEstimado Decimal? @db.Decimal(12,2)
+
+  solicitudCompra SolicitudCompra @relation(fields: [scId], references: [id])
+  producto        Producto        @relation(fields: [productoId], references: [sku])
+
+  @@index([scId])
+}
+
+model OrdenCompra {
+  id            String     @id @default(uuid())
+  scId          String     @unique
+  proveedorId   String
+  codigo        String     @unique
+  estado        EstadoOC   @default(OPEN)
+  total         Decimal    @db.Decimal(12,2)
+  facturaUrl    String?
+  fecha         DateTime   @default(now())
+
+  solicitudCompra SolicitudCompra @relation(fields: [scId], references: [id])
+  proveedor       Proveedor       @relation(fields: [proveedorId], references: [id])
+  items           OCItem[]
+
+  @@index([estado, fecha])
+}
+
+model OCItem {
+  id            String  @id @default(uuid())
+  ocId          String
+  productoId    String  // Producto.sku
+  cantidad      Decimal @db.Decimal(12,3)
+  costoUnitario Decimal @db.Decimal(12,2)
+
+  ordenCompra   OrdenCompra @relation(fields: [ocId], references: [id])
+  producto      Producto    @relation(fields: [productoId], references: [sku])
+
+  @@index([ocId])
 }

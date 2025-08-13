@@ -9,4 +9,7 @@ export const cacheTags = {
   inventoryProducts: "inventory:products",
   inventoryMovs: "inventory:movs",
   inventoryKardex: (sku: string) => `inventory:kardex:${sku}`,
+  purchasesSC: "purchases:sc",
+  purchasesOC: "purchases:oc",
+  providers: "purchases:providers",
 };

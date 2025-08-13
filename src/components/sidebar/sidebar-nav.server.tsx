@@ -58,7 +58,7 @@ const allNavItems: (NavItem & { requiredPerm?: string })[] = [
     href: "/compras", 
     label: "Compras", 
     icon: "ShoppingCart", 
-    requiredPerm: "purchasing.read" 
+    requiredPerm: "purchases.read" 
   },
   { 
     href: "/produccion", 
