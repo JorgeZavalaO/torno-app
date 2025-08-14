@@ -86,32 +86,48 @@ export async function createOT(fd: FormData): Promise<R> {
     }
     return { productoId: p.productoId ?? null, descripcion: p.descripcion ?? null, qtyPlan: p.qtyPlan };
   });
+  // Validar que el cliente exista (si se envía) para evitar P2003 silencioso por cache desactualizado
+  const clienteId: string | null = parsed.data.clienteId ?? null;
+  if (clienteId) {
+    const exists = await prisma.cliente.findUnique({ where: { id: clienteId }, select: { id: true } });
+    if (!exists) {
+      return { ok: false, message: "El cliente seleccionado ya no existe. Recarga y vuelve a intentar." };
+    }
+  }
 
-  const o = await prisma.ordenTrabajo.create({
-    data: ({
-      codigo,
-      estado: "OPEN",
-      prioridad: (parsed.data.prioridad ?? "MEDIUM"),
-      clienteId: parsed.data.clienteId ?? null,
-      cotizacionId: parsed.data.cotizacionId ?? null,
-      notas: parsed.data.notas ?? null,
-      acabado: parsed.data.acabado ?? null,
-      materiales: {
-        create: parsed.data.materiales.map(m => ({
-          productoId: m.productoId,
-          qtyPlan: D(m.qtyPlan),
-        })),
-      },
-      piezas: {
-        create: piezasSanitized.map(p => ({
-          productoId: p.productoId,
-          descripcion: p.descripcion,
-          qtyPlan: D(p.qtyPlan),
-        })),
-      },
-    }),
-    select: { id: true, codigo: true },
-  });
+  let o: { id: string; codigo: string };
+  try {
+    o = await prisma.ordenTrabajo.create({
+      data: ({
+        codigo,
+        estado: "OPEN",
+        prioridad: (parsed.data.prioridad ?? "MEDIUM"),
+        clienteId,
+        cotizacionId: parsed.data.cotizacionId ?? null,
+        notas: parsed.data.notas ?? null,
+        acabado: parsed.data.acabado ?? null,
+        materiales: {
+          create: parsed.data.materiales.map(m => ({
+            productoId: m.productoId,
+            qtyPlan: D(m.qtyPlan),
+          })),
+        },
+        piezas: {
+          create: piezasSanitized.map(p => ({
+            productoId: p.productoId,
+            descripcion: p.descripcion,
+            qtyPlan: D(p.qtyPlan),
+          })),
+        },
+      }),
+      select: { id: true, codigo: true },
+    });
+  } catch (err) {
+    if (err && typeof err === "object" && (err as { code?: string }).code === "P2003") {
+      return { ok: false, message: "Error de integridad: Alguna referencia (cliente, cotización o producto) es inválida. Verifica los datos y recarga." };
+    }
+    return { ok: false, message: "Error interno al crear OT" };
+  }
 
   // Generar SC automática si faltan materiales
   if (parsed.data.autoSC) {
@@ -292,7 +308,8 @@ export async function createSCFromShortages(otId: string): Promise<R> {
   const sc = await prisma.solicitudCompra.create({
     data: {
       solicitanteId: user.id,
-      otId: ot.codigo,               // guarda referencia de OT (usa tu string/código)
+  // Debe referenciar al ID real de la OT (relación FK), no al código amigable
+  otId: ot.id,
       estado: "PENDING_ADMIN",
       totalEstimado: D(0),
       items: {

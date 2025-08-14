@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -42,6 +43,9 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
   const hasAny = useMemo(()=> Object.values(qtys).some(v => Number(v) > 0), [qtys]);
   const faltantes = useMemo(()=> detail.materiales.filter(m=>m.qtyPend>0), [detail.materiales]);
 
+  const router = useRouter();
+  const refresh = () => startTransition(() => router.refresh());
+
   const [editClienteId, setEditClienteId] = useState<string|undefined>(undefined);
   const [editPrioridad, setEditPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">(detail.prioridad);
   const [editNotas, setEditNotas] = useState<string>(detail.notas ?? "");
@@ -60,7 +64,7 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
     fd.set("prioridad", editPrioridad);
   fd.set("notas", editNotas.trim());
     const r = await actions.updateOTMeta(fd);
-    if (r.ok) { toast.success(r.message || "OT actualizada"); location.reload(); }
+    if (r.ok) { toast.success(r.message || "OT actualizada"); refresh(); }
     else toast.error(r.message);
   };
 
@@ -131,8 +135,8 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
                 variant="outline" 
                 onClick={async ()=>{ 
                   const r = await actions.setOTState(detail.id, "IN_PROGRESS"); 
-                  if(r.ok) location.reload(); 
-                  else toast.error(r.message);
+                  if (r.ok) { toast.success(r.message || "OT iniciada"); refresh(); }
+                  else toast.error(r.message || "No se pudo iniciar la OT");
                 }} 
                 disabled={detail.estado!=="OPEN"}
                 className="flex items-center gap-2"
@@ -144,8 +148,8 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
                 variant="outline" 
                 onClick={async ()=>{ 
                   const r = await actions.setOTState(detail.id, "DONE"); 
-                  if(r.ok) location.reload();
-                  else toast.error(r.message);
+                  if (r.ok) { toast.success(r.message || "OT finalizada"); refresh(); }
+                  else toast.error(r.message || "No se pudo finalizar la OT");
                 }} 
                 disabled={detail.estado==="DONE"}
                 className="flex items-center gap-2"
@@ -160,7 +164,7 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
                     const r = await actions.createSCFromShortages(detail.id); 
                     if(r.ok) {
                       toast.success("Solicitud de compra creada para faltantes");
-                      location.reload();
+                      refresh();
                     } else {
                       toast.error(r.message || "Error al crear SC");
                     }
@@ -206,8 +210,8 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
                     fd.set("otId", detail.id);
                     fd.set("items", JSON.stringify(items));
                     const r = await actions.issueMaterials(fd);
-                    if (r.ok) { toast.success(r.message || "Emitido todo"); location.reload(); }
-                    else toast.error(r.message);
+                    if (r.ok) { toast.success(r.message || "Emitido todo"); refresh(); }
+                    else toast.error(r.message || "No se pudo emitir");
                   }}>Emitir todo pendiente</Button>
                 </div>
               </div>
@@ -236,8 +240,8 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
                   fd.set("otId", detail.id);
                   fd.set("items", JSON.stringify(items));
                   const r = await actions.issueMaterials(fd);
-                  if (r.ok) { toast.success(r.message || "Emitido"); location.reload(); }
-                  else toast.error(r.message);
+                  if (r.ok) { toast.success(r.message || "Emitido"); refresh(); }
+                  else toast.error(r.message || "No se pudo emitir");
                 }}>Confirmar</Button>
               </div>
             </Card>
@@ -248,8 +252,8 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
               <div className="text-sm text-muted-foreground">Faltantes detectados: {faltantes.length}</div>
               <Button variant="outline" onClick={async ()=>{
                 const r = await actions.createSCFromShortages(detail.id);
-                if (r.ok) toast.success(r.message || "SC creada");
-                else toast.error(r.message);
+                if (r.ok) {toast.success(r.message || "SC creada");refresh();}
+                else {toast.error(r.message || "No se pudo crear la SC");}
               }}>MRP: Crear SC por faltantes</Button>
             </div>
           )}
@@ -408,8 +412,8 @@ export default function OTDetailClient({ canWrite, detail, products, actions, cl
                   if (maquina) fd.set("maquina", maquina);
                   if (nota) fd.set("nota", nota);
                   const r = await actions.logProduction(fd);
-                  if (r.ok) { toast.success(r.message || "Parte registrado"); setHoras(1); setMaquina(""); setNota(""); location.reload(); }
-                  else toast.error(r.message);
+                  if (r.ok) { toast.success(r.message || "Parte registrado"); setHoras(1); setMaquina(""); setNota(""); refresh();  }
+                  else {toast.error(r.message || "No se pudo registrar el parte");}
                 }}>Guardar</Button>
               </div>
             </Card>

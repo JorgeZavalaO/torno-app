@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -44,6 +45,9 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
   const [piezaQtys, setPiezaQtys] = useState<Record<string, number>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"produccion"|"materiales"|"historial">("produccion");
+
+  const router = useRouter();
+  const refresh = () => startTransition(() => router.refresh());
   
   // Estados de edición mejorados
   const [editClienteId, setEditClienteId] = useState<string|undefined>(
@@ -80,7 +84,7 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
     if (r.ok) { 
       toast.success("OT actualizada"); 
       setIsEditing(false);
-      setTimeout(() => location.reload(), 500);
+      refresh();
     } else {
       toast.error(r.message);
     }
@@ -94,7 +98,7 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
     if (r.ok) { 
       toast.success(r.message || "Materiales emitidos"); 
       setQtys({});
-      location.reload(); 
+      refresh();
     } else {
       toast.error(r.message);
     }
@@ -109,7 +113,7 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
     if (r.ok) {
       toast.success("Producción registrada");
       setPiezaQtys({});
-      location.reload();
+      refresh();
     } else {
       toast.error(r.message);
     }
@@ -211,8 +215,8 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
                   <Button 
                     onClick={async ()=>{ 
                       const r = await actions.setOTState(detail.id, "IN_PROGRESS"); 
-                      if(r.ok) location.reload(); 
-                      else toast.error(r.message);
+                      if (r.ok) { toast.success(r.message || "OT iniciada"); refresh(); }
+                      else toast.error(r.message || "No se pudo iniciar la OT");
                     }}
                     className="whitespace-nowrap"
                   >
@@ -225,8 +229,8 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
                     variant="secondary"
                     onClick={async ()=>{ 
                       const r = await actions.setOTState(detail.id, "DONE"); 
-                      if(r.ok) location.reload();
-                      else toast.error(r.message);
+                      if (r.ok) { toast.success(r.message || "OT finalizada"); refresh(); }
+                      else toast.error(r.message || "No se pudo finalizar la OT");
                     }}
                     className="whitespace-nowrap"
                   >
@@ -240,12 +244,8 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
                     size="sm"
                     onClick={async ()=>{ 
                       const r = await actions.createSCFromShortages(detail.id); 
-                      if(r.ok) {
-                        toast.success("Solicitud de compra creada");
-                        location.reload();
-                      } else {
-                        toast.error(r.message || "Error al crear SC");
-                      }
+                      if (r.ok) { toast.success("Solicitud de compra creada"); refresh(); }
+                      else toast.error(r.message || "Error al crear SC");
                     }}
                     className="whitespace-nowrap"
                   >
@@ -733,6 +733,8 @@ function RegistrarParteForm({ otId, onSubmit }: {
   const [horas, setHoras] = useState<number>(1);
   const [maquina, setMaquina] = useState("");
   const [nota, setNota] = useState("");
+  const router = useRouter();
+  const refresh = () => startTransition(() => router.refresh());
 
   const handleSubmit = async () => {
     const fd = new FormData();
@@ -746,8 +748,8 @@ function RegistrarParteForm({ otId, onSubmit }: {
       toast.success("Parte registrado"); 
       setHoras(1); 
       setMaquina(""); 
-      setNota(""); 
-      location.reload(); 
+      setNota("");
+      refresh();
     } else {
       toast.error(r.message);
     }

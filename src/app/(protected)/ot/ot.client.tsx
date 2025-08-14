@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -45,14 +46,19 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
   canWrite: boolean; rows: OT[]; products: Product[]; actions: Actions; clients: ClientOption[];
 }) {
   const [q, setQ] = useState("");
+  // Estado local para permitir inserción optimista y que el toast permanezca (evitamos reload total)
+  const [items, setItems] = useState<OT[]>(rows);
   const [isCreating, setIsCreating] = useState(false);
   const [filterPrioridad, setFilterPrioridad] = useState<"ALL"|"LOW"|"MEDIUM"|"HIGH"|"URGENT">("ALL");
   const [filterClienteId, setFilterClienteId] = useState<string|undefined>(undefined);
   const [sortBy, setSortBy] = useState<"fecha"|"prioridad">("fecha");
+
+  const router = useRouter();
+  const refresh = () => startTransition(() => router.refresh());
   
   const filtered = useMemo(()=>{
     const s = q.trim().toLowerCase();
-    let out = rows.filter(o =>
+    let out = items.filter(o =>
       (!s || o.codigo.toLowerCase().includes(s) || (o.clienteNombre ?? "").toLowerCase().includes(s) || o.materiales.some(m => m.nombre.toLowerCase().includes(s) || m.productoId.toLowerCase().includes(s))) &&
       (filterPrioridad === "ALL" || o.prioridad === filterPrioridad) &&
       (!filterClienteId || o.clienteId === filterClienteId)
@@ -65,11 +71,11 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
       out = [...out].sort((a,b)=> new Date(b.creadaEn).getTime() - new Date(a.creadaEn).getTime());
     }
     return out;
-  }, [q, rows, filterPrioridad, filterClienteId, sortBy]);
+  }, [q, items, filterPrioridad, filterClienteId, sortBy]);
 
-  const shortageCount = useMemo(()=> rows.filter(r => r.hasShortage).length, [rows]);
-  const inProgressCount = useMemo(()=> rows.filter(r => r.estado === "IN_PROGRESS").length, [rows]);
-  const openCount = useMemo(()=> rows.filter(r => r.estado === "OPEN").length, [rows]);
+  const shortageCount = useMemo(()=> items.filter(r => r.hasShortage).length, [items]);
+  const inProgressCount = useMemo(()=> items.filter(r => r.estado === "IN_PROGRESS").length, [items]);
+  const openCount = useMemo(()=> items.filter(r => r.estado === "OPEN").length, [items]);
 
   const handleCreateOT = async (payload: CreateOTPayload) => {
     setIsCreating(true);
@@ -89,11 +95,38 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
       fd.set("autoSC", String(payload.autoSC ?? true));
       
       const r = await actions.createOT(fd);
-      if (r.ok) { 
-        toast.success(`OT ${r.codigo} creada exitosamente`); 
-        location.reload(); 
-      } else {
+      if (r.ok && r.id && r.codigo) {
+        // Construcción optimista mínima (hasta próxima revalidación o navegación)
+        const now = new Date();
+        const matOptimistic: OT["materiales"] = mats.map(m => ({
+          id: `tmp-${Math.random().toString(36).slice(2)}`,
+          productoId: m.productoId,
+          nombre: products.find(p=>p.sku===m.productoId)?.nombre || m.productoId,
+          uom: products.find(p=>p.sku===m.productoId)?.uom || "u",
+            qtyPlan: m.qtyPlan,
+            qtyEmit: 0,
+            qtyPend: m.qtyPlan,
+            stock: 0,
+            faltante: 0,
+        }));
+        const newOt: OT = {
+          id: r.id,
+          codigo: r.codigo,
+          estado: "OPEN",
+          prioridad: payload.prioridad || "MEDIUM",
+          creadaEn: now.toISOString(),
+          clienteId: payload.clienteId || null,
+          clienteNombre: payload.clienteId ? (clients.find(c=>c.id===payload.clienteId)?.nombre || null) : null,
+          notas: payload.notas,
+          materiales: matOptimistic,
+          hasShortage: false,
+        };
+        setItems(prev => [newOt, ...prev]);
+        toast.success(`OT ${r.codigo} creada exitosamente`);
+      } else if (!r.ok) {
         toast.error(r.message || "Error al crear la OT");
+      } else {
+        toast.error("Respuesta inesperada al crear OT");
       }
     } finally {
       setIsCreating(false);
@@ -218,10 +251,10 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><Badge variant="outline">Total</Badge> {rows.length}</span>
-              <span className="inline-flex items-center gap-1"><Badge className="bg-red-100 text-red-800">Faltantes</Badge> {rows.filter(r=>r.hasShortage).length}</span>
-              <span className="inline-flex items-center gap-1"><Badge className="bg-blue-100 text-blue-800">Abiertas</Badge> {rows.filter(r=>r.estado==="OPEN").length}</span>
-              <span className="inline-flex items-center gap-1"><Badge className="bg-indigo-100 text-indigo-800">En proceso</Badge> {rows.filter(r=>r.estado==="IN_PROGRESS").length}</span>
+              <span className="inline-flex items-center gap-1"><Badge variant="outline">Total</Badge> {items.length}</span>
+              <span className="inline-flex items-center gap-1"><Badge className="bg-red-100 text-red-800">Faltantes</Badge> {items.filter(r=>r.hasShortage).length}</span>
+              <span className="inline-flex items-center gap-1"><Badge className="bg-blue-100 text-blue-800">Abiertas</Badge> {items.filter(r=>r.estado==="OPEN").length}</span>
+              <span className="inline-flex items-center gap-1"><Badge className="bg-indigo-100 text-indigo-800">En proceso</Badge> {items.filter(r=>r.estado==="IN_PROGRESS").length}</span>
             </div>
           </Card>
 
@@ -311,7 +344,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                               const r = await actions.createSCFromShortages(o.id);
                               if (r.ok) {
                                 toast.success(`Solicitud de compra creada exitosamente`);
-                                location.reload();
+                                refresh();
                               } else {
                                 toast.error(r.message || "Error al crear SC");
                               }
