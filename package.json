@@ -10,6 +10,9 @@
     "grant:admin": "tsx prisma/grant-admin.ts"
   },
   "dependencies": {
+    "@auth/neon-adapter": "^1.10.0",
+    "@auth/prisma-adapter": "^2.10.0",
+    "@neondatabase/serverless": "^1.0.1",
     "@prisma/client": "^6.13.0",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.1.10",
@@ -24,12 +27,13 @@
     "@radix-ui/react-switch": "^1.2.5",
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-tooltip": "^1.2.7",
-    "@stackframe/stack": "^2.8.28",
+    "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide": "^0.539.0",
     "lucide-react": "^0.537.0",
     "next": "15.4.6",
+    "next-auth": "5.0.0-beta.29",
     "next-themes": "^0.4.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -54,6 +58,6 @@
     "typescript": "^5.9.2"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts"
   }
 }

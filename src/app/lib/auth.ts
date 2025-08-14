@@ -1,34 +1,30 @@
 import "server-only";
-import { cache } from "react";
-import { stackServerApp } from "@/stack";
+import { auth } from "@/server/auth";
 import { prisma } from "@/app/lib/prisma";
+import { unstable_noStore as noStore } from "next/cache";
 
 export type SessionUser = {
-  stackUserId: string;
+  id: string;
   email: string;
   displayName?: string | null;
 };
 
-// ✅ Solo lectura y memoizado por request
-export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
-  const user = await stackServerApp.getUser();
-  if (!user?.primaryEmail) return null;
+export async function getCurrentUser(): Promise<SessionUser | null> {
+  noStore();
+  const session = await auth();
+  const email = session?.user?.email?.toLowerCase();
+  if (!email) return null;
 
-  return {
-    stackUserId: user.id,
-    email: user.primaryEmail.toLowerCase(),
-    displayName: user.displayName ?? null,
-  };
-});
+  const id = (session?.user as { id?: string } | undefined)?.id;
 
-// 🔹 (Opcional) Llamar SOLO después de sign-in, no en cada render
-export async function syncUserProfileOnce(): Promise<void> {
-  const u = await getCurrentUser();
-  if (!u) return;
+  // Si la sesión aún no trae id (ej: antes de callbacks agregados), lo buscamos por email
+  if (!id) {
+    const profile = await prisma.userProfile.findUnique({ where: { email }, select: { id: true, displayName: true } });
+    if (!profile) return null;
+    return { id: profile.id, email, displayName: profile.displayName ?? session?.user?.name ?? null };
+  }
 
-  await prisma.userProfile.upsert({
-    where: { email: u.email },
-    create: { email: u.email, stackUserId: u.stackUserId, displayName: u.displayName ?? null },
-    update: { stackUserId: u.stackUserId, displayName: u.displayName ?? null },
-  });
+  // Ya tenemos id, traemos displayName (sin fallo si no existe)
+  const up = await prisma.userProfile.findUnique({ where: { email }, select: { displayName: true } });
+  return { id, email, displayName: up?.displayName ?? session?.user?.name ?? null };
 }

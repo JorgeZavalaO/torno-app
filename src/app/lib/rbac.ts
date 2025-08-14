@@ -29,9 +29,8 @@ const _getUserPermissionCodes = async (email: string): Promise<string[]> => {
 
 // ✅ cache cross-request con tags (se invalida cuando tus server actions llaman revalidateTag)
 const getUserPermissionCodes = ucache(
-  async (email: string) => _getUserPermissionCodes(email),
-  // cache key
-  [`rbac:permcodes`],
+  _getUserPermissionCodes,
+  ["rbac:permcodes"],
   { tags: [cacheTags.users, cacheTags.roles, cacheTags.permissions] }
 );
 

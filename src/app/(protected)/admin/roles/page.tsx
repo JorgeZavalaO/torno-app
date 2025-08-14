@@ -7,7 +7,7 @@ import { getRolesCached } from "@/app/server/queries/roles";
 
 export default async function RolesPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/handler/sign-in");
+  if (!user) redirect("/login");
 
   const [canRead, canWrite] = await Promise.all([
     userHasPermission(user.email, "roles.read"),
