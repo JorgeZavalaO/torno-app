@@ -28,6 +28,7 @@ model UserProfile {
 
   solicitudesCompra SolicitudCompra[]
   partesProduccion  ParteProduccion[]
+  maquinaEventos    MaquinaEvento[]
 
   authUserId  String?  @unique
   authUser    User?    @relation(fields: [authUserId], references: [id], onDelete: SetNull)
@@ -336,6 +337,7 @@ model OrdenTrabajo {
   piezas           OTPieza[]
   partesProduccion ParteProduccion[]
   solicitudesCompra SolicitudCompra[]
+  maquinaEventos   MaquinaEvento[]
 
   @@index([estado, creadaEn])
 }
@@ -441,4 +443,71 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+enum MaquinaEstado {
+  ACTIVA
+  MANTENIMIENTO
+  BAJA
+}
+
+enum MaquinaEventoTipo {
+  USO
+  PARO
+  MANTENIMIENTO
+  AVERIA
+  DISPONIBLE
+}
+
+model Maquina {
+  id          String   @id @default(uuid())
+  codigo      String   @unique
+  nombre      String
+  categoria   String?
+  estado      MaquinaEstado @default(ACTIVA)
+  ubicacion   String?
+  fabricante  String?
+  modelo      String?
+  serie       String?
+  capacidad   String?
+  notas       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  eventos         MaquinaEvento[]
+  mantenimientos  MaquinaMantenimiento[]
+}
+
+model MaquinaEvento {
+  id        String   @id @default(uuid())
+  maquinaId String
+  maquina   Maquina  @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+
+  tipo      MaquinaEventoTipo
+  inicio    DateTime @default(now())
+  fin       DateTime?
+  horas     Decimal  @default(0)
+  nota      String?
+
+  otId      String?
+  ot        OrdenTrabajo? @relation(fields: [otId], references: [id], onDelete: SetNull)
+
+  userId    String?
+  usuario   UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+}
+
+model MaquinaMantenimiento {
+  id         String   @id @default(uuid())
+  maquinaId  String
+  maquina    Maquina  @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+
+  tipo       String   // PREVENTIVO / CORRECTIVO / CALIBRACION, etc.
+  estado     String   // PENDIENTE / EN_PROCESO / COMPLETADO
+  fechaProg  DateTime
+  fechaReal  DateTime?
+  costo      Decimal  @default(0)
+  nota       String?
+  createdAt  DateTime @default(now())
 }

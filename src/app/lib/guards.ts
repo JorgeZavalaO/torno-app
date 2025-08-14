@@ -77,3 +77,27 @@ export async function assertCanWriteWorkorders() {
   if (!await userHasPermission(u.email, "workorders.write")) throw new Error("No autorizado");
   return u;
 }
+
+// Máquinas (inventario de activos / eventos / mantenimiento)
+export async function assertCanReadMachines() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "machines.read")) throw new Error("No autorizado");
+  return u;
+}
+export async function assertCanWriteMachines() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "machines.write")) throw new Error("No autorizado");
+  return u;
+}
+
+// Producción (tablero control y registro de partes/piezas)
+export async function assertCanReadProduction() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "production.read")) throw new Error("No autorizado");
+  return u;
+}
+export async function assertCanWriteProduction() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "production.write")) throw new Error("No autorizado");
+  return u;
+}

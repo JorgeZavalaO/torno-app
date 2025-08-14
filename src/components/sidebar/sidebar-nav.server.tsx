@@ -20,12 +20,7 @@ const allNavItems: (NavItem & { requiredPerm?: string })[] = [
     icon: "Shield", 
     requiredPerm: "roles.read" 
   },
-  {
-    href: "/ot",
-    label: "Órdenes de Trabajo",
-    icon: "ClipboardList",
-    requiredPerm: "workorders.read"
-  },
+  { href: "/ot", label: "Órdenes de Trabajo", icon: "ClipboardList", requiredPerm: "workorders.read" },
   { 
     href: "/admin/permissions", 
     label: "Permisos", 
@@ -66,24 +61,8 @@ const allNavItems: (NavItem & { requiredPerm?: string })[] = [
     icon: "ShoppingCart", 
     requiredPerm: "purchases.read" 
   },
-  { 
-    href: "/produccion", 
-    label: "Producción", 
-    icon: "Factory", 
-    requiredPerm: "production.read" 
-  },
-  { 
-    href: "/mantenimiento", 
-    label: "Mantenimiento", 
-    icon: "Wrench", 
-    requiredPerm: "maintenance.read" 
-  },
-  { 
-    href: "/reportes", 
-    label: "Reportes", 
-    icon: "BarChart3", 
-    requiredPerm: "reports.read" 
-  },
+  { href: "/control", label: "Control Producción", icon: "Factory", requiredPerm: "production.read" },
+  { href: "/maquinas", label: "Máquinas", icon: "Wrench", requiredPerm: "machines.read" },
 ];
 
 export default async function SidebarNavServer() {

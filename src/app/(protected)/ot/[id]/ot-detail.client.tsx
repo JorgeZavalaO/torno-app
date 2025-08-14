@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { ArrowLeft, Play, Check, ShoppingCart, Copy, Link as LinkIcon, FileText, Clock, Package, Wrench, Edit3, Plus } from "lucide-react";
+import { ArrowLeft, Play, Check, ShoppingCart, Copy, Link as LinkIcon, FileText } from "lucide-react";
 import { PriorityBadge } from "@/components/ot/priority-badge";
 import { StatusBadge } from "@/components/ot/status-badge";
 import { PrioritySelect } from "@/components/ot/priority-select";
