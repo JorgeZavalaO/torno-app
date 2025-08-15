@@ -131,6 +131,32 @@ export async function createOT(fd: FormData): Promise<R> {
   if (payload.piezas.length === 0) return { ok: false, message: "Agrega al menos una pieza válida" };
   if (payload.materiales.length === 0) return { ok: false, message: "Agrega materiales válidos" };
 
+  // --- Validación/normalización de SKUs ---
+  const piezaSkus = payload.piezas.map(p => p.sku).filter(Boolean) as string[];
+  const matSkus   = payload.materiales.map(m => m.sku);
+  const allSkus   = Array.from(new Set([...piezaSkus, ...matSkus]));
+
+  const existing = new Set(
+    (await prisma.producto.findMany({ where: { sku: { in: allSkus } }, select: { sku: true } }))
+      .map(r => r.sku)
+  );
+
+  // Si hay materiales con SKU inexistente => error (material debe existir sí o sí)
+  const unknownMats = matSkus.filter(s => !existing.has(s));
+  if (unknownMats.length) {
+    return { ok: false, message: `Material(es) inexistente(s): ${unknownMats.join(", ")}` };
+  }
+
+  // Piezas: si el SKU no existe, se guarda como pieza libre (productoId=null)
+  const piezasSafe = payload.piezas.map(p => {
+    const skuOk = p.sku && existing.has(p.sku);
+    const descripcion =
+      (p.descripcion?.trim() || "") ||
+      (!skuOk && p.sku ? String(p.sku) : "") || // si escribió un "código" que no existe, úsalo como descripción
+      "Pieza sin código";
+    return { sku: skuOk ? p.sku : undefined, descripcion, qty: p.qty };
+  });
+
   const created = await prisma.$transaction(async (tx) => {
     const codigo = await nextOTCode(tx);
     const ot = await tx.ordenTrabajo.create({
@@ -145,20 +171,20 @@ export async function createOT(fd: FormData): Promise<R> {
       select: { id: true, codigo: true }
     });
 
-    // Piezas
-    if (payload.piezas.length) {
+    // Piezas (productoId sólo si el SKU existe)
+    if (piezasSafe.length) {
       await tx.oTPieza.createMany({
-        data: payload.piezas.map(x => ({
+        data: piezasSafe.map(x => ({
           otId: ot.id,
           productoId: x.sku || null,
-          descripcion: x.descripcion?.trim() || (x.sku ? undefined : "Pieza sin código"),
+          descripcion: x.descripcion,
           qtyPlan: new Prisma.Decimal(x.qty),
           qtyHecha: new Prisma.Decimal(0),
         })),
       });
     }
 
-    // Materiales planificados
+    // Materiales planificados (ya validados que existen)
     if (payload.materiales.length) {
       await tx.oTMaterial.createMany({
         data: payload.materiales.map(m => ({

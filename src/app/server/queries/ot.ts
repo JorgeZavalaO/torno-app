@@ -93,57 +93,95 @@ export const getOTListCached = cache(
 
 export const getOTDetail = cache(
   async (id: string) => {
-    const ot = await prisma.ordenTrabajo.findUnique({
+    const raw = await prisma.ordenTrabajo.findUnique({
       where: { id },
       include: {
-        cliente: true,
-        materiales: { include: { producto: true } },
+        cliente: { select: { id: true, nombre: true } },
+        materiales: { include: { producto: { select: { nombre: true, uom: true } } } },
         piezas: true,
-        partesProduccion: { // solo informativo; no se registran horas desde OT
+        partesProduccion: {
           orderBy: { fecha: "desc" },
           take: 200,
-          include: { usuario: { select: { displayName: true, email: true } }, pieza: { select: { descripcion: true, productoId: true } } },
+          include: {
+            usuario: { select: { displayName: true, email: true } },
+            pieza:   { select: { descripcion: true, productoId: true } },
+          },
         },
-        solicitudesCompra: {
-          orderBy: { createdAt: "desc" },
-          include: { items: { include: { producto: true } } },
-        },
+        // (si no lo usas en la UI, evita cargar solicitudesCompra para no sobrecargar)
       },
     });
-    if (!ot) return null;
+    if (!raw) return null;
 
-    // KPIs de avance
-    const mats = ot.materiales;
-    const piezas = ot.piezas;
+    const N = (v: unknown) => Number(v ?? 0);
 
+    // Normaliza materiales (Decimal -> number)
+    const materiales = raw.materiales.map(m => ({
+      id: m.id,
+      productoId: m.productoId,
+      producto: m.producto ? { nombre: m.producto.nombre, uom: m.producto.uom ?? "" } : null,
+      qtyPlan: N(m.qtyPlan),
+      qtyEmit: N(m.qtyEmit),
+    }));
+
+    // Normaliza piezas (Decimal -> number)
+    const piezas = raw.piezas.map(p => ({
+      id: p.id,
+      productoId: p.productoId ?? null,
+      descripcion: p.descripcion ?? null,
+      qtyPlan: N(p.qtyPlan),
+      qtyHecha: N(p.qtyHecha),
+    }));
+
+    // Normaliza partes (Decimal/Date -> number/string)
+    const partesProduccion = raw.partesProduccion.map(pp => ({
+      id: pp.id,
+      fecha: pp.fecha.toISOString(),
+      horas: N(pp.horas),
+      maquina: pp.maquina ?? null,
+      nota: pp.nota ?? null,
+      usuario: { displayName: pp.usuario?.displayName ?? null, email: pp.usuario?.email ?? null },
+      pieza: { descripcion: pp.pieza?.descripcion ?? null, productoId: pp.pieza?.productoId ?? null },
+    }));
+
+    // KPIs (con números ya normalizados)
     let planM = 0, emitM = 0;
-    for (const m of mats) {
-      const p = Number(m.qtyPlan || 0);
-      const e = Number(m.qtyEmit || 0);
-      if (p > 0) { planM += p; emitM += Math.min(e, p); }
+    for (const m of materiales) {
+      if (m.qtyPlan > 0) { planM += m.qtyPlan; emitM += Math.min(m.qtyEmit, m.qtyPlan); }
     }
-    const progMat = planM > 0 ? emitM / planM : 0;
-
     let planP = 0, hechaP = 0;
     for (const p of piezas) {
-      planP += Number(p.qtyPlan || 0);
-      hechaP += Math.min(Number(p.qtyHecha || 0), Number(p.qtyPlan || 0));
+      planP += p.qtyPlan;
+      hechaP += Math.min(p.qtyHecha, p.qtyPlan);
     }
-    const progPz = planP > 0 ? hechaP / planP : 0;
 
-    return {
-      ot,
-      kpis: {
-        progresoMateriales: Number(progMat),
-        progresoPiezas: Number(progPz),
-        piezasPend: Number(planP - hechaP),
-        matsPend: Number(planM - emitM),
-      },
+    const kpis = {
+      progresoMateriales: planM > 0 ? emitM / planM : 0,
+      progresoPiezas:     planP > 0 ? hechaP / planP : 0,
+      piezasPend:         planP - hechaP,
+      matsPend:           planM - emitM,
     };
+
+    // Objeto plano y serializable
+    const ot = {
+      id: raw.id,
+      codigo: raw.codigo,
+      estado: raw.estado as "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED",
+      prioridad: raw.prioridad as "LOW"|"MEDIUM"|"HIGH"|"URGENT",
+      clienteId: raw.cliente?.id ?? null,
+      cliente: raw.cliente ? { id: raw.cliente.id, nombre: raw.cliente.nombre } : null,
+      notas: raw.notas ?? null,
+      acabado: raw.acabado ?? null,
+      materiales,
+      piezas,
+      partesProduccion,
+    };
+
+    return { ot, kpis };
   },
   ["ot:detail"],
   { revalidate: 15 }
 );
+
 export const getProductsMini = cache(
   async () => {
     const rows = await prisma.producto.findMany({
