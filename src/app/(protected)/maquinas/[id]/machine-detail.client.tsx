@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,35 +10,21 @@ import { ArrowLeft } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 type Detail = Awaited<ReturnType<typeof import("@/app/server/queries/machines").getMachineDetail>>;
-type OTMini = { id: string; codigo: string };
 type Actions = {
-  logMachineEvent: (fd: FormData)=>Promise<{ok:boolean; message?:string}>;
   scheduleMaintenance: (fd: FormData)=>Promise<{ok:boolean; message?:string}>;
   closeMaintenance: (fd: FormData)=>Promise<{ok:boolean; message?:string}>;
   upsertMachine: (fd: FormData)=>Promise<{ok:boolean; message?:string}>;
 };
 
-export default function MachineDetailClient({ canWrite, detail, ots, actions }:{
+export default function MachineDetailClient({ canWrite, detail, actions }:{
   canWrite: boolean;
   detail: NonNullable<Detail>;
-  ots: OTMini[];
   actions: Actions;
 }) {
   const m = detail.maquina;
 
-  // quick log
-  const [otId, setOtId] = useState(ots[0]?.id ?? "");
-  const [horas, setHoras] = useState<number>(1);
-  const [nota, setNota] = useState("");
-
   // programar mantenimiento
-  const [tipoMant, setTipoMant] = useState("PREVENTIVO");
-  const [fechaProg, setFechaProg] = useState<string>(new Date().toISOString().slice(0,10));
-
-  // editar cabecera simple (simplificado: mantenemos cambios locales mínimos)
-  const [name] = useState(m.nombre);
-  const [ubic] = useState(m.ubicacion ?? "");
-  const [estado] = useState(m.estado);
+  const today = new Date().toISOString().slice(0,10);
 
   return (
     <div className="p-6 space-y-6">
@@ -49,24 +34,12 @@ export default function MachineDetailClient({ canWrite, detail, ots, actions }:{
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{m.nombre} <span className="text-muted-foreground font-mono">({m.codigo})</span></h1>
+          <h1 className="text-2xl font-bold">
+            {m.nombre} <span className="text-muted-foreground font-mono">({m.codigo})</span>
+          </h1>
           <div className="text-sm text-muted-foreground">{m.categoria ?? "—"} · {m.ubicacion ?? "sin ubicación"}</div>
           <div className="mt-2 text-sm">Estado: <strong>{m.estado}</strong></div>
         </div>
-        {canWrite && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={async ()=>{
-              const fd = new FormData();
-              fd.set("id", m.id);
-              fd.set("codigo", m.codigo);
-              fd.set("nombre", name);
-              fd.set("estado", estado);
-              if (ubic) fd.set("ubicacion", ubic);
-              const p = actions.upsertMachine(fd);
-              await toast.promise(p, { loading: "Guardando…", success: "Actualizada", error: "Error" });
-            }}>Guardar</Button>
-          </div>
-        )}
       </div>
 
       {/* KPIs y serie */}
@@ -96,42 +69,6 @@ export default function MachineDetailClient({ canWrite, detail, ots, actions }:{
         </Card>
       </div>
 
-      {/* Registro rápido */}
-      {canWrite && (
-        <Card className="p-4 space-y-3">
-          <div className="font-semibold">Registrar horas (USO)</div>
-          <div className="grid grid-cols-12 gap-2 items-end">
-            <div className="col-span-4">
-              <label className="text-xs font-medium block mb-1">OT</label>
-              <select className="w-full h-9 border rounded-md px-2" value={otId} onChange={e=>setOtId(e.target.value)}>
-                {ots.map(o => <option key={o.id} value={o.id}>{o.codigo}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-medium block mb-1">Horas</label>
-              <Input type="number" min={0.25} step="0.25" value={horas} onChange={e=>setHoras(Number(e.target.value))} />
-            </div>
-            <div className="col-span-5">
-              <label className="text-xs font-medium block mb-1">Nota</label>
-              <Input value={nota} onChange={e=>setNota(e.target.value)} placeholder="Operación realizada…" />
-            </div>
-            <div className="col-span-1 flex justify-end">
-              <Button onClick={async ()=>{
-                const fd = new FormData();
-                fd.set("maquinaId", m.id);
-                fd.set("tipo", "USO");
-                fd.set("otId", otId);
-                fd.set("horas", String(horas));
-                if (nota.trim()) fd.set("nota", nota.trim());
-                const p = actions.logMachineEvent(fd);
-                await toast.promise(p, { loading: "Registrando…", success: "Evento registrado", error: "Error" });
-                setHoras(1); setNota("");
-              }}>Guardar</Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {/* Agenda mantenimiento */}
       {canWrite && (
         <Card className="p-4 space-y-3">
@@ -139,18 +76,18 @@ export default function MachineDetailClient({ canWrite, detail, ots, actions }:{
           <div className="grid grid-cols-12 gap-2 items-end">
             <div className="col-span-4">
               <label className="text-xs font-medium block mb-1">Tipo</label>
-              <Input value={tipoMant} onChange={e=>setTipoMant(e.target.value)} />
+              <Input defaultValue="PREVENTIVO" id="tipoMant" />
             </div>
             <div className="col-span-4">
               <label className="text-xs font-medium block mb-1">Fecha programada</label>
-              <Input type="date" value={fechaProg} onChange={e=>setFechaProg(e.target.value)} />
+              <Input type="date" defaultValue={today} id="fechaProg" />
             </div>
             <div className="col-span-4 flex justify-end">
               <Button onClick={async ()=>{
                 const fd = new FormData();
                 fd.set("maquinaId", m.id);
-                fd.set("tipo", tipoMant);
-                fd.set("fechaProg", new Date(fechaProg).toISOString());
+                fd.set("tipo", (document.getElementById("tipoMant") as HTMLInputElement).value || "PREVENTIVO");
+                fd.set("fechaProg", new Date((document.getElementById("fechaProg") as HTMLInputElement).value || today).toISOString());
                 const p = actions.scheduleMaintenance(fd);
                 await toast.promise(p, { loading: "Programando…", success: "Programado", error: "Error" });
               }}>Programar</Button>

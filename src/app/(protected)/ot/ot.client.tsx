@@ -18,10 +18,10 @@ import { PriorityBadge } from "@/components/ot/priority-badge";
 import { NewOTDialog } from "@/components/ot/new-ot-dialog";
 import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
 import { StatusBadge } from "@/components/ot/status-badge";
+import type { OTListRow } from "@/app/server/queries/ot";
 
 type Product = { sku: string; nombre: string; uom: string };
-type MatRow = { id: string; productoId: string; nombre: string; uom: string; qtyPlan: number; qtyEmit: number; qtyPend: number; stock: number; faltante: number };
-type OT = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; prioridad: "LOW"|"MEDIUM"|"HIGH"|"URGENT"; creadaEn: string|Date; clienteId: string|null; clienteNombre: string|null; notas?: string; materiales: MatRow[]; hasShortage: boolean };
+type OT = OTListRow; // usamos misma forma; creadaEn siempre Date
 
 type CreateOTPayload = {
   piezas: { sku?: string; descripcion?: string; qty: number }[];
@@ -47,7 +47,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
 }) {
   const [q, setQ] = useState("");
   // Estado local para permitir inserción optimista y que el toast permanezca (evitamos reload total)
-  const [items, setItems] = useState<OT[]>(rows);
+  const [items, setItems] = useState<OT[]>(rows as OT[]);
   const [isCreating, setIsCreating] = useState(false);
   const [filterPrioridad, setFilterPrioridad] = useState<"ALL"|"LOW"|"MEDIUM"|"HIGH"|"URGENT">("ALL");
   const [filterClienteId, setFilterClienteId] = useState<string|undefined>(undefined);
@@ -97,8 +97,8 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
       const r = await actions.createOT(fd);
       if (r.ok && r.id && r.codigo) {
         // Construcción optimista mínima (hasta próxima revalidación o navegación)
-        const now = new Date();
-        const matOptimistic: OT["materiales"] = mats.map(m => ({
+  const now = new Date();
+  const matOptimistic: OT["materiales"] = mats.map(m => ({
           id: `tmp-${Math.random().toString(36).slice(2)}`,
           productoId: m.productoId,
           nombre: products.find(p=>p.sku===m.productoId)?.nombre || m.productoId,
@@ -114,12 +114,14 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
           codigo: r.codigo,
           estado: "OPEN",
           prioridad: payload.prioridad || "MEDIUM",
-          creadaEn: now.toISOString(),
+          creadaEn: now,
           clienteId: payload.clienteId || null,
           clienteNombre: payload.clienteId ? (clients.find(c=>c.id===payload.clienteId)?.nombre || null) : null,
           notas: payload.notas,
           materiales: matOptimistic,
           hasShortage: false,
+          progresoMateriales: 0,
+          progresoPiezas: 0,
         };
         setItems(prev => [newOt, ...prev]);
         toast.success(`OT ${r.codigo} creada exitosamente`);

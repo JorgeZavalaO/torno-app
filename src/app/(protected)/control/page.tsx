@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getProductionOverviewCached, getQuickLogData } from "@/app/server/queries/production";
 import ControlClient from "./control.client";
-import { logProduction, logFinishedPieces } from "../ot/actions";
+import { logProduction, logFinishedPieces } from "@/app/(protected)/control/actions";
 
 export default async function ControlPage() {
   const me = await getCurrentUser();

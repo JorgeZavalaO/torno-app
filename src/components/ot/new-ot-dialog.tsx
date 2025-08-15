@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Hammer, Layers } from "lucide-react";
 import { ClientSelect, ClientOption } from "@/components/ot/client-select";
 import { PrioritySelect } from "@/components/ot/priority-select";
@@ -18,7 +17,6 @@ export type NewOTDialogPayload = {
   notas?: string;
   prioridad?: "LOW"|"MEDIUM"|"HIGH"|"URGENT";
   acabado?: string;
-  autoSC?: boolean;
 };
 
 interface Product { sku: string; nombre: string; uom: string }
@@ -37,7 +35,6 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
   const [prioridad, setPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">("MEDIUM");
   const [acabado, setAcabado] = useState("");
   const [notas, setNotas] = useState("");
-  const [autoSC, setAutoSC] = useState(true);
 
   const reset = () => {
     setStep(1);
@@ -47,7 +44,6 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
     setPrioridad("MEDIUM");
     setAcabado("");
     setNotas("");
-    setAutoSC(true);
   };
 
   const handleCreate = async () => {
@@ -66,13 +62,12 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
       prioridad,
       acabado: acabado.trim() || undefined,
       notas: notas.trim() || undefined,
-      autoSC,
     });
     reset();
     setOpen(false);
   };
 
-  // Piezas handlers - digitables (sin afectar inventario al crear)
+  // Piezas handlers
   const addPieza = () => setPiezas(p => [...p, { qty: 1 }]);
   const updatePieza = (i:number, field:'sku'|'descripcion'|'qty', value:string|number)=>{
     setPiezas(prev => prev.map((pz,idx)=> idx===i ? { ...pz, [field]: value } : pz));
@@ -141,7 +136,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
               <label className="text-sm font-semibold flex items-center gap-2"><Layers className="h-4 w-4" /> Materiales Planificados</label>
               <Button size="sm" variant="outline" onClick={addMaterial}><Plus className="h-3 w-3 mr-1"/>Agregar</Button>
             </div>
-            <p className="text-xs text-muted-foreground">Estos materiales se utilizarán para calcular faltantes y generar solicitudes de compra si lo permites.</p>
+            <p className="text-xs text-muted-foreground">Estos materiales se usarán para verificar cobertura y faltantes (la SC es manual desde el detalle).</p>
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {materiales.map((m,i)=>(
                 <div key={i} className="flex gap-2 items-center">
@@ -154,10 +149,6 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
                 </div>
               ))}
               {materiales.length===0 && <div className="text-xs text-muted-foreground">Sin materiales aún.</div>}
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Checkbox checked={autoSC} onCheckedChange={v=>setAutoSC(Boolean(v))} />
-              Generar solicitud de compra automática por faltantes
             </div>
           </div>
         )}

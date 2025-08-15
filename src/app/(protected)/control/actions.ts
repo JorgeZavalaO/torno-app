@@ -7,7 +7,7 @@ import { assertCanWriteWorkorders } from "@/app/lib/guards";
 import { logHoursBulk, logPieces } from "@/app/server/services/production";
 
 // Reusamos la lógica robusta existente del módulo de OT
-import { logProduction as logProductionOT, logFinishedPieces as logFinishedPiecesOT } from "../ot/actions";
+// Nota: las acciones de OT específicas se implementan aquí usando servicios compartidos
 
 type R = { ok: true; message?: string } | { ok: false; message: string };
 
@@ -26,19 +26,26 @@ function bumpControl(otIds: string[] = []) {
 /*                    Wrappers 1: acciones simples (una OT)                   */
 /* -------------------------------------------------------------------------- */
 
-export async function logProduction(fd: FormData) {
-  // delega en actions de OT (mantiene validaciones y side-effects)
-  const r = await logProductionOT(fd);
-  // fuerza refresco del dashboard
-  const otId = String(fd.get("otId") || "");
-  bumpControl(otId ? [otId] : []);
+export async function logProduction(fd: FormData): Promise<R> {
+  await assertCanWriteWorkorders();
+  const otId = String(fd.get("otId") || "").trim();
+  const horas = Number(fd.get("horas") || 0);
+  const maquina = String(fd.get("maquina") || "").trim() || undefined;
+  const nota = String(fd.get("nota") || "").trim() || undefined;
+  if(!otId || !Number.isFinite(horas) || horas <= 0) return { ok:false, message:"Datos inválidos" };
+  const r = await logHoursBulk([{ otId, horas, maquina, nota }]);
+  if (r.ok) bumpControl([otId]);
   return r;
 }
 
-export async function logFinishedPieces(fd: FormData) {
-  const r = await logFinishedPiecesOT(fd);
-  const otId = String(fd.get("otId") || "");
-  bumpControl(otId ? [otId] : []);
+export async function logFinishedPieces(fd: FormData): Promise<R> {
+  await assertCanWriteWorkorders();
+  const otId = String(fd.get("otId") || "").trim();
+  const piezaId = String(fd.get("piezaId") || "").trim();
+  const cantidad = Number(fd.get("cantidad") || 0);
+  if(!otId || !piezaId || !Number.isFinite(cantidad) || cantidad <= 0) return { ok:false, message:"Datos inválidos" };
+  const r = await logPieces({ otId, items: [{ piezaId, cantidad }] });
+  if (r.ok) bumpControl([otId]);
   return r;
 }
 

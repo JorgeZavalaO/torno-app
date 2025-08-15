@@ -1,476 +1,266 @@
 "use client";
 
-import { useMemo, useState, startTransition } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Alert } from "@/components/ui/enhanced-alert";
-import { ProgressBar } from "@/components/ui/progress-bar";
-import { ArrowLeft, Play, Check, ShoppingCart, Copy, Link as LinkIcon, FileText } from "lucide-react";
-import { PriorityBadge } from "@/components/ot/priority-badge";
-import { StatusBadge } from "@/components/ot/status-badge";
-import { PrioritySelect } from "@/components/ot/priority-select";
-import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
+import { Hammer, Wrench, Play, FilePlus2, Edit3 } from "lucide-react";
+import { StatusBadge, EstadoOT } from "@/components/ot/status-badge";
+import { PriorityBadge, Prioridad } from "@/components/ot/priority-badge";
+import EditHeaderDialog from "../../../../components/ot/edit-header-dialog";
+import EmitMaterialsDialog from "../../../../components/ot/emit-materials-dialog";
+import RequestSCDialog from "../../../../components/ot/request-sc-dialog";
 
-type Product = { sku: string; nombre: string; uom: string };
-type Mat = { id: string; productoId: string; nombre: string; uom: string; qtyPlan: number; qtyEmit: number; qtyPend: number };
-type Mov = { id: string; fecha: string|Date; sku: string; nombre: string; uom: string; tipo: string; cantidad: number; costoUnitario: number; importe: number; nota?: string };
-type Parte = { id: string; fecha: string|Date; horas: number; maquina?: string; nota?: string; usuario: string };
-type Pieza = { id: string; productoId?: string; descripcion?: string; qtyPlan: number; qtyHecha: number };
-type Detail = { id: string; codigo: string; estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"; prioridad: "LOW"|"MEDIUM"|"HIGH"|"URGENT"; creadaEn: string|Date; clienteNombre: string|null; notas?: string; materiales: Mat[]; piezas: Pieza[]; kardex: Mov[]; partes: Parte[] };
+type Detail = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getOTDetail>>;
+type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>>;
+type ClientsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getClientsMini>>;
 
 type Actions = {
-  issueMaterials: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
-  logProduction: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
-  createSCFromShortages: (otId: string) => Promise<{ok:boolean; message?:string}>;
-  setOTState: (id: string, estado: Detail["estado"]) => Promise<{ok:boolean; message?:string}>;
-  addMaterial: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
-  updateOTMeta: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
+  updateOTHeader: (payload: {
+    id: string;
+    clienteId?: string | null;
+    prioridad?: "LOW"|"MEDIUM"|"HIGH"|"URGENT";
+    notas?: string;
+    acabado?: string;
+    materialesPlan?: { sku: string; qtyPlan: number }[];
+  })=>Promise<{ok:boolean; message?:string}>;
+  emitOTMaterials: (payload: { otId: string; items: { sku: string; qty: number }[] })=>Promise<{ok:boolean; message?:string}>;
+  startOTManually: (payload: { otId: string })=>Promise<{ok:boolean; message?:string}>;
+  createManualSCForOT: (payload: { otId: string; nota?: string })=>Promise<{ok:boolean; message?:string}>;
+  recompute: (otId: string)=>Promise<void>;
 };
 
-export default function OTDetailClient({ canWrite, detail, products, actions, clients }:{
-  canWrite: boolean; detail: Detail; products: Product[]; actions: Actions; clients: ClientOption[];
+export default function OTDetailClient({
+  canWrite,
+  detail,
+  products,
+  clients,
+  actions
+}:{
+  canWrite: boolean;
+  detail: NonNullable<Detail>;
+  products: ProductsMini;
+  clients: ClientsMini;
+  actions: Actions;
 }) {
-  const [qtys, setQtys] = useState<Record<string, number>>({});
-  const [horas, setHoras] = useState<number>(1);
-  const [maquina, setMaquina] = useState("");
-  const [nota, setNota] = useState("");
-  const hasAny = useMemo(()=> Object.values(qtys).some(v => Number(v) > 0), [qtys]);
-  const faltantes = useMemo(()=> detail.materiales.filter(m=>m.qtyPend>0), [detail.materiales]);
+  const { ot, kpis } = detail;
+  const [openEdit, setOpenEdit] = useState(false);
+  const [openEmit, setOpenEmit] = useState(false);
+  const [openSC, setOpenSC] = useState(false);
 
-  const router = useRouter();
-  const refresh = () => startTransition(() => router.refresh());
+  const coveragePct = Math.round(kpis.progresoMateriales * 100);
+  const piezasPct = Math.round(kpis.progresoPiezas * 100);
 
-  const [editClienteId, setEditClienteId] = useState<string|undefined>(undefined);
-  const [editPrioridad, setEditPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">(detail.prioridad);
-  const [editNotas, setEditNotas] = useState<string>(detail.notas ?? "");
+  const canStart = canWrite && (coveragePct >= 20) && (ot.estado === "OPEN" || ot.estado === "DRAFT");
 
-  const totales = useMemo(()=>{
-    const plan = detail.materiales.reduce((s,m)=> s + Number(m.qtyPlan), 0);
-    const emit = detail.materiales.reduce((s,m)=> s + Number(m.qtyEmit), 0);
-    const pend = detail.materiales.reduce((s,m)=> s + Number(m.qtyPend), 0);
-    return { plan, emit, pend };
-  }, [detail.materiales]);
+  const matsPlan = useMemo(()=> ot.materiales.map(m=>({
+    sku: m.productoId,
+    nombre: m.producto?.nombre ?? m.productoId,
+    uom: m.producto?.uom ?? "",
+    plan: Number(m.qtyPlan || 0),
+    emit: Number(m.qtyEmit || 0),
+    pend: Math.max(Number(m.qtyPlan || 0) - Number(m.qtyEmit || 0), 0),
+  })), [ot.materiales]);
 
-  const saveMeta = async () => {
-    const fd = new FormData();
-    fd.set("otId", detail.id);
-    if (editClienteId !== undefined) fd.set("clienteId", editClienteId ?? "");
-    fd.set("prioridad", editPrioridad);
-  fd.set("notas", editNotas.trim());
-    const r = await actions.updateOTMeta(fd);
-    if (r.ok) { toast.success(r.message || "OT actualizada"); refresh(); }
-    else toast.error(r.message);
-  };
+  const piezasRows = useMemo(()=> ot.piezas.map(p=>({
+    id: p.id,
+    desc: p.descripcion || p.productoId || "Pieza",
+    plan: Number(p.qtyPlan || 0),
+    hecha: Number(p.qtyHecha || 0),
+    pend: Math.max(Number(p.qtyPlan || 0) - Number(p.qtyHecha || 0), 0),
+  })), [ot.piezas]);
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
-          <div className="text-sm text-muted-foreground mb-1">
-            <Link href="/ot" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3 w-3" />
-              Volver a Órdenes de Trabajo
-            </Link>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Hammer className="h-5 w-5" /> {ot.codigo}
+          </h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+            <StatusBadge estado={ot.estado as EstadoOT} />
+            <PriorityBadge prioridad={ot.prioridad as Prioridad} />
+            {ot.cliente && <Badge variant="outline">{ot.cliente.nombre}</Badge>}
           </div>
-          <div className="flex items-center gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-bold tracking-tight">OT {detail.codigo}</h1>
-                <Button size="icon" variant="ghost" className="h-7 w-7" title="Copiar código"
-                  onClick={async ()=>{ await navigator.clipboard.writeText(String(detail.codigo)); toast.success("Código copiado"); }}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="text-lg text-muted-foreground">
-                {detail.clienteNombre ?? <span className="italic">Sin cliente asignado</span>}
-              </div>
-            </div>
-            <StatusBadge estado={detail.estado} />
-            <PriorityBadge prioridad={detail.prioridad} />
-          </div>
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-sm text-muted-foreground mb-1">
-              <span>Avance de materiales</span>
-              <span>{totales.emit} / {totales.plan}</span>
-            </div>
-            <ProgressBar value={totales.emit} max={Math.max(1, totales.plan)} variant={totales.pend>0?"default":"success"} />
-          </div>
-          {canWrite && (
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <ClientSelect clients={clients} value={editClienteId} onChange={setEditClienteId} />
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <PrioritySelect value={editPrioridad} onChange={setEditPrioridad} />
-                </div>
-                <Button size="sm" onClick={saveMeta}>Guardar</Button>
-              </div>
-            </div>
-          )}
-          <div className="mt-2">
-            <label className="text-sm text-muted-foreground">Notas</label>
-            <Input value={editNotas} onChange={e=>setEditNotas(e.target.value)} placeholder="Notas, indicaciones o referencias..." />
-          </div>
+          {ot.notas && <div className="text-sm text-muted-foreground mt-1">{ot.notas}</div>}
+          {ot.acabado && <div className="text-xs text-muted-foreground">Acabado: {ot.acabado}</div>}
         </div>
         {canWrite && (
-          <div className="flex flex-col items-end gap-2">
-            {/* Stepper simple de estados */}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {(["OPEN","IN_PROGRESS","DONE"] as const).map((s, idx) => (
-                <div key={s} className="flex items-center gap-2">
-                  <div className={`h-6 px-2 rounded-full border ${detail.estado===s?"bg-primary text-primary-foreground border-primary":""}`}>
-                    <div className="h-full flex items-center">{s === "OPEN" ? "Abierta" : s === "IN_PROGRESS" ? "En proceso" : "Terminada"}</div>
-                  </div>
-                  {idx<2 && <div className="w-8 h-[2px] bg-muted" />}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 items-center">
-              <Button 
-                variant="outline" 
-                onClick={async ()=>{ 
-                  const r = await actions.setOTState(detail.id, "IN_PROGRESS"); 
-                  if (r.ok) { toast.success(r.message || "OT iniciada"); refresh(); }
-                  else toast.error(r.message || "No se pudo iniciar la OT");
-                }} 
-                disabled={detail.estado!=="OPEN"}
-                className="flex items-center gap-2"
-              >
-                <Play className="h-4 w-4" />
-                Iniciar
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={async ()=>{ 
-                  const r = await actions.setOTState(detail.id, "DONE"); 
-                  if (r.ok) { toast.success(r.message || "OT finalizada"); refresh(); }
-                  else toast.error(r.message || "No se pudo finalizar la OT");
-                }} 
-                disabled={detail.estado==="DONE"}
-                className="flex items-center gap-2"
-              >
-                <Check className="h-4 w-4" />
-                Terminar
-              </Button>
-              {faltantes.length > 0 && (
-                <Button 
-                  variant="destructive" 
-                  onClick={async ()=>{ 
-                    const r = await actions.createSCFromShortages(detail.id); 
-                    if(r.ok) {
-                      toast.success("Solicitud de compra creada para faltantes");
-                      refresh();
-                    } else {
-                      toast.error(r.message || "Error al crear SC");
-                    }
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  Crear SC Faltantes
-                </Button>
-              )}
-            </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={()=>setOpenEdit(true)}>
+              <Edit3 className="h-4 w-4 mr-1" /> Editar cabecera / plan
+            </Button>
+            <Button variant="outline" onClick={()=>setOpenEmit(true)}>
+              <Wrench className="h-4 w-4 mr-1" /> Emitir materiales
+            </Button>
+            <Button variant="outline" onClick={()=>setOpenSC(true)}>
+              <FilePlus2 className="h-4 w-4 mr-1" /> Solicitar faltante
+            </Button>
+            <Button onClick={async ()=>{
+              const p = actions.startOTManually({ otId: ot.id });
+              await toast.promise(p, { loading: "Validando…", success: (r)=> r.message || "OT iniciada", error: (e)=> e?.message || "No se pudo iniciar" });
+              await actions.recompute(ot.id);
+            }} disabled={!canStart}>
+              <Play className="h-4 w-4 mr-1" /> Iniciar OT
+            </Button>
           </div>
         )}
       </div>
 
-      {/* Material Status Alert */}
-      {faltantes.length > 0 && (
-        <Alert type="warning" title="Materiales Faltantes Detectados">
-          Hay {faltantes.length} material(es) con faltantes. Puedes generar una solicitud de compra automáticamente para resolver estos faltantes.
-        </Alert>
+      {/* KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="p-4">
+          <div className="text-sm text-muted-foreground">Progreso materiales</div>
+          <div className="text-2xl font-bold">{coveragePct}%</div>
+          <div className="h-2 bg-muted rounded mt-2">
+            <div className="h-2 bg-blue-600 rounded" style={{ width: `${coveragePct}%` }} />
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-sm text-muted-foreground">Progreso piezas</div>
+          <div className="text-2xl font-bold">{piezasPct}%</div>
+          <div className="h-2 bg-muted rounded mt-2">
+            <div className="h-2 bg-green-600 rounded" style={{ width: `${piezasPct}%` }} />
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-sm text-muted-foreground">Pzas. pendientes</div>
+          <div className="text-2xl font-bold">{kpis.piezasPend}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-sm text-muted-foreground">Material faltante</div>
+          <div className="text-2xl font-bold">{kpis.matsPend}</div>
+        </Card>
+      </div>
+
+      {/* Materiales */}
+      <Card className="overflow-hidden">
+        <div className="p-4 font-semibold flex items-center gap-2"><Wrench className="h-4 w-4" /> Materiales planificados</div>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40">
+              <TableHead>Producto</TableHead>
+              <TableHead className="text-right">Plan</TableHead>
+              <TableHead className="text-right">Emitido</TableHead>
+              <TableHead className="text-right">Pendiente</TableHead>
+              <TableHead>UOM</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {matsPlan.map(r=>(
+              <TableRow key={r.sku}>
+                <TableCell className="font-mono">{r.nombre} <span className="text-muted-foreground">({r.sku})</span></TableCell>
+                <TableCell className="text-right font-mono">{r.plan}</TableCell>
+                <TableCell className="text-right font-mono">{r.emit}</TableCell>
+                <TableCell className="text-right font-mono">{r.pend}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{r.uom}</TableCell>
+              </TableRow>
+            ))}
+            {matsPlan.length===0 && <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Sin materiales planificados</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* Piezas */}
+      <Card className="overflow-hidden">
+        <div className="p-4 font-semibold">Piezas</div>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40">
+              <TableHead>Descripción</TableHead>
+              <TableHead className="text-right">Plan</TableHead>
+              <TableHead className="text-right">Hecha</TableHead>
+              <TableHead className="text-right">Pendiente</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {piezasRows.map(p=>(
+              <TableRow key={p.id}>
+                <TableCell>{p.desc}</TableCell>
+                <TableCell className="text-right font-mono">{p.plan}</TableCell>
+                <TableCell className="text-right font-mono">{p.hecha}</TableCell>
+                <TableCell className="text-right font-mono">{p.pend}</TableCell>
+              </TableRow>
+            ))}
+            {piezasRows.length===0 && <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Sin piezas</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+        <div className="p-3 text-xs text-muted-foreground border-t">
+          * Esta sección es informativa. El registro de producción y horas se hace en el módulo de <strong>Control de Producción</strong>.
+        </div>
+      </Card>
+
+      {/* Partes (solo lectura) */}
+      <Card className="overflow-hidden">
+        <div className="p-4 font-semibold">Partes de producción (informativo)</div>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40">
+              <TableHead>Fecha</TableHead>
+              <TableHead>Usuario</TableHead>
+              <TableHead>Máquina</TableHead>
+              <TableHead className="text-right">Horas</TableHead>
+              <TableHead>Pieza</TableHead>
+              <TableHead>Nota</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {ot.partesProduccion.map(pp=>(
+              <TableRow key={pp.id}>
+                <TableCell className="text-sm text-muted-foreground">{new Date(pp.fecha).toLocaleString()}</TableCell>
+                <TableCell className="text-sm">{pp.usuario?.displayName ?? pp.usuario?.email ?? "—"}</TableCell>
+                <TableCell className="text-sm">{pp.maquina ?? "—"}</TableCell>
+                <TableCell className="text-right font-mono">{Number(pp.horas || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-sm">{pp.pieza?.descripcion ?? pp.pieza?.productoId ?? "—"}</TableCell>
+                <TableCell className="text-sm">{pp.nota ?? "—"}</TableCell>
+              </TableRow>
+            ))}
+            {ot.partesProduccion.length===0 && (
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Sin partes</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* Modales */}
+      {canWrite && (
+        <>
+          <EditHeaderDialog
+            open={openEdit}
+            onOpenChange={setOpenEdit}
+            ot={ot}
+            products={products}
+            clients={clients}
+            onSave={async (payload: Parameters<Actions["updateOTHeader"]>[0])=>{
+              const p = actions.updateOTHeader(payload);
+              await toast.promise(p, { loading: "Guardando…", success: (r)=> r.message || "Actualizado", error: "Error" });
+              await actions.recompute(ot.id);
+            }}
+          />
+          <EmitMaterialsDialog
+            open={openEmit}
+            onOpenChange={setOpenEmit}
+            materials={matsPlan}
+            products={products}
+            onEmit={async (items: { sku: string; qty: number }[])=>{
+              const p = actions.emitOTMaterials({ otId: ot.id, items });
+              await toast.promise(p, { loading: "Emitiendo…", success: (r)=> r.message || "Materiales emitidos", error: "Error" });
+              await actions.recompute(ot.id);
+            }}
+          />
+          <RequestSCDialog
+            open={openSC}
+            onOpenChange={setOpenSC}
+            onConfirm={async (nota?: string)=>{
+              const p = actions.createManualSCForOT({ otId: ot.id, nota });
+              await toast.promise(p, { loading: "Creando solicitud…", success: (r)=> r.message || "Solicitud de compra creada", error: "Error" });
+            }}
+          />
+        </>
       )}
-
-    <Tabs defaultValue="materiales">
-        <TabsList>
-          <TabsTrigger value="materiales">Materiales</TabsTrigger>
-      <TabsTrigger value="piezas">Piezas</TabsTrigger>
-          <TabsTrigger value="kardex">Kardex</TabsTrigger>
-          <TabsTrigger value="partes">Partes</TabsTrigger>
-        </TabsList>
-
-        {/* Materiales */}
-        <TabsContent value="materiales" className="space-y-4">
-          {canWrite && (
-            <Card className="p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">Emitir materiales</div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={()=>setQtys({})}>Limpiar</Button>
-                  <Button size="sm" variant="secondary" onClick={async ()=>{
-                    const items = detail.materiales.filter(m=>m.qtyPend>0).map(m=>({ productoId: m.productoId, cantidad: Number(m.qtyPend) }));
-                    if (items.length===0) return toast.info("No hay pendientes");
-                    const fd = new FormData();
-                    fd.set("otId", detail.id);
-                    fd.set("items", JSON.stringify(items));
-                    const r = await actions.issueMaterials(fd);
-                    if (r.ok) { toast.success(r.message || "Emitido todo"); refresh(); }
-                    else toast.error(r.message || "No se pudo emitir");
-                  }}>Emitir todo pendiente</Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground">
-                <div className="col-span-6">Producto</div>
-                <div className="col-span-3 text-right">Pendiente</div>
-                <div className="col-span-3 text-right">Emitir</div>
-              </div>
-              <div className="space-y-2 max-h-[45vh] overflow-auto pr-1">
-                {detail.materiales.map(m=>(
-                  <div key={m.id} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-6 truncate" title={`${m.nombre} — ${m.productoId}`}>{m.nombre}</div>
-                    <div className="col-span-3 text-right">{m.qtyPend}</div>
-                    <div className="col-span-3">
-                      <Input type="number" inputMode="decimal" min={0} max={m.qtyPend} step="0.001" placeholder="0"
-                        value={qtys[m.productoId] ?? ""} onChange={e=>setQtys(mo => ({ ...mo, [m.productoId]: e.target.value===""? 0 : Number(e.target.value) }))} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button size="sm" onClick={async ()=>{
-                  if (!hasAny) return toast.error("Indica cantidades a emitir");
-                  const items = Object.entries(qtys).filter(([,v])=>Number(v)>0).map(([productoId, cantidad])=>({ productoId, cantidad:Number(cantidad) }));
-                  const fd = new FormData();
-                  fd.set("otId", detail.id);
-                  fd.set("items", JSON.stringify(items));
-                  const r = await actions.issueMaterials(fd);
-                  if (r.ok) { toast.success(r.message || "Emitido"); refresh(); }
-                  else toast.error(r.message || "No se pudo emitir");
-                }}>Confirmar</Button>
-              </div>
-            </Card>
-          )}
-
-          {canWrite && faltantes.length>0 && (
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">Faltantes detectados: {faltantes.length}</div>
-              <Button variant="outline" onClick={async ()=>{
-                const r = await actions.createSCFromShortages(detail.id);
-                if (r.ok) {toast.success(r.message || "SC creada");refresh();}
-                else {toast.error(r.message || "No se pudo crear la SC");}
-              }}>MRP: Crear SC por faltantes</Button>
-            </div>
-          )}
-
-          {canWrite && (
-            <Card className="p-3 space-y-2">
-              <div className="text-sm text-muted-foreground">Agregar material (plan)</div>
-              <div className="grid grid-cols-12 gap-2">
-                <AddMat products={products} onAdd={async (sku, qty)=>{
-                  const fd = new FormData();
-                  fd.set("otId", detail.id);
-                  fd.set("productoId", sku);
-                  fd.set("qtyPlan", String(qty));
-                  const r = await actions.addMaterial(fd);
-                  if (r.ok) location.reload(); else toast.error(r.message);
-                }}/>
-              </div>
-            </Card>
-          )}
-
-          <Card className="overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead>Producto</TableHead>
-                  <TableHead className="text-right">Plan</TableHead>
-                  <TableHead className="text-right">Emitido</TableHead>
-                  <TableHead className="text-right">Pend.</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {detail.materiales.map(m=>(
-                  <TableRow key={m.id}>
-                    <TableCell>{m.nombre} <span className="text-xs text-muted-foreground">({m.productoId})</span></TableCell>
-                    <TableCell className="text-right">{m.qtyPlan} {m.uom}</TableCell>
-                    <TableCell className="text-right">{m.qtyEmit}</TableCell>
-                    <TableCell className={"text-right " + (m.qtyPend>0 ? "text-red-600 font-medium" : "")}>{m.qtyPend}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        {/* Piezas */}
-        <TabsContent value="piezas" className="space-y-4">
-          <Card className="overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead>Pieza</TableHead>
-                  <TableHead className="text-center">Tipo</TableHead>
-                  <TableHead className="text-right">Plan</TableHead>
-                  <TableHead className="text-right">Hecho</TableHead>
-                  <TableHead className="text-right">% Avance</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {detail.piezas.map(p => {
-                  const pct = p.qtyPlan>0 ? Math.min(100, (p.qtyHecha / p.qtyPlan) * 100) : 0;
-                  const linked = !!p.productoId;
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="max-w-64">
-                        <div className="flex items-center gap-2">
-                          {linked ? <LinkIcon className="h-4 w-4 text-green-600" /> : <FileText className="h-4 w-4 text-blue-600" />}
-                          <span className="truncate" title={p.descripcion || p.productoId}>{p.descripcion || p.productoId || '—'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${linked?'bg-green-50 text-green-700 border-green-300':'bg-blue-50 text-blue-700 border-blue-300'}`}>
-                          {linked ? 'Producto' : 'Libre'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">{p.qtyPlan}</TableCell>
-                      <TableCell className="text-right font-mono">{p.qtyHecha}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="text-xs font-medium tabular-nums">{pct.toFixed(0)}%</div>
-                          <div className="w-24 h-2 rounded bg-muted overflow-hidden">
-                            <div className={`h-full ${pct===100?'bg-green-600':'bg-primary'}`} style={{ width: pct+"%" }} />
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {detail.piezas.length===0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                      Sin piezas definidas en esta OT
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        {/* Kardex */}
-        <TabsContent value="kardex" className="space-y-4">
-          <Card className="overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead className="text-right">Cantidad</TableHead>
-                  <TableHead className="text-right">Costo Unit.</TableHead>
-                  <TableHead className="text-right">Importe</TableHead>
-                  <TableHead>Nota</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {detail.kardex.map(k=>(
-                  <TableRow key={k.id}>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(k.fecha).toLocaleString()}</TableCell>
-                    <TableCell className="font-mono">{k.sku}</TableCell>
-                    <TableCell>{k.nombre}</TableCell>
-                    <TableCell className="text-right">{k.cantidad.toFixed(3)}</TableCell>
-                    <TableCell className="text-right">{new Intl.NumberFormat(undefined,{style:"currency",currency:"PEN"}).format(k.costoUnitario)}</TableCell>
-                    <TableCell className="text-right font-medium">{new Intl.NumberFormat(undefined,{style:"currency",currency:"PEN"}).format(k.importe)}</TableCell>
-                    <TableCell className="text-sm">{k.nota ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
-                {detail.kardex.length===0 && (
-                  <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Sin movimientos referidos a esta OT</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        {/* Partes */}
-        <TabsContent value="partes" className="space-y-4">
-          {canWrite && (
-            <Card className="p-3 space-y-2">
-              <div className="text-sm text-muted-foreground">Registrar parte de producción</div>
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-3">
-                  <Input type="number" min={0.25} step="0.25" value={horas} onChange={e=>setHoras(Number(e.target.value))} placeholder="Horas" />
-                </div>
-                <div className="col-span-4">
-                  <Input value={maquina} onChange={e=>setMaquina(e.target.value)} placeholder="Máquina (opcional)" />
-                </div>
-                <div className="col-span-5">
-                  <Input value={nota} onChange={e=>setNota(e.target.value)} placeholder="Nota (opcional)" />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button size="sm" onClick={async ()=>{
-                  const fd = new FormData();
-                  fd.set("otId", detail.id);
-                  fd.set("horas", String(horas));
-                  if (maquina) fd.set("maquina", maquina);
-                  if (nota) fd.set("nota", nota);
-                  const r = await actions.logProduction(fd);
-                  if (r.ok) { toast.success(r.message || "Parte registrado"); setHoras(1); setMaquina(""); setNota(""); refresh();  }
-                  else {toast.error(r.message || "No se pudo registrar el parte");}
-                }}>Guardar</Button>
-              </div>
-            </Card>
-          )}
-
-          <Card className="overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Horas</TableHead>
-                  <TableHead>Máquina</TableHead>
-                  <TableHead>Nota</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {detail.partes.map(p=>(
-                  <TableRow key={p.id}>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(p.fecha).toLocaleString()}</TableCell>
-                    <TableCell>{p.usuario}</TableCell>
-                    <TableCell>{p.horas.toFixed(2)}</TableCell>
-                    <TableCell>{p.maquina ?? "—"}</TableCell>
-                    <TableCell className="text-sm">{p.nota ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
-                {detail.partes.length===0 && (
-                  <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Sin partes</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
-  );
-}
-
-function AddMat({ products, onAdd }:{
-  products: Product[];
-  onAdd: (sku:string, qty:number)=>void;
-}) {
-  const [sku, setSku] = useState(products[0]?.sku ?? "");
-  const [qty, setQty] = useState<number>(1);
-  return (
-    <>
-      <div className="col-span-8">
-        <select className="w-full border rounded-md h-9 px-2" value={sku} onChange={e=>setSku(e.target.value)}>
-          {products.map(p=> <option key={p.sku} value={p.sku}>{p.nombre} — {p.sku}</option>)}
-        </select>
-      </div>
-      <div className="col-span-3">
-        <Input type="number" min={0.001} step="0.001" value={qty} onChange={e=>setQty(Number(e.target.value))} />
-      </div>
-      <div className="col-span-1 flex justify-end">
-        <Button onClick={()=>onAdd(sku, qty)}>+</Button>
-      </div>
-    </>
   );
 }

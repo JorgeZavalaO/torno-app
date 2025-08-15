@@ -1,567 +1,471 @@
 "use server";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/app/lib/prisma";
-import { revalidatePath, revalidateTag } from "next/cache";
-import { cacheTags } from "@/app/lib/cache-tags";
-import { assertCanWriteWorkorders } from "@/app/lib/guards";
 import { getCurrentUser } from "@/app/lib/auth";
-import { logHours, logPieces } from "@/app/server/services/production";
+import { assertCanWriteWorkorders } from "@/app/lib/guards";
 
-type R =
-  | { ok: true; message?: string; id?: string; codigo?: string }
-  | { ok: false; message: string };
+type R = { ok: true; message?: string; id?: string; codigo?: string } | { ok: false; message: string };
+const D = (n: number | string | null | undefined) => new Prisma.Decimal(n ?? 0);
 
-const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
-
-function bumpAll(id?: string) {
-  revalidateTag(cacheTags.workorders);
-  if (id) {
-    revalidateTag(cacheTags.workorder(id));
-    revalidateTag(cacheTags.worklogs(id));
-  }
-  // inventario se afecta al emitir materiales
-  revalidateTag(cacheTags.inventoryProducts);
-  revalidateTag(cacheTags.inventoryMovs);
-  revalidatePath("/ot", "page");
+function bumpAll(otId?: string) {
+  revalidatePath("/ot", "page");                 // listado
+  if (otId) revalidatePath(`/ot/${otId}`, "page"); // detalle
 }
 
-/* ---------------- Helpers ---------------- */
-async function generateOTCode(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `OT-${year}-`;
-  const count = await prisma.ordenTrabajo.count({
-    where: { codigo: { startsWith: prefix } },
-  });
-  let code = `${prefix}${(count + 1).toString().padStart(3, "0")}`;
-  // asegurar unicidad por si hay huecos
-  while (await prisma.ordenTrabajo.findUnique({ where: { codigo: code } })) {
-    const n = parseInt(code.slice(prefix.length), 10) + 1;
-    code = `${prefix}${n.toString().padStart(3, "0")}`;
+/* ------------------- Helpers de negocio / estado ------------------- */
+
+/**
+ * Recalcula y actualiza el estado de la OT según:
+ *  - IN_PROGRESS: si la cobertura de materiales planificados emitidos es 100%
+ *  - DONE: si todas las piezas tienen qtyHecha >= qtyPlan
+ *
+ * TIP: Si el módulo de Control de Producción actualiza qtyHecha, conviene invocar
+ * este helper desde allí también después de registrar producción.
+ */
+export async function recomputeOTState(otId: string) {
+  const [ot, mats, piezas] = await Promise.all([
+    prisma.ordenTrabajo.findUnique({ where: { id: otId }, select: { estado: true } }),
+    prisma.oTMaterial.findMany({ where: { otId } }),
+    prisma.oTPieza.findMany({ where: { otId }, select: { qtyPlan: true, qtyHecha: true } }),
+  ]);
+  if (!ot) return;
+
+  // Cobertura materiales (solo considera planificados con qtyPlan > 0)
+  let plan = 0, emit = 0;
+  for (const m of mats) {
+    const p = Number(m.qtyPlan || 0);
+    const e = Number(m.qtyEmit || 0);
+    if (p > 0) { plan += p; emit += Math.min(e, p); }
   }
-  return code;
+  const coverage = plan > 0 ? emit / plan : 0;
+
+  // ¿Todas las piezas terminadas?
+  const allPiecesDone = piezas.length > 0
+    ? piezas.every(p => Number(p.qtyHecha || 0) >= Number(p.qtyPlan || 0))
+    : false;
+
+  let next: "IN_PROGRESS" | "DONE" | null = null;
+
+  if (allPiecesDone) {
+    next = "DONE";
+  } else if (coverage >= 1) {
+    if (ot.estado === "DRAFT" || ot.estado === "OPEN") next = "IN_PROGRESS";
+  }
+
+  if (next) {
+    await prisma.ordenTrabajo.update({ where: { id: otId }, data: { estado: next } });
+    bumpAll(otId);
+  }
 }
 
-/* ---------------- Create / Update OT ---------------- */
-const CreateOTSchema = z.object({
-  clienteId: z.string().optional(),
-  cotizacionId: z.string().optional(),
+/* --------------------------- Schemas --------------------------- */
+
+const UpdateHeaderSchema = z.object({
+  id: z.string().uuid(),
+  clienteId: z.string().uuid().nullable().optional(),
+  prioridad: z.enum(["LOW","MEDIUM","HIGH","URGENT"]).optional(),
   notas: z.string().max(500).optional(),
-  prioridad: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
-  acabado: z.string().max(100).optional(),
-  autoSC: z
-    .union([
-      z.boolean(),
-      z.string().transform((v) => v === "true"),
-    ])
-    .optional()
-    .default(true),
-  piezas: z
-    .array(
-      z
-        .object({
-          productoId: z.string().optional(),
-          descripcion: z.string().max(200).optional(),
-          qtyPlan: z.coerce.number().positive(),
-        })
-        .refine((v) => !!(v.productoId || v.descripcion), {
-          message: "Pieza sin código o descripción",
-        })
-    )
-    .min(1),
-  materiales: z
-    .array(
-      z.object({
-        productoId: z.string().min(1),
-        qtyPlan: z.coerce.number().positive(),
-      })
-    )
-    .min(1),
+  acabado: z.string().max(200).optional(),
+  materialesPlan: z.array(
+    z.object({
+      sku: z.string(),
+      qtyPlan: z.coerce.number().nonnegative()
+    })
+  ).optional(),
 });
 
+const EmitMaterialsSchema = z.object({
+  otId: z.string().uuid(),
+  items: z.array(
+    z.object({
+      sku: z.string().min(1),
+      qty: z.coerce.number().positive()
+    })
+  ).min(1),
+});
+
+const StartOTSchema = z.object({
+  otId: z.string().uuid(),
+});
+
+const ManualSCSchema = z.object({
+  otId: z.string().uuid(),
+  nota: z.string().max(300).optional(),
+});
+
+/* ----------------------------- Actions ----------------------------- */
+
+/** Crear OT (desde FormData). Sin registro de horas; SC por faltantes es manual */
 export async function createOT(fd: FormData): Promise<R> {
   await assertCanWriteWorkorders();
-  const parsed = CreateOTSchema.safeParse({
-    clienteId: (fd.get("clienteId") || undefined) as string | undefined,
-    cotizacionId: (fd.get("cotizacionId") || undefined) as
-      | string
-      | undefined,
-    notas: (fd.get("notas") || undefined) as string | undefined,
-    prioridad: (fd.get("prioridad") || undefined) as
-      | "LOW"
-      | "MEDIUM"
-      | "HIGH"
-      | "URGENT"
-      | undefined,
-    acabado: (fd.get("acabado") || undefined) as string | undefined,
-  autoSC: fd.get("autoSC") ?? "true",
-    piezas: JSON.parse(String(fd.get("piezas") || "[]")),
-    materiales: JSON.parse(String(fd.get("materiales") || "[]")),
-  });
-  if (!parsed.success) return { ok: false, message: "Datos inválidos de OT" };
 
-  const codigo = await generateOTCode();
+  // Llegan:
+  // - piezas: [{ productoId?: string|null, descripcion?: string|null, qtyPlan: number }]
+  // - materiales: [{ productoId: string, qtyPlan: number }]
+  let piezasRaw: Array<{ productoId?: string|null; descripcion?: string|null; qtyPlan: number }> = [];
+  let matsRaw: Array<{ productoId: string; qtyPlan: number }> = [];
 
-  // Sanitizar piezas: permitir códigos digitados que NO existen en producto -> se guardan como descripción
-  const candidateSkus = Array.from(
-    new Set(parsed.data.piezas.map((p) => p.productoId).filter(Boolean))
-  ) as string[];
-  const existing = candidateSkus.length
-    ? await prisma.producto.findMany({
-        where: { sku: { in: candidateSkus } },
-        select: { sku: true },
-      })
-    : [];
-  const existingSet = new Set(existing.map((p) => p.sku));
-  const piezasSanitized = parsed.data.piezas.map((p) => {
-    if (p.productoId && !existingSet.has(p.productoId)) {
-      // código digitado no corresponde a un producto -> mover a descripción si no existe ya
-      const desc = p.descripcion?.trim() ? p.descripcion.trim() : p.productoId;
-      return {
-        productoId: null as string | null,
-        descripcion: desc,
-        qtyPlan: p.qtyPlan,
-      };
-    }
-    return {
-      productoId: p.productoId ?? null,
-      descripcion: p.descripcion ?? null,
-      qtyPlan: p.qtyPlan,
-    };
-  });
-
-  // Validar que el cliente exista (si se envía) para evitar P2003 silencioso por cache desactualizado
-  const clienteId: string | null = parsed.data.clienteId ?? null;
-  if (clienteId) {
-    const exists = await prisma.cliente.findUnique({
-      where: { id: clienteId },
-      select: { id: true },
-    });
-    if (!exists) {
-      return {
-        ok: false,
-        message:
-          "El cliente seleccionado ya no existe. Recarga y vuelve a intentar.",
-      };
-    }
-  }
-
-  let o: { id: string; codigo: string };
   try {
-    o = await prisma.ordenTrabajo.create({
+    piezasRaw = JSON.parse(String(fd.get("piezas") ?? "[]"));
+    matsRaw   = JSON.parse(String(fd.get("materiales") ?? "[]"));
+  } catch {
+    return { ok: false, message: "Datos inválidos (JSON)" };
+  }
+
+  const payload = {
+    piezas: piezasRaw
+      .filter(p => (p.productoId || p.descripcion) && Number(p.qtyPlan) > 0)
+      .map(p => ({ sku: p.productoId ?? undefined, descripcion: p.descripcion ?? undefined, qty: Number(p.qtyPlan) })),
+    materiales: matsRaw
+      .filter(m => m.productoId && Number(m.qtyPlan) > 0)
+      .map(m => ({ sku: m.productoId, qty: Number(m.qtyPlan) })),
+    clienteId: fd.get("clienteId")?.toString() || undefined,
+    prioridad: (fd.get("prioridad")?.toString() as "LOW"|"MEDIUM"|"HIGH"|"URGENT") || "MEDIUM",
+    acabado: fd.get("acabado")?.toString() || undefined,
+    notas: fd.get("notas")?.toString() || undefined,
+  };
+
+  if (payload.piezas.length === 0) return { ok: false, message: "Agrega al menos una pieza válida" };
+  if (payload.materiales.length === 0) return { ok: false, message: "Agrega materiales válidos" };
+
+  const created = await prisma.$transaction(async (tx) => {
+    const codigo = await nextOTCode(tx);
+    const ot = await tx.ordenTrabajo.create({
       data: {
-        codigo,
+        clienteId: payload.clienteId ?? null,
+        prioridad: payload.prioridad,
+        notas: payload.notas?.trim() || null,
+        acabado: payload.acabado?.trim() || null,
         estado: "OPEN",
-        prioridad: parsed.data.prioridad ?? "MEDIUM",
-        clienteId,
-        cotizacionId: parsed.data.cotizacionId ?? null,
-        notas: parsed.data.notas ?? null,
-        acabado: parsed.data.acabado ?? null,
-        materiales: {
-          create: parsed.data.materiales.map((m) => ({
-            productoId: m.productoId,
-            qtyPlan: D(m.qtyPlan),
-          })),
-        },
-        piezas: {
-          create: piezasSanitized.map((p) => ({
-            productoId: p.productoId,
-            descripcion: p.descripcion,
-            qtyPlan: D(p.qtyPlan),
-          })),
-        },
+        codigo,
       },
-      select: { id: true, codigo: true },
+      select: { id: true, codigo: true }
     });
-  } catch (err) {
-    if (err && typeof err === "object" && (err as { code?: string }).code === "P2003") {
-      return {
-        ok: false,
-        message:
-          "Error de integridad: Alguna referencia (cliente, cotización o producto) es inválida. Verifica los datos y recarga.",
-      };
+
+    // Piezas
+    if (payload.piezas.length) {
+      await tx.oTPieza.createMany({
+        data: payload.piezas.map(x => ({
+          otId: ot.id,
+          productoId: x.sku || null,
+          descripcion: x.descripcion?.trim() || (x.sku ? undefined : "Pieza sin código"),
+          qtyPlan: new Prisma.Decimal(x.qty),
+          qtyHecha: new Prisma.Decimal(0),
+        })),
+      });
     }
-    return { ok: false, message: "Error interno al crear OT" };
-  }
 
-  // Generar SC automática si faltan materiales
-  if (parsed.data.autoSC) {
-    try {
-      await createSCFromShortages(o.id);
-    } catch {
-      /* noop */
+    // Materiales planificados
+    if (payload.materiales.length) {
+      await tx.oTMaterial.createMany({
+        data: payload.materiales.map(m => ({
+          otId: ot.id,
+          productoId: m.sku,
+          qtyPlan: new Prisma.Decimal(m.qty),
+          qtyEmit: new Prisma.Decimal(0),
+        })),
+      });
     }
-  }
-  bumpAll(o.id);
-  return { ok: true, id: o.id, codigo: o.codigo, message: "OT creada" };
-}
 
-export async function setOTState(
-  id: string,
-  estado: "DRAFT" | "OPEN" | "IN_PROGRESS" | "DONE" | "CANCELLED"
-): Promise<R> {
-  await assertCanWriteWorkorders();
-
-  // Bloquear terminar si hay pendientes
-  if (estado === "DONE") {
-    const [mats, piezas] = await Promise.all([
-      prisma.oTMaterial.findMany({
-        where: { otId: id },
-        select: { qtyPlan: true, qtyEmit: true },
-      }),
-      (prisma as unknown as {
-        oTPieza: {
-          findMany: (args: unknown) => Promise<Array<{ qtyPlan: Prisma.Decimal; qtyHecha: Prisma.Decimal }>>;
-        };
-      }).oTPieza.findMany({
-        where: { otId: id } as any,
-        select: { qtyPlan: true, qtyHecha: true } as any,
-      }),
-    ]);
-    const matPend = mats.some((m) => Number(m.qtyEmit) < Number(m.qtyPlan));
-    const pzPend = piezas.some((p) => Number(p.qtyHecha) < Number(p.qtyPlan));
-    if (matPend || pzPend) {
-      return {
-        ok: false,
-        message:
-          "No puedes terminar la OT con pendientes de materiales o piezas",
-      };
-    }
-  }
-
-  await prisma.ordenTrabajo.update({ where: { id }, data: { estado } });
-  bumpAll(id);
-  return { ok: true, message: "Estado actualizado" };
-}
-
-/* ---------------- Update OT metadata (cliente/prioridad/notas) ---------------- */
-const UpdateMetaSchema = z.object({
-  otId: z.string().uuid(),
-  clienteId: z.string().nullable().optional(),
-  prioridad: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
-  notas: z.string().max(500).optional(),
-});
-
-export async function updateOTMeta(fd: FormData): Promise<R> {
-  await assertCanWriteWorkorders();
-  const rawCliente = fd.get("clienteId");
-  const parsed = UpdateMetaSchema.safeParse({
-    otId: fd.get("otId"),
-    clienteId: rawCliente === "" ? null : rawCliente || undefined,
-    prioridad: (fd.get("prioridad") || undefined) as
-      | "LOW"
-      | "MEDIUM"
-      | "HIGH"
-      | "URGENT"
-      | undefined,
-    notas: (fd.get("notas") || undefined) as string | undefined,
+    return ot; // { id, codigo }
   });
+
+  bumpAll(created.id);
+  return { ok: true, id: created.id, codigo: created.codigo, message: "OT creada" };
+}
+
+/** Editar cabecera (cliente/prioridad/notas/acabado y plan de materiales) */
+export async function updateOTHeader(payload: z.infer<typeof UpdateHeaderSchema>): Promise<R> {
+  await assertCanWriteWorkorders();
+  const parsed = UpdateHeaderSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, message: "Datos inválidos" };
 
-  const { otId, clienteId, prioridad, notas } = parsed.data;
-  await prisma.ordenTrabajo.update({
-    where: { id: otId },
-    data: {
-      clienteId:
-        typeof clienteId === "string"
-          ? clienteId
-          : clienteId === null
-          ? null
-          : undefined,
-      prioridad: prioridad ?? undefined,
-      notas: notas === undefined ? undefined : notas || null,
-    },
+  const { id, clienteId, prioridad, notas, acabado, materialesPlan } = parsed.data;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.ordenTrabajo.update({
+      where: { id },
+      data: {
+        clienteId: (clienteId ?? undefined) || null,
+        prioridad: prioridad ?? undefined,
+        notas: notas?.trim() ?? undefined,
+        acabado: acabado?.trim() ?? undefined,
+      },
+    });
+
+    if (Array.isArray(materialesPlan)) {
+      // Sincroniza qtyPlan por SKU (crea/actualiza)
+      for (const mp of materialesPlan) {
+        const exists = await tx.oTMaterial.findUnique({ where: { otId_productoId: { otId: id, productoId: mp.sku } } });
+        if (!exists && mp.qtyPlan > 0) {
+          await tx.oTMaterial.create({
+            data: { otId: id, productoId: mp.sku, qtyPlan: D(mp.qtyPlan), qtyEmit: D(0) },
+          });
+        } else if (exists) {
+          await tx.oTMaterial.update({
+            where: { otId_productoId: { otId: id, productoId: mp.sku } },
+            data: { qtyPlan: D(mp.qtyPlan) },
+          });
+        }
+      }
+    }
   });
-  bumpAll(otId);
+
+  await recomputeOTState(id);
+  bumpAll(id);
   return { ok: true, message: "OT actualizada" };
 }
 
-/* ---------------- Agregar / Actualizar material plan ---------------- */
-
-const AddMatSchema = z.object({
-  otId: z.string().uuid(),
-  productoId: z.string().min(1),
-  qtyPlan: z.coerce.number().positive(),
-  mode: z.enum(["add", "set"]).optional().default("add"),
-});
-
-export async function addMaterial(fd: FormData): Promise<R> {
+/** Emisión de materiales (movimientos SALIDA_OT) vía diálogo */
+export async function emitOTMaterials(payload: z.infer<typeof EmitMaterialsSchema>): Promise<R> {
   await assertCanWriteWorkorders();
-  const parsed = AddMatSchema.safeParse({
-    otId: fd.get("otId"),
-    productoId: fd.get("productoId"),
-    qtyPlan: fd.get("qtyPlan"),
-    mode: (fd.get("mode") || "add") as "add" | "set",
-  });
-  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
-
-  const { otId, productoId, qtyPlan, mode } = parsed.data;
-
-  try {
-    const existing = await prisma.oTMaterial.findUnique({
-      where: { otId_productoId: { otId, productoId } },
-      select: { qtyEmit: true },
-    });
-
-    if (mode === "set" && existing && Number(qtyPlan) < Number(existing.qtyEmit)) {
-      return {
-        ok: false,
-        message:
-          "El plan no puede ser menor a lo ya emitido para este material",
-      };
-    }
-
-    await prisma.oTMaterial.upsert({
-      where: { otId_productoId: { otId, productoId } },
-      update:
-        mode === "add"
-          ? { qtyPlan: { increment: D(qtyPlan) } }
-          : { qtyPlan: D(qtyPlan) },
-      create: {
-        otId,
-        productoId,
-        qtyPlan: D(qtyPlan),
-      },
-    });
-    bumpAll(otId);
-    return { ok: true, message: "Material agregado/actualizado" };
-  } catch {
-    return { ok: false, message: "No se pudo agregar material" };
-  }
-}
-
-/* ---------------- Emisión (consumo) de materiales ---------------- */
-
-const IssueSchema = z.object({
-  otId: z.string().uuid(),
-  items: z
-    .array(
-      z.object({
-        productoId: z.string().min(1),
-        cantidad: z.coerce.number().positive(),
-      })
-    )
-    .min(1),
-});
-
-export async function issueMaterials(fd: FormData): Promise<R> {
-  await assertCanWriteWorkorders();
-  const parsed = IssueSchema.safeParse({
-    otId: fd.get("otId"),
-    items: JSON.parse(String(fd.get("items") || "[]")),
-  });
+  const parsed = EmitMaterialsSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, message: "Datos inválidos" };
 
   const { otId, items } = parsed.data;
 
-  // leer materiales de la OT
-  const mats = await prisma.oTMaterial.findMany({
-    where: { otId },
-    select: { productoId: true, qtyPlan: true, qtyEmit: true },
-  });
-  const planMap = new Map(
-    mats.map((m) => [
-      m.productoId,
-      { plan: Number(m.qtyPlan), emit: Number(m.qtyEmit) },
-    ])
-  );
-
-  // stock actual por los SKUs a emitir
-  const skus = Array.from(new Set(items.map((i) => i.productoId)));
-  const sums = await prisma.movimiento.groupBy({
-    by: ["productoId"],
-    where: { productoId: { in: skus } },
-    _sum: { cantidad: true },
-  });
-  const stockMap = new Map(
-    sums.map((s) => [s.productoId, Number(s._sum.cantidad || 0)])
-  );
-
-  // validaciones
-  const errs: string[] = [];
-  for (const it of items) {
-    const info = planMap.get(it.productoId);
-    if (!info) {
-      errs.push(`SKU no pertenece a la OT: ${it.productoId}`);
-      continue;
-    }
-    const pend = Math.max(0, info.plan - info.emit);
-    if (it.cantidad > pend) errs.push(`Cantidad supera pendiente (${it.productoId})`);
-    const stock = stockMap.get(it.productoId) ?? 0;
-    if (it.cantidad > stock) errs.push(`Stock insuficiente (${it.productoId})`);
-  }
-  if (errs.length) return { ok: false, message: errs.join(" • ") };
-
-  // Obtener código OT una sola vez
-  const ot = await prisma.ordenTrabajo.findUnique({
-    where: { id: otId },
-    select: { codigo: true },
-  });
-  if (!ot) return { ok: false, message: "OT no encontrada" };
-
   await prisma.$transaction(async (tx) => {
-    // costo actual de referencia por SKU
-    const prods = await tx.producto.findMany({
-      where: { sku: { in: skus } },
-      select: { sku: true, costo: true },
-    });
-    const costMap = new Map(prods.map((p) => [p.sku, Number(p.costo)]));
+    // Validar stock suficiente para cada SKU
+    const skus = Array.from(new Set(items.map(i => i.sku)));
+    const products = await tx.producto.findMany({ where: { sku: { in: skus } }, select: { sku: true, costo: true } });
 
-    // movimientos SALIDA_OT (negativos) y update qtyEmit
+    const stockMap = new Map<string, number>();
+    const stocks = await tx.movimiento.groupBy({
+      by: ["productoId"],
+      where: { productoId: { in: skus } },
+      _sum: { cantidad: true },
+    });
+    for (const s of stocks) stockMap.set(s.productoId, Number(s._sum.cantidad || 0));
+
     for (const it of items) {
+      const onHand = stockMap.get(it.sku) ?? 0;
+      if (onHand < it.qty) {
+        throw new Error(`Stock insuficiente para ${it.sku} (disp: ${onHand}, req: ${it.qty})`);
+      }
+    }
+
+    // Registrar movimientos y actualizar OTMaterial.qtyEmit
+    for (const it of items) {
+      const p = products.find(pp => pp.sku === it.sku);
+      const costoUnit = p ? Number(p.costo) : 0;
+
       await tx.movimiento.create({
         data: {
-          productoId: it.productoId,
+          productoId: it.sku,
           tipo: "SALIDA_OT",
-          cantidad: D(-Math.abs(it.cantidad)), // negativo
-          costoUnitario: D(costMap.get(it.productoId) ?? 0),
-          refTabla: "OT",
-          refId: ot.codigo,
-          nota: "Consumo OT",
-        } as any,
+          cantidad: D(-Math.abs(it.qty)), // convención: salidas negativas
+          costoUnitario: D(costoUnit),
+          refTabla: "OrdenTrabajo",
+          refId: otId,
+          nota: `Emisión a OT ${otId}`,
+        },
       });
-      await tx.oTMaterial.update({
-        where: { otId_productoId: { otId, productoId: it.productoId } },
-        data: { qtyEmit: { increment: D(it.cantidad) } },
+
+      // Upsert en OTMaterial (permite emitir incluso si no estaba planificado)
+      await tx.oTMaterial.upsert({
+        where: { otId_productoId: { otId, productoId: it.sku } },
+        create: { otId, productoId: it.sku, qtyPlan: D(0), qtyEmit: D(it.qty) },
+        update: { qtyEmit: new Prisma.Decimal((await getCurrentQtyEmit(tx, otId, it.sku)) + it.qty) },
       });
     }
   });
 
+  await recomputeOTState(otId);
   bumpAll(otId);
-  return { ok: true, message: "Materiales emitidos" };
+  return { ok: true, message: "Material(es) emitido(s)" };
 }
 
-/** MRP-lite: genera una SC con faltantes de la OT (qtyPend - stock disponible). */
-export async function createSCFromShortages(otId: string): Promise<R> {
+/** Arranque manual de OT: requiere ≥20% de cobertura de materiales emitidos */
+export async function startOTManually(payload: z.infer<typeof StartOTSchema>): Promise<R> {
   await assertCanWriteWorkorders();
-  const me = await getCurrentUser();
-  if (!me) return { ok: false, message: "Sesión inválida" };
+  const parsed = StartOTSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
 
-  const user = await prisma.userProfile.findFirst({
-    where: { email: me.email },
-  });
-  if (!user) return { ok: false, message: "Usuario no registrado" };
-
-  const ot = await prisma.ordenTrabajo.findUnique({
-    where: { id: otId },
-    include: { materiales: true },
-  });
+  const { otId } = parsed.data;
+  const [ot, mats] = await Promise.all([
+    prisma.ordenTrabajo.findUnique({ where: { id: otId }, select: { estado: true } }),
+    prisma.oTMaterial.findMany({ where: { otId } }),
+  ]);
   if (!ot) return { ok: false, message: "OT no encontrada" };
-
-  // Evitar SC duplicada abierta para la misma OT
-  const scAbierta = await prisma.solicitudCompra.findFirst({
-    where: {
-      otId,
-      estado: { in: ["PENDING_ADMIN"] as any }, // ajusta si tienes más estados "abiertos"
-    },
-    select: { id: true },
-  });
-  if (scAbierta) {
-    return {
-      ok: false,
-      message: "Ya existe una solicitud de compra abierta para esta OT",
-    };
+  if (ot.estado === "IN_PROGRESS" || ot.estado === "DONE") {
+    return { ok: true, message: "La OT ya está iniciada o terminada" };
   }
 
-  // stock actual por SKU
-  const skus = ot.materiales.map((m) => m.productoId);
-  const sums = await prisma.movimiento.groupBy({
+  let plan = 0, emit = 0;
+  for (const m of mats) {
+    const p = Number(m.qtyPlan || 0);
+    const e = Number(m.qtyEmit || 0);
+    if (p > 0) { plan += p; emit += Math.min(e, p); }
+  }
+  const coverage = plan > 0 ? emit / plan : 0;
+
+  if (coverage < 0.2) {
+    return { ok: false, message: "Se requiere al menos 20% de materiales emitidos para iniciar" };
+  }
+
+  await prisma.ordenTrabajo.update({ where: { id: otId }, data: { estado: "IN_PROGRESS" } });
+  bumpAll(otId);
+  return { ok: true, message: "OT iniciada" };
+}
+
+/** Generar manualmente Solicitud de Compra por faltantes de materiales */
+export async function createManualSCForOT(payload: z.infer<typeof ManualSCSchema>): Promise<R> {
+  await assertCanWriteWorkorders();
+  const me = await getCurrentUser();
+  const user = me ? await prisma.userProfile.findFirst({ where: { email: me.email }, select: { id: true } }) : null;
+
+  const parsed = ManualSCSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
+
+  const { otId, nota } = parsed.data;
+
+  // Calcular faltantes = max(qtyPlan - qtyEmit - stockDisponible, 0)
+  const mats = await prisma.oTMaterial.findMany({ where: { otId } });
+  if (mats.length === 0) return { ok: false, message: "No hay materiales planificados" };
+
+  const skus = mats.map(m => m.productoId);
+  const stocks = await prisma.movimiento.groupBy({
     by: ["productoId"],
     where: { productoId: { in: skus } },
     _sum: { cantidad: true },
   });
-  const stockMap = new Map(
-    sums.map((s) => [s.productoId, Number(s._sum.cantidad || 0)])
-  );
+  const stockMap = new Map(stocks.map(s => [s.productoId, Number(s._sum.cantidad || 0)]));
 
-  const items = ot.materiales
-    .map((m) => {
-      const plan = Number(m.qtyPlan);
-      const emit = Number(m.qtyEmit);
-      const pend = Math.max(0, plan - emit);
-      const stock = stockMap.get(m.productoId) ?? 0;
-      const falt = Math.max(0, pend - stock);
-      return { productoId: m.productoId, cantidad: falt };
-    })
-    .filter((i) => i.cantidad > 0);
+  const items: { productoId: string; cantidad: number }[] = [];
+  for (const m of mats) {
+    const plan = Number(m.qtyPlan || 0);
+    const emit = Number(m.qtyEmit || 0);
+    const need = Math.max(plan - emit, 0);
+    const stock = stockMap.get(m.productoId) ?? 0;
+    const falt = Math.max(need - stock, 0);
+    if (falt > 0) items.push({ productoId: m.productoId, cantidad: falt });
+  }
 
-  if (items.length === 0)
-    return { ok: false, message: "No hay faltantes para solicitar" };
+  if (items.length === 0) {
+    return { ok: false, message: "No se encontraron faltantes para solicitar" };
+  }
 
-  const sc = await prisma.solicitudCompra.create({
-    data: {
-      solicitanteId: user.id,
-      // relacionar al ID real de la OT (FK)
-      otId: ot.id,
-      estado: "PENDING_ADMIN",
-      totalEstimado: D(0),
-      items: {
-        create: items.map((it) => ({
-          productoId: it.productoId,
-          cantidad: D(it.cantidad),
-        })),
+  const scId = await prisma.$transaction(async (tx) => {
+    const sc = await tx.solicitudCompra.create({
+      data: {
+        solicitanteId: user?.id ?? (await ensureAdminUserId(tx)),
+        otId,
+        estado: "PENDING_ADMIN",
+        notas: nota?.trim() || null,
       },
-      notas: "MRP-lite: generado automáticamente desde faltantes de OT",
-    },
-    select: { id: true },
+      select: { id: true }
+    });
+
+    await tx.sCItem.createMany({
+      data: items.map(i => ({
+        scId: sc.id,
+        productoId: i.productoId,
+        cantidad: D(i.cantidad),
+      })),
+    });
+
+    return sc.id;
   });
 
   bumpAll(otId);
-  revalidateTag(cacheTags.purchasesSC);
-  revalidatePath("/compras", "page");
-
-  return { ok: true, id: sc.id, message: "Solicitud de compra creada desde faltantes" };
+  return { ok: true, id: scId, message: "Solicitud de compra creada" };
 }
 
-/** Parte de producción (horas/turno/nota) */
-const LogSchema = z.object({
-  otId: z.string().uuid(),
-  horas: z.coerce.number().positive(),
-  maquina: z.string().max(100).optional(),
-  nota: z.string().max(300).optional(),
-});
-export async function logProduction(fd: FormData): Promise<R> {
+/** Cancelar/Reabrir OT (opcional) */
+export async function setOTStatus(otId: string, estado: "CANCELLED" | "OPEN"): Promise<R> {
   await assertCanWriteWorkorders();
-  const parsed = LogSchema.safeParse({
-    otId: fd.get("otId"),
-    horas: fd.get("horas"),
-    maquina: (fd.get("maquina") || undefined) as string | undefined,
-    nota: (fd.get("nota") || undefined) as string | undefined,
-  });
-  if (!parsed.success) return { ok: false, message: "Datos inválidos del parte" };
-  const r = await logHours({
-    otId: parsed.data.otId,
-    horas: Number(parsed.data.horas),
-    maquina: parsed.data.maquina,
-    nota: parsed.data.nota,
-  });
-  if (r.ok) bumpAll(parsed.data.otId); // asegurar invalidaciones extra (inventario no aplica aquí)
-  return r;
+  await prisma.ordenTrabajo.update({ where: { id: otId }, data: { estado } });
+  bumpAll(otId);
+  return { ok: true, message: "Estado actualizado" };
 }
 
-/* ---------------- Registrar piezas terminadas ---------------- */
-const LogPiecesSchema = z.object({
-  otId: z.string().uuid(),
-  items: z
-    .array(
-      z.object({
-        piezaId: z.string().uuid(),
-        cantidad: z.coerce.number().positive(),
-      })
-    )
-    .min(1),
-});
+/* ---------------------- Wrappers de compatibilidad ---------------------- */
 
-export async function logFinishedPieces(fd: FormData): Promise<R> {
+/** Compat con UI: issueMaterials(fd) -> emitOTMaterials(...) */
+export async function issueMaterials(fd: FormData): Promise<R> {
   await assertCanWriteWorkorders();
-  const parsed = LogPiecesSchema.safeParse({
-    otId: fd.get("otId"),
-    items: JSON.parse(String(fd.get("items") || "[]")),
+  const otId = String(fd.get("otId") || "");
+  if (!otId) return { ok: false, message: "otId requerido" };
+
+  let itemsRaw: Array<{ productoId: string; cantidad: number }> = [];
+  try { itemsRaw = JSON.parse(String(fd.get("items") ?? "[]")); } catch { /* noop */ }
+
+  const items = itemsRaw
+    .filter(i => i.productoId && Number(i.cantidad) > 0)
+    .map(i => ({ sku: i.productoId, qty: Number(i.cantidad) }));
+
+  return emitOTMaterials({ otId, items });
+}
+
+/** Compat con UI: crear SC desde faltantes calculados */
+export async function createSCFromShortages(otId: string): Promise<R> {
+  return createManualSCForOT({ otId, nota: undefined });
+}
+
+/** Compat con UI: setOTState(id, estado) con reglas pedidas */
+export async function setOTState(id: string, estado: "DRAFT"|"OPEN"|"IN_PROGRESS"|"DONE"|"CANCELLED"): Promise<R> {
+  await assertCanWriteWorkorders();
+
+  if (estado === "IN_PROGRESS") {
+    // Requiere ≥ 20% de cobertura
+    const mats = await prisma.oTMaterial.findMany({ where: { otId: id }, select: { qtyPlan: true, qtyEmit: true } });
+    let plan = 0, emit = 0;
+    for (const m of mats) {
+      const p = Number(m.qtyPlan || 0);
+      const e = Number(m.qtyEmit || 0);
+      if (p > 0) { plan += p; emit += Math.min(e, p); }
+    }
+    const coverage = plan > 0 ? emit / plan : 0;
+    if (coverage < 0.2) return { ok: false, message: "Se requiere al menos 20% de materiales emitidos para iniciar" };
+  }
+
+  if (estado === "DONE") {
+    // Validar piezas completas
+    const piezas = await prisma.oTPieza.findMany({ where: { otId: id }, select: { qtyPlan: true, qtyHecha: true } });
+    const allDone = piezas.length > 0
+      ? piezas.every(p => Number(p.qtyHecha || 0) >= Number(p.qtyPlan || 0))
+      : false;
+    if (!allDone) return { ok: false, message: "Aún hay piezas pendientes" };
+  }
+
+  await prisma.ordenTrabajo.update({ where: { id }, data: { estado } });
+  await recomputeOTState(id);
+  bumpAll(id);
+  return { ok: true, message: "Estado actualizado" };
+}
+
+/** Compat con UI: addMaterial ya no se usa (se edita en cabecera/plan) */
+export async function addMaterial(_: FormData): Promise<R> {
+  return { ok: false, message: "Obsoleto: usa 'Editar cabecera / plan' para materiales." };
+}
+
+/* ----------------------------- Utils ----------------------------- */
+
+async function nextOTCode(tx: Prisma.TransactionClient | typeof prisma = prisma) {
+  // Genera un correlativo simple: OT-YYYYMM-#### (puedes reemplazar por tu lógica real)
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const prefix = `OT-${y}${m}-`;
+  const last = await tx.ordenTrabajo.findFirst({
+    where: { codigo: { startsWith: prefix } },
+    orderBy: { creadaEn: "desc" },
+    select: { codigo: true },
   });
-  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
-  const r = await logPieces({ otId: parsed.data.otId, items: parsed.data.items.map(i=>({ piezaId: i.piezaId, cantidad: Number(i.cantidad) })) });
-  if (r.ok) bumpAll(parsed.data.otId);
-  return r;
+  const n = last ? parseInt(last.codigo.slice(prefix.length)) + 1 : 1;
+  return `${prefix}${String(n).padStart(4, "0")}`;
+}
+
+async function getCurrentQtyEmit(tx: Prisma.TransactionClient | typeof prisma, otId: string, sku: string) {
+  const m = await tx.oTMaterial.findUnique({ where: { otId_productoId: { otId, productoId: sku } }, select: { qtyEmit: true } });
+  return Number(m?.qtyEmit || 0);
+}
+
+async function ensureAdminUserId(tx: Prisma.TransactionClient | typeof prisma) {
+  const u = await tx.userProfile.findFirst({ select: { id: true } });
+  if (!u) throw new Error("No hay usuario para asignar solicitud");
+  return u.id;
 }
