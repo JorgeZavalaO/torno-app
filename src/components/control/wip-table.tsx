@@ -547,8 +547,7 @@ export function WIPTable({
                         </TooltipContent>
                     </Tooltip>
                     </TableCell>
-
-                      <TableCell className="text-center">
+                    <TableCell className="text-center">
                         <Tooltip>
                           <TooltipTrigger>
                             <span className="text-xs text-muted-foreground">
@@ -564,42 +563,6 @@ export function WIPTable({
                             })}</p>
                           </TooltipContent>
                         </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {onView && (
-                              <DropdownMenuItem onClick={() => onView(item)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Ver
-                              </DropdownMenuItem>
-                            )}
-                            {onEdit && (
-                              <DropdownMenuItem onClick={() => onEdit(item)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Editar
-                              </DropdownMenuItem>
-                            )}
-                            {onDelete && (
-                              <DropdownMenuItem 
-                                onClick={() => onDelete(item)}
-                                className="text-red-600 focus:text-red-600"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
