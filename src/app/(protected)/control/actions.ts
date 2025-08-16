@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanWriteWorkorders } from "@/app/lib/guards";
 import { logHoursBulk, logPieces } from "@/app/server/services/production";
+import { prisma } from "@/app/lib/prisma";
 
 // Reusamos la lógica robusta existente del módulo de OT
 // Nota: las acciones de OT específicas se implementan aquí usando servicios compartidos
@@ -28,12 +29,16 @@ function bumpControl(otIds: string[] = []) {
 
 export async function logProduction(fd: FormData): Promise<R> {
   await assertCanWriteWorkorders();
-  const otId = String(fd.get("otId") || "").trim();
-  const horas = Number(fd.get("horas") || 0);
+  const otId   = String(fd.get("otId") || "").trim();
+  const horas  = Number(fd.get("horas") || 0);
   const maquina = String(fd.get("maquina") || "").trim() || undefined;
-  const nota = String(fd.get("nota") || "").trim() || undefined;
-  if(!otId || !Number.isFinite(horas) || horas <= 0) return { ok:false, message:"Datos inválidos" };
-  const r = await logHoursBulk([{ otId, horas, maquina, nota }]);
+  const nota    = String(fd.get("nota") || "").trim() || undefined;
+  const userId  = String(fd.get("userId") || "").trim() || undefined;
+
+  if(!otId || !Number.isFinite(horas) || horas <= 0)
+    return { ok:false, message:"Datos inválidos" };
+
+  const r = await logHoursBulk([{ otId, horas, maquina, nota, userId }]);
   if (r.ok) bumpControl([otId]);
   return r;
 }
@@ -43,7 +48,13 @@ export async function logFinishedPieces(fd: FormData): Promise<R> {
   const otId = String(fd.get("otId") || "").trim();
   const piezaId = String(fd.get("piezaId") || "").trim();
   const cantidad = Number(fd.get("cantidad") || 0);
-  if(!otId || !piezaId || !Number.isFinite(cantidad) || cantidad <= 0) return { ok:false, message:"Datos inválidos" };
+  if(!otId || !piezaId || !Number.isFinite(cantidad) || cantidad <= 0)
+    return { ok:false, message:"Datos inválidos" };
+
+  const ot = await prisma.ordenTrabajo.findUnique({ where: { id: otId }, select: { estado: true }});
+  if (!ot) return { ok:false, message:"OT no existe" };
+  if (ot.estado !== "IN_PROGRESS") return { ok:false, message:"Solo se pueden registrar piezas en OTs EN PROCESO" };
+
   const r = await logPieces({ otId, items: [{ piezaId, cantidad }] });
   if (r.ok) bumpControl([otId]);
   return r;
@@ -55,25 +66,33 @@ export async function logFinishedPieces(fd: FormData): Promise<R> {
 
 /** Registrar múltiples partes de producción (horas) en una sola transacción. */
 const BulkHoursSchema = z.object({
-  entries: z
-    .array(
-      z.object({
-        otId: z.string().uuid(),
-        horas: z.coerce.number().positive(),
-        maquina: z.string().max(100).optional(),
-        nota: z.string().max(300).optional(),
-      })
-    )
-    .min(1),
+  entries: z.array(
+    z.object({
+      otId: z.string().uuid(),
+      horas: z.coerce.number().positive(),
+      maquina: z.string().max(100).optional(),
+      nota: z.string().max(300).optional(),
+      userId: z.string().uuid().optional(), 
+    })
+  ).min(1),
 });
 
 export async function bulkLogProduction(fd: FormData): Promise<R> {
   await assertCanWriteWorkorders();
   let payload: unknown;
-  try { payload = JSON.parse(String(fd.get("entries") || "[]")); } catch { return { ok:false, message:"Formato inválido (entries)" }; }
+  try { payload = JSON.parse(String(fd.get("entries") || "[]")); }
+  catch { return { ok:false, message:"Formato inválido (entries)" }; }
+
   const parsed = BulkHoursSchema.safeParse({ entries: payload });
   if(!parsed.success) return { ok:false, message:"Datos inválidos" };
-  const r = await logHoursBulk(parsed.data.entries.map(e=>({ otId: e.otId, horas: Number(e.horas), maquina: e.maquina, nota: e.nota })));
+
+  const r = await logHoursBulk(parsed.data.entries.map(e => ({
+    otId: e.otId,
+    horas: Number(e.horas),
+    maquina: e.maquina,
+    nota: e.nota,
+    userId: e.userId, // nuevo
+  })));
   if(r.ok) bumpControl(Array.from(new Set(parsed.data.entries.map(e=>e.otId))));
   return r;
 }
@@ -94,10 +113,19 @@ const BulkPiecesSchema = z.object({
 export async function bulkLogFinishedPieces(fd: FormData): Promise<R> {
   await assertCanWriteWorkorders();
   let payload: unknown;
-  try { payload = JSON.parse(String(fd.get("items") || "[]")); } catch { return { ok:false, message:"Formato inválido (items)" }; }
+  try { payload = JSON.parse(String(fd.get("items") || "[]")); }
+  catch { return { ok:false, message:"Formato inválido (items)" }; }
+
   const parsed = BulkPiecesSchema.safeParse({ items: payload });
   if(!parsed.success) return { ok:false, message:"Datos inválidos" };
-  // Agrupar por OT y usar servicio para cada grupo (para mantener transacciones por OT)
+
+  // Validar que TODAS las OTs estén en proceso
+  const otIds = Array.from(new Set(parsed.data.items.map(i => i.otId)));
+  const ots = await prisma.ordenTrabajo.findMany({ where: { id: { in: otIds } }, select: { id:true, estado:true }});
+  const invalid = ots.filter(o => o.estado !== "IN_PROGRESS");
+  if (invalid.length) return { ok:false, message:"Hay OTs que no están EN PROCESO" };
+
+  // Registrar por grupos
   const groups = new Map<string, { piezaId:string; cantidad:number }[]>();
   for(const it of parsed.data.items){
     const arr = groups.get(it.otId) ?? [];

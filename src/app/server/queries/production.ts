@@ -150,21 +150,14 @@ export const getProductionOverviewCached = cache(
 /** Para “registro rápido”: OTs en proceso con piezas pendientes */
 export const getQuickLogData = cache(
   async () => {
+    // OTs elegibles (OPEN + IN_PROGRESS) para horas y piezas (UI restringe piezas a IN_PROGRESS)
     const ots = await prisma.ordenTrabajo.findMany({
       where: { estado: { in: ["OPEN", "IN_PROGRESS"] } },
       orderBy: { creadaEn: "desc" },
       select: {
-        id: true,
-        codigo: true,
-        estado: true,
+        id: true, codigo: true, estado: true,
         piezas: {
-          select: {
-            id: true,
-            productoId: true,
-            descripcion: true,
-            qtyPlan: true,
-            qtyHecha: true,
-          },
+          select: { id: true, productoId: true, descripcion: true, qtyPlan: true, qtyHecha: true },
         },
       },
     });
@@ -182,7 +175,25 @@ export const getQuickLogData = cache(
         .filter((p) => p.pend > 0),
     }));
 
-    return { ots: items };
+    // Operadores (catálogo)
+    const usuarios = await prisma.userProfile.findMany({
+      select: { id: true, displayName: true, email: true },
+      orderBy: { displayName: "asc" },
+    });
+    const operadores = usuarios.map(u => ({
+      id: u.id,
+      nombre: u.displayName || (u.email?.split("@")[0] ?? "Operador"),
+      email: u.email ?? null,
+    }));
+
+    // Máquinas (catálogo del módulo de máquinas)
+    const maquinasRaw = await prisma.maquina.findMany({
+      select: { id: true, nombre: true },
+      orderBy: { nombre: "asc" },
+    });
+    const maquinas = maquinasRaw.map(m => ({ id: m.id, nombre: m.nombre }));
+
+    return { ots: items, operadores, maquinas };
   },
   ["production:quicklog"],
   { tags: [cacheTags.workorders, cacheTags.worklogs("")], revalidate: 15 }

@@ -10,6 +10,9 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Clock, Package, Plus, Save, RefreshCw } from "lucide-react";
 import type { QuickLog, Actions } from "./types";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
 
 interface QuickRegistrationProps {
   quicklog: QuickLog;
@@ -24,7 +27,7 @@ export function QuickRegistration({ quicklog, actions, canWrite }: QuickRegistra
   // Estados para registro de horas
   const [otHoras, setOtHoras] = useState<string>(quicklog.ots[0]?.id ?? "");
   const [horas, setHoras] = useState<number>(1);
-  const [maquina, setMaquina] = useState("");
+  // máquina libre is in `maquinaLibre`; selected machine id is in `maquinaSel`
   const [nota, setNota] = useState("");
   const [isSubmittingHours, setIsSubmittingHours] = useState(false);
 
@@ -43,6 +46,13 @@ export function QuickRegistration({ quicklog, actions, canWrite }: QuickRegistra
   const selectedOTPiezas = quicklog.ots.find(o => o.id === otPiezas);
   const selectedPieza = piezasDeOTSel.find(p => p.id === piezaSel);
 
+  // operador
+  const [operadorId, setOperadorId] = useState<string>("");
+  // máquina (catálogo) + modo "otro"
+  const [maquinaSel, setMaquinaSel] = useState<string>("");
+  const [maquinaLibre, setMaquinaLibre] = useState<string>("");
+
+
   const handleLogHours = async () => {
     if (!otHoras) {
       toast.error("Selecciona una orden de trabajo");
@@ -54,7 +64,18 @@ export function QuickRegistration({ quicklog, actions, canWrite }: QuickRegistra
       const fd = new FormData();
       fd.set("otId", otHoras);
       fd.set("horas", String(horas));
-      if (maquina.trim()) fd.set("maquina", maquina.trim());
+
+      // máquina: del catálogo (por nombre) o libre
+      let maquinaNombre = "";
+      if (maquinaSel && maquinaSel !== "__custom__") {
+        const m = quicklog.maquinas.find(x => x.id === maquinaSel);
+        maquinaNombre = m?.nombre ?? "";
+      } else if (maquinaSel === "__custom__") {
+        maquinaNombre = maquinaLibre.trim();
+      }
+      if (maquinaNombre) fd.set("maquina", maquinaNombre);
+
+      if (operadorId) fd.set("userId", operadorId);
       if (nota.trim()) fd.set("nota", nota.trim());
       
       const result = await actions.logProduction(fd);
@@ -62,7 +83,8 @@ export function QuickRegistration({ quicklog, actions, canWrite }: QuickRegistra
       if (result.ok) {
         toast.success(result.message || "Horas registradas correctamente");
         setHoras(1);
-        setMaquina("");
+        setMaquinaSel("");
+        setMaquinaLibre("");
         setNota("");
         refresh();
       } else {
@@ -89,11 +111,11 @@ export function QuickRegistration({ quicklog, actions, canWrite }: QuickRegistra
     setIsSubmittingPieces(true);
     try {
       const fd = new FormData();
-      fd.set("otId", otPiezas);
-      fd.set("items", JSON.stringify([{ piezaId: piezaSel, cantidad: Number(qtyFin) }]));
-      
-      const result = await actions.logFinishedPieces(fd);
-      
+        fd.set("otId", otPiezas);
+        fd.set("piezaId", piezaSel);
+        fd.set("cantidad", String(Number(qtyFin)));
+        const result = await actions.logFinishedPieces(fd);
+            
       if (result.ok) {
         toast.success(result.message || "Piezas registradas correctamente");
         setQtyFin(1);
@@ -174,11 +196,13 @@ export function QuickRegistration({ quicklog, actions, canWrite }: QuickRegistra
               className="w-full h-10 border rounded-md px-3 bg-background"
               disabled={isSubmittingHours}
             >
-              {quicklog.ots.map((ot) => (
-                <option key={ot.id} value={ot.id}>
-                  {ot.codigo} ({ot.estado === "OPEN" ? "Abierta" : "En proceso"})
-                </option>
-              ))}
+              {quicklog.ots
+                .filter(ot => ot.estado === "IN_PROGRESS")
+                .map((ot) => (
+                    <option key={ot.id} value={ot.id}>
+                    {ot.codigo} (En proceso)
+                    </option>
+                ))}
             </select>
             {selectedOTHoras && (
               <div className="mt-2">
@@ -205,17 +229,59 @@ export function QuickRegistration({ quicklog, actions, canWrite }: QuickRegistra
                 disabled={isSubmittingHours}
               />
             </div>
+
             <div>
-              <label className="text-sm font-medium block mb-2">
-                Máquina utilizada
-              </label>
-              <Input
-                value={maquina}
-                onChange={(e) => setMaquina(e.target.value)}
+                <label className="text-sm font-medium block mb-2">Operador</label>
+                <Select
+                    value={operadorId}
+                    onValueChange={setOperadorId}
+                    disabled={isSubmittingHours}
+                >
+                    <SelectTrigger className="w-full">
+                    <SelectValue placeholder="(Opcional) Seleccionar operador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {quicklog.operadores.map(op => (
+                        <SelectItem key={op.id} value={op.id}>
+                        {op.nombre}{op.email ? ` — ${op.email}` : ""}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div>
+            <label className="text-sm font-medium block mb-2">Máquina</label>
+            <Select
+                value={maquinaSel}
+                onValueChange={(v) => {
+                setMaquinaSel(v);
+                if (v !== "__custom__") setMaquinaLibre("");
+                }}
+                disabled={isSubmittingHours}
+            >
+                <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecciona una máquina" />
+                </SelectTrigger>
+                <SelectContent>
+                {quicklog.maquinas.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>
+                ))}
+                <SelectItem value="__custom__">Otra (escribir)</SelectItem>
+                </SelectContent>
+            </Select>
+
+            {maquinaSel === "__custom__" && (
+                <Input
+                className="mt-2"
+                value={maquinaLibre}
+                onChange={(e) => setMaquinaLibre(e.target.value)}
                 placeholder="Ej: Torno CNC #1"
                 disabled={isSubmittingHours}
-              />
+                />
+            )}
             </div>
+
           </div>
 
           {/* Nota */}

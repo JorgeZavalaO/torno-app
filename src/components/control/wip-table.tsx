@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ProgressBar } from "@/components/ui/progress-bar";
+// import { ProgressBar } from "@/components/ui/progress-bar";
 import { PriorityBadge } from "@/components/ot/priority-badge";
 import { StatusBadge } from "@/components/ot/status-badge";
 import {
@@ -200,6 +200,13 @@ export function WIPTable({
     };
   }, [filteredAndSortedWIP]);
 
+  const getProgressBarClasses = (p: number) => {
+    if (p >= 100) return "bg-gradient-to-r from-emerald-500 to-green-500";
+    if (p >= 75)  return "bg-gradient-to-r from-blue-500 to-indigo-500";
+    if (p >= 50)  return "bg-gradient-to-r from-orange-400 to-amber-500";
+    if (p >= 25)  return "bg-gradient-to-r from-yellow-400 to-amber-500";
+    return "bg-gradient-to-r from-rose-500 to-red-500";
+};
   const getProgressColor = (percentage: number) => {
     if (percentage === 100) return "text-green-600 dark:text-green-400";
     if (percentage >= 75) return "text-blue-600 dark:text-blue-400";
@@ -208,12 +215,12 @@ export function WIPTable({
     return "text-red-600 dark:text-red-400";
   };
 
-  const getProgressVariant = (percentage: number): "default" | "success" | "warning" | "error" => {
-    if (percentage === 100) return "success";
-    if (percentage < 25) return "error";
-    if (percentage < 50) return "warning";
-    return "default";
-  };
+//   const getProgressVariant = (percentage: number): "default" | "success" | "warning" | "error" => {
+//     if (percentage === 100) return "success";
+//     if (percentage < 25) return "error";
+//     if (percentage < 50) return "warning";
+//     return "default";
+//   };
 
   return (
     <TooltipProvider>
@@ -363,9 +370,9 @@ export function WIPTable({
 
           <CardContent className="p-0">
             {/* Tabla */}
-            <div className="overflow-x-auto">
+            <div className="max-h-[70vh] overflow-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                   <TableRow className="bg-muted/40 hover:bg-muted/60">
                     <TableHead className="font-semibold">
                       <Button 
@@ -472,21 +479,75 @@ export function WIPTable({
                           </TooltipContent>
                         </Tooltip>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-col items-end gap-2">
-                          <div className={`text-sm font-semibold tabular-nums ${getProgressColor(item.avancePct)}`}>
-                            {item.avancePct.toFixed(1)}%
-                          </div>
-                          <div className="w-20">
-                            <ProgressBar 
-                              value={item.piezasHechas} 
-                              max={Math.max(1, item.piezasPlan)} 
-                              variant={getProgressVariant(item.avancePct)}
-                              className="h-2"
-                            />
-                          </div>
+                    <TableCell className="text-right">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                        <div className="flex flex-col items-end gap-1.5">
+                            {/* Línea superior: % + x/y + badge de pendientes */}
+                            <div className="flex items-center gap-2">
+                            <span
+                                className={`text-sm font-semibold tabular-nums ${getProgressColor(item.avancePct)}`}
+                                aria-label={`Avance ${item.avancePct.toFixed(1)} por ciento`}
+                            >
+                                {item.avancePct.toFixed(1)}%
+                            </span>
+
+                            <span className="text-xs text-muted-foreground">
+                                {item.piezasHechas.toLocaleString()}/{item.piezasPlan.toLocaleString()}
+                            </span>
+
+                            {(() => {
+                                const pend = Math.max(0, item.piezasPlan - item.piezasHechas);
+                                if (pend === 0) {
+                                return (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                                    ✔ listo
+                                    </span>
+                                );
+                                }
+                                const badgeClass =
+                                item.avancePct < 25
+                                    ? "bg-red-100 text-red-700"
+                                    : item.avancePct < 50
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-blue-100 text-blue-700";
+                                return (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${badgeClass}`}>
+                                    {pend.toLocaleString()} pend.
+                                </span>
+                                );
+                            })()}
+                            </div>
+
+                            {/* Barra mejorada con marcas 25/50/75 */}
+                            <div className="w-28">
+                            <div className="relative h-2.5 rounded bg-muted overflow-hidden">
+                                <div
+                                className={`absolute inset-y-0 left-0 ${getProgressBarClasses(item.avancePct)}`}
+                                style={{ width: `${Math.min(100, Math.max(0, item.avancePct))}%` }}
+                                />
+                                {/* Marcas (25/50/75%) */}
+                                <div className="absolute inset-0 pointer-events-none opacity-50">
+                                <div className="absolute inset-y-0 left-1/4 w-px bg-border/60" />
+                                <div className="absolute inset-y-0 left-1/2 w-px bg-border/60" />
+                                <div className="absolute inset-y-0 left-3/4 w-px bg-border/60" />
+                                </div>
+                            </div>
+                            </div>
                         </div>
-                      </TableCell>
+                        </TooltipTrigger>
+
+                        {/* Tooltip con desglose */}
+                        <TooltipContent>
+                        <div className="text-xs space-y-1">
+                            <div><strong>Plan:</strong> {item.piezasPlan.toLocaleString()}</div>
+                            <div><strong>Hechas:</strong> {item.piezasHechas.toLocaleString()}</div>
+                            <div><strong>Pendientes:</strong> {Math.max(0, item.piezasPlan - item.piezasHechas).toLocaleString()}</div>
+                        </div>
+                        </TooltipContent>
+                    </Tooltip>
+                    </TableCell>
+
                       <TableCell className="text-center">
                         <Tooltip>
                           <TooltipTrigger>

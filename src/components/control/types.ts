@@ -49,6 +49,8 @@ export type QuickLogOT = {
 
 export type QuickLog = {
   ots: QuickLogOT[];
+  operadores: { id: string; nombre: string; email?: string | null }[];
+  maquinas: { id: string; nombre: string }[];
 };
 
 export type Actions = {

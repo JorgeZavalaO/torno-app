@@ -25,6 +25,7 @@ const SingleHoursSchema = z.object({
   horas: z.number().positive(),
   maquina: z.string().max(100).optional(),
   nota: z.string().max(300).optional(),
+  userId: z.string().uuid().optional(),
 });
 
 const BulkHoursSchema = z.object({
@@ -46,8 +47,9 @@ export async function logHours(entry: z.infer<typeof SingleHoursSchema>){
   const parsed = SingleHoursSchema.safeParse(entry);
   if(!parsed.success) return { ok:false as const, message:"Datos inválidos del parte" };
 
+  const targetUserId = parsed.data.userId ?? user.id;
   await prisma.parteProduccion.create({
-    data:{ otId: parsed.data.otId, userId: user.id, horas: D(parsed.data.horas), maquina: parsed.data.maquina ?? null, nota: parsed.data.nota ?? null }
+    data:{ otId: parsed.data.otId, userId: targetUserId, horas: D(parsed.data.horas), maquina: parsed.data.maquina ?? null, nota: parsed.data.nota ?? null }
   });
   bump([parsed.data.otId]);
   return { ok:true as const, message:"Parte registrado" };
@@ -63,7 +65,7 @@ export async function logHoursBulk(entries: z.infer<typeof SingleHoursSchema>[])
   if(!parsed.success) return { ok:false as const, message:"Datos inválidos" };
 
   const otIds = Array.from(new Set(parsed.data.entries.map(e=>e.otId)));
-  await prisma.parteProduccion.createMany({ data: parsed.data.entries.map(e=>({ otId: e.otId, userId: user.id, horas: D(e.horas), maquina: e.maquina ?? null, nota: e.nota ?? null })) });
+  await prisma.parteProduccion.createMany({ data: parsed.data.entries.map(e=>({ otId: e.otId, userId: e.userId ?? user.id, horas: D(e.horas), maquina: e.maquina ?? null, nota: e.nota ?? null })) });
   bump(otIds);
   return { ok:true as const, message:"Partes registrados" };
 }
