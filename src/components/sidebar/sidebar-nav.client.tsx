@@ -16,15 +16,21 @@ export type NavItem = {
   icon?: IconName;
 };
 
+export type NavGroup = {
+  group: string;
+  items: NavItem[];
+};
+
 export default function SidebarNavClient({
   items,
   brand = "App",
 }: {
-  items: NavItem[];
+  items: Array<NavItem | NavGroup>;
   brand?: string;
 }) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   // Cerrar sidebar en móviles al cambiar de ruta
   useEffect(() => {
@@ -58,6 +64,37 @@ export default function SidebarNavClient({
       document.body.style.overflow = '';
     };
   }, [isMobileOpen]);
+
+  // Inicializar estado de grupos (persistir en localStorage)
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('sidebar-open-groups');
+      if (saved) {
+        setOpenGroups(JSON.parse(saved));
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
+    // Por defecto abrir "General" y cerrar otros
+    const initial: Record<string, boolean> = {};
+    items.forEach((it) => {
+      if ((it as NavGroup).group) {
+        const g = (it as NavGroup).group;
+        initial[g] = g === 'General';
+      }
+    });
+    setOpenGroups(initial);
+  }, [items]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('sidebar-open-groups', JSON.stringify(openGroups));
+    } catch {
+      // ignore
+    }
+  }, [openGroups]);
 
   return (
     <>
@@ -109,43 +146,100 @@ export default function SidebarNavClient({
 
         {/* Navegación */}
         <nav className="flex-1 overflow-y-auto py-4 px-3">
-          <div className="space-y-1">
-            {items.map(({ href, label, icon }) => {
-              const active = pathname === href || pathname.startsWith(`${href}/`);
-              const IconComp = icon ? (Icons[icon] as LucideIcon) : null;
-              
+          <div className="space-y-4">
+            {items.map((item) => {
+              // Grupo de navegación
+              if ((item as NavGroup).group && Array.isArray((item as NavGroup).items)) {
+                const grp = item as NavGroup;
+                const isOpen = !!openGroups[grp.group];
+                return (
+                  <div key={grp.group} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setOpenGroups((s) => ({ ...s, [grp.group]: !isOpen }))}
+                      className="w-full flex items-center justify-between px-3 text-xs uppercase text-muted-foreground tracking-wide font-semibold py-1 hover:text-foreground"
+                      aria-expanded={isOpen}
+                    >
+                      <span>{grp.group}</span>
+                      <Icons.ChevronDown className={cn('h-4 w-4 transition-transform', isOpen ? 'rotate-180' : '')} />
+                    </button>
+                    <div className={cn('space-y-1 overflow-hidden transition-all', isOpen ? 'max-h-96' : 'max-h-0') }>
+                      {grp.items.map(({ href, label, icon }) => {
+                        const active = pathname === href || pathname.startsWith(`${href}/`);
+                        const IconComp = icon ? (Icons[icon] as LucideIcon) : null;
+
+                        return (
+                          <Link
+                            key={href}
+                            href={href}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium " +
+                                "transition-all duration-200 ease-out group relative",
+                              active
+                                ? "bg-primary/10 text-primary shadow-sm border border-primary/20"
+                                : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                            )}
+                          >
+                            {active && (
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
+                            )}
+
+                            {IconComp && (
+                              <IconComp
+                                className={cn(
+                                  "h-4 w-4 transition-all duration-200",
+                                  active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                )}
+                                aria-hidden="true"
+                              />
+                            )}
+
+                            <span className="flex-1">{label}</span>
+
+                            {!active && (
+                              <div className="absolute inset-0 rounded-lg bg-accent/0 group-hover:bg-accent/20 transition-all duration-200" />
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Item suelto
+              const nav = item as NavItem;
+              const active = pathname === nav.href || pathname.startsWith(`${nav.href}/`);
+              const IconComp = nav.icon ? (Icons[nav.icon] as LucideIcon) : null;
+
               return (
                 <Link
-                  key={href}
-                  href={href}
+                  key={nav.href}
+                  href={nav.href}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium " +
-                    "transition-all duration-200 ease-out group relative",
+                      "transition-all duration-200 ease-out group relative",
                     active
-                      ? "bg-primary/10 text-primary shadow-sm border border-primary/20" 
+                      ? "bg-primary/10 text-primary shadow-sm border border-primary/20"
                       : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                   )}
                 >
-                  {/* Indicador activo */}
                   {active && (
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
                   )}
-                  
+
                   {IconComp && (
-                    <IconComp 
+                    <IconComp
                       className={cn(
                         "h-4 w-4 transition-all duration-200",
-                        active 
-                          ? "text-primary" 
-                          : "text-muted-foreground group-hover:text-foreground"
-                      )} 
-                      aria-hidden="true" 
+                        active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                      )}
+                      aria-hidden="true"
                     />
                   )}
-                  
-                  <span className="flex-1">{label}</span>
-                  
-                  {/* Efecto hover */}
+
+                  <span className="flex-1">{nav.label}</span>
+
                   {!active && (
                     <div className="absolute inset-0 rounded-lg bg-accent/0 group-hover:bg-accent/20 transition-all duration-200" />
                   )}

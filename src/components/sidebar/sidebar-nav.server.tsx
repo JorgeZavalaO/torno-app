@@ -72,9 +72,58 @@ export default async function SidebarNavServer() {
  // ✅ Un solo roundtrip
   const permSet = await getUserPermissionSet(me.email);
 
-  const allowed: NavItem[] = allNavItems
-    .filter(item => !item.requiredPerm || permSet.has(item.requiredPerm))
-    .map(({ href, label, icon }) => ({ href, label, icon }));
+  // Filtrar por permisos
+  const allowed = allNavItems
+    .filter((item) => !item.requiredPerm || permSet.has(item.requiredPerm))
+    .map(({ href, label, icon }) => ({ href, label, icon })) as NavItem[];
 
-  return <SidebarNavClient items={allowed} brand="TornoApp" />;
+  // Heurística para agrupar por contexto según href o label
+  const groups: Record<string, NavItem[]> = {};
+  const solo: NavItem[] = [];
+
+  const inferGroup = (it: NavItem) => {
+    const h = it.href.toLowerCase();
+
+    if (h.startsWith('/admin') || /admin/.test(h) || /roles|permissions|users|parametros/.test(h)) return 'Administración';
+    if (h.startsWith('/ot') || /workorders|ot/.test(h)) return 'Órdenes';
+    if (h.startsWith('/compras') || /compras|providers|purchase|oc|sc/.test(h)) return 'Compras';
+    if (h.startsWith('/inventario') || /inventario|inventory|stock/.test(h)) return 'Inventario';
+    if (h.startsWith('/cotizador') || /cotiz|quotes/.test(h)) return 'Cotizador';
+    if (h.startsWith('/clientes') || /clientes|clients/.test(h)) return 'Clientes';
+    if (h.startsWith('/control') || /control|production|kpi/.test(h)) return 'Control';
+    if (h.startsWith('/maquinas') || /maquina|machines|machine/.test(h)) return 'Máquinas';
+    if (h === '/dashboard') return 'General';
+    return '';
+  };
+
+  for (const it of allowed) {
+    const g = inferGroup(it);
+    if (!g) {
+      solo.push(it);
+    } else {
+      groups[g] = groups[g] || [];
+      groups[g].push(it);
+    }
+  }
+
+  // Construir array mixto: items sueltos (general/primarios) + grupos ordenados
+  const orderedGroupNames = ['General', 'Administración', 'Órdenes', 'Cotizador', 'Clientes', 'Inventario', 'Compras', 'Control', 'Máquinas'];
+
+  const groupedOutput: Array<NavItem | { group: string; items: NavItem[] }> = [];
+
+  // Añadir sueltos primero (ej. ítems sin grupo)
+  for (const s of solo) groupedOutput.push(s);
+
+  for (const name of orderedGroupNames) {
+    if (groups[name] && groups[name].length) {
+      groupedOutput.push({ group: name, items: groups[name] });
+    }
+  }
+
+  // Añadir cualquier otro grupo que no estaba en la lista ordenada
+  for (const [name, items] of Object.entries(groups)) {
+    if (!orderedGroupNames.includes(name)) groupedOutput.push({ group: name, items });
+  }
+
+  return <SidebarNavClient items={groupedOutput} brand="TornoApp" />;
 }

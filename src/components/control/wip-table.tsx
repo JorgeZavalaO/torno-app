@@ -33,18 +33,8 @@ import {
   Package,
   AlertTriangle,
   CheckCircle2,
-  MoreHorizontal,
-  Eye,
-  Edit,
-  Trash2,
   RefreshCw
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import type { WIPRow } from "./types";
 
 interface WIPTableProps {
@@ -62,10 +52,7 @@ type SortDirection = "asc" | "desc";
 const ITEMS_PER_PAGE = 25;
 
 export function WIPTable({ 
-  wip, 
-  onView, 
-  onEdit, 
-  onDelete, 
+  wip,
   onRefresh,
   loading = false 
 }: WIPTableProps) {
