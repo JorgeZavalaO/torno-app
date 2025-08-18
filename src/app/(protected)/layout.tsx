@@ -1,22 +1,33 @@
 import { getCurrentUser } from "@/app/lib/auth";
-import { redirect } from "next/navigation";
 import SidebarNavServer from "@/components/sidebar/sidebar-nav.server";
+import { redirect } from "next/navigation";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 
-export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+export default async function ProtectedLayout({
+  children,
+}: { children: React.ReactNode }) {
   const me = await getCurrentUser();
-  if (!me) redirect("/login"); // o /api/auth/signin
+  if (!me) redirect("/login");
 
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="flex min-h-dvh">
-        <SidebarNavServer />
-        <main id="main" className="flex-1 min-w-0 ml-0 lg:ml-72 transition-all duration-300 ease-out">
-          <div className="h-16 lg:hidden" />
-          <div className="p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+    <SidebarProvider>
+      {/* Sidebar completo (server + client) */}
+      <SidebarNavServer />
+
+      {/* Contenido (inset) */}
+      <SidebarInset>
+        {/* Header superior con trigger para móvil/colapsado */}
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background px-4">
+          <SidebarTrigger className="-ml-1" />
+          <h1 className="text-lg font-semibold">TornoApp</h1>
+        </header>
+
+        <main className="py-4">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+            {children}
           </div>
         </main>
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
