@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { QuoteStatusBadge } from "@/components/cotizador/quote-status-badge";
 import { toast } from "sonner";
-import { updateQuoteStatus } from "@/app/(protected)/cotizador/actions";
+import { updateQuoteStatus, createOTFromQuote } from "@/app/(protected)/cotizador/actions";
 
 type QuoteDetail = {
   id: string;
@@ -29,18 +29,18 @@ type QuoteDetail = {
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   currency: string;
   qty: number;
-  materials: unknown;
-  hours: unknown;
-  kwh: unknown;
+  materials: number;
+  hours: number;
+  kwh: number;
   validUntil?: Date | null;
   notes?: string | null;
-  giPct: unknown;
-  marginPct: unknown;
-  hourlyRate: unknown;
-  kwhRate: unknown;
-  deprPerHour: unknown;
-  toolingPerPc: unknown;
-  rentPerHour: unknown;
+  giPct: number;
+  marginPct: number;
+  hourlyRate: number;
+  kwhRate: number;
+  deprPerHour: number;
+  toolingPerPc: number;
+  rentPerHour: number;
   breakdown: unknown;
   cliente: {
     id: string;
@@ -48,6 +48,7 @@ type QuoteDetail = {
     ruc: string;
     email?: string | null;
   };
+  ordenesTrabajo?: { id: string; codigo: string }[];
 };
 
 interface QuoteDetailViewProps {
@@ -134,9 +135,12 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">
-            Cotización #{quote.id.slice(0, 8)}
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">Cotización #{quote.id.slice(0, 8)}</h1>
+          {quote.ordenesTrabajo && quote.ordenesTrabajo.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              OT vinculada: <a className="underline" href={`/ot/${quote.ordenesTrabajo[0].id}`}>{quote.ordenesTrabajo[0].codigo}</a>
+            </div>
+          )}
           <div className="flex items-center gap-4 text-muted-foreground">
             <div className="flex items-center gap-1">
               <Calendar className="h-4 w-4" />
@@ -150,6 +154,7 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
             )}
           </div>
         </div>
+
         <div className="flex items-center gap-3">
           <QuoteStatusBadge status={quote.status} />
           {canWrite && (
@@ -182,6 +187,27 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
                 <FileText className="h-4 w-4 mr-2" />
                 Generar PDF
               </Button>
+              {quote.status === 'APPROVED' && (quote.ordenesTrabajo?.length ?? 0) === 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => {
+                    if (!confirm('Generar una Orden de Trabajo desde esta cotización aprobada?')) return;
+                    startTransition(async () => {
+                      const r = await createOTFromQuote(quote.id);
+                      if (r.ok) {
+                        toast.success(r.message || 'OT creada');
+                        window.location.href = `/ot/${r.id}`;
+                      } else {
+                        toast.error(r.message);
+                      }
+                    });
+                  }}
+                >
+                  {pending ? 'Creando OT...' : 'Generar OT'}
+                </Button>
+              )}
             </div>
           )}
         </div>

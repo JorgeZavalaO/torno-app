@@ -6,6 +6,8 @@ import { prisma } from "@/app/lib/prisma";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanReadQuotes, assertCanWriteQuotes } from "@/app/lib/guards";
+import { assertCanWriteWorkorders } from "@/app/lib/guards";
+import { revalidatePath as rp } from "next/cache";
 import { getCostingValues } from "@/app/server/queries/costing-params";
 
 type Result = { ok: true; message?: string; id?: string } | { ok: false; message: string };
@@ -445,4 +447,120 @@ export async function deleteQuote(quoteId: string): Promise<Result> {
     console.error("Error deleting quote:", error);
     return { ok: false, message: "Error al eliminar la cotización" };
   }
+}
+
+/* -------------------------------------------------------------- */
+// Generar OT desde una cotización (usa líneas detalladas del breakdown)
+/* -------------------------------------------------------------- */
+
+export async function createOTFromQuote(quoteId: string): Promise<Result> {
+  await assertCanWriteQuotes();
+  await assertCanWriteWorkorders();
+
+  const quote = await prisma.cotizacion.findUnique({
+    where: { id: quoteId },
+    select: { id: true, status: true, clienteId: true, breakdown: true }
+  });
+  if (!quote) return { ok: false, message: "Cotización no encontrada" };
+  if (quote.status !== "APPROVED") return { ok: false, message: "Solo se puede generar OT desde una cotización APROBADA" };
+
+  // Si ya existe una OT vinculada a esta cotización, devolvemos la existente
+  const existingOt = await prisma.ordenTrabajo.findFirst({ where: { cotizacionId: quoteId }, select: { id: true, codigo: true } });
+  if (existingOt) {
+    // revalidate minimal paths and return existing OT
+    rp(`/ot/${existingOt.id}`);
+    rp(`/cotizador/${quoteId}`);
+    bumpQuotesCache();
+  console.log(`[createOTFromQuote] OT ya existente para cotizacion ${quoteId}: ${existingOt.id} / ${existingOt.codigo}`);
+    return { ok: true, id: existingOt.id, message: `OT ${existingOt.codigo} ya existente` };
+  }
+
+  type BreakdownShape = {
+    inputs?: {
+      piezasLines?: Array<{ productoId?: string; descripcion?: string; qty: number }>;
+      materialesLines?: Array<{ productoId?: string; qty: number; unitCost?: number }>;
+    };
+  };
+
+  const breakdown: unknown = quote.breakdown || {};
+  const isBreakdown = (x: unknown): x is BreakdownShape =>
+    !!x && typeof x === "object" && "inputs" in (x as Record<string, unknown>);
+
+  const piezasLines: Array<{ productoId?: string; descripcion?: string; qty: number }> = isBreakdown(breakdown) && Array.isArray(breakdown.inputs?.piezasLines)
+    ? (breakdown.inputs!.piezasLines as Array<{ productoId?: string; descripcion?: string; qty: number }>)
+    : [];
+
+  const materialesLines: Array<{ productoId?: string; qty: number; unitCost?: number }> = isBreakdown(breakdown) && Array.isArray(breakdown.inputs?.materialesLines)
+    ? (breakdown.inputs!.materialesLines as Array<{ productoId?: string; qty: number; unitCost?: number }>)
+    : [];
+
+  if (!Array.isArray(piezasLines) || piezasLines.length === 0) {
+    return { ok: false, message: "La cotización no tiene piezas detalladas para generar la OT" };
+  }
+    // materialesLines es opcional: si no hay materiales detallados, creamos la OT sin materiales.
+
+  // Generar código correlativo (duplicado ligero de lógica de ot/actions.ts)
+  async function nextOTCode() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const prefix = `OT-${y}${m}-`;
+    const last = await prisma.ordenTrabajo.findFirst({
+      where: { codigo: { startsWith: prefix } },
+      orderBy: { creadaEn: "desc" },
+      select: { codigo: true },
+    });
+    const n = last ? parseInt(last.codigo.slice(prefix.length)) + 1 : 1;
+    return `${prefix}${String(n).padStart(4, "0")}`;
+  }
+
+  const created = await prisma.$transaction(async (tx) => {
+    const codigo = await nextOTCode();
+    const ot = await tx.ordenTrabajo.create({
+      data: {
+        clienteId: quote.clienteId || null,
+        cotizacionId: quote.id,
+        prioridad: "MEDIUM",
+        estado: "OPEN",
+        codigo,
+        notas: null,
+      },
+      select: { id: true, codigo: true }
+    });
+
+    // Piezas
+    await tx.oTPieza.createMany({
+      data: piezasLines.filter(p => (p.productoId || p.descripcion) && p.qty > 0).map(p => ({
+        otId: ot.id,
+        productoId: p.productoId || null,
+        descripcion: p.descripcion?.trim() || (p.productoId ? undefined : "Pieza"),
+        qtyPlan: new Prisma.Decimal(p.qty),
+        qtyHecha: new Prisma.Decimal(0),
+      }))
+    });
+
+    // Materiales (solo los que tienen productoId y qty > 0)
+      // Materiales (solo si vienen definidos y tienen productoId)
+      const matToCreate = Array.isArray(materialesLines)
+        ? materialesLines.filter(m => m.productoId && m.qty > 0).map(m => ({
+          otId: ot.id,
+          productoId: m.productoId!,
+          qtyPlan: new Prisma.Decimal(m.qty),
+          qtyEmit: new Prisma.Decimal(0),
+        }))
+        : [];
+      if (matToCreate.length > 0) {
+        await tx.oTMaterial.createMany({ data: matToCreate });
+      }
+
+  console.log(`[createOTFromQuote] OT creada: ${ot.id} / ${ot.codigo} para cotizacion ${quoteId}`);
+  return ot;
+  });
+
+  // Revalidate vistas relevantes
+  rp("/ot");
+  rp(`/ot/${created.id}`);
+  rp(`/cotizador/${quoteId}`);
+  bumpQuotesCache();
+  return { ok: true, id: created.id, message: `OT ${created.codigo} creada` };
 }

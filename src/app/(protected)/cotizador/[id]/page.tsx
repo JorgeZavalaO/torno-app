@@ -39,12 +39,13 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
     toolingPerPc: toNum(quote.toolingPerPc),
     rentPerHour: toNum(quote.rentPerHour),
     breakdown: quote.breakdown,
-    cliente: {
+  cliente: {
       id: quote.cliente!.id,
       nombre: quote.cliente!.nombre,
       ruc: quote.cliente!.ruc,
       email: quote.cliente!.email ?? undefined,
     },
+  ordenesTrabajo: quote.ordenesTrabajo ?? [],
   };
 
   return (
@@ -55,21 +56,22 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
         status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
         currency: string;
         qty: number;
-        materials: unknown;
-        hours: unknown;
-        kwh: unknown;
+        materials: number;
+        hours: number;
+        kwh: number;
         validUntil?: Date | null;
         notes?: string | null;
-        giPct: unknown;
-        marginPct: unknown;
-        hourlyRate: unknown;
-        kwhRate: unknown;
-        deprPerHour: unknown;
-        toolingPerPc: unknown;
-        rentPerHour: unknown;
+        giPct: number;
+        marginPct: number;
+        hourlyRate: number;
+        kwhRate: number;
+        deprPerHour: number;
+        toolingPerPc: number;
+        rentPerHour: number;
         breakdown: unknown;
         cliente: { id: string; nombre: string; ruc: string; email?: string | null };
-      }} canWrite={canWrite} />
+        ordenesTrabajo?: { id: string; codigo: string }[];
+  }} canWrite={canWrite} />
     </div>
   );
 }

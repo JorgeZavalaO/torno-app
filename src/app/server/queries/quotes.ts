@@ -2,6 +2,7 @@ import { unstable_cache as cache } from "next/cache";
 import { prisma } from "@/app/lib/prisma";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { serializeQuote } from "./serializers";
+import type { PlainQuote } from "./serializers";
 
 export const getQuotesCached = cache(
   async () =>
@@ -17,13 +18,18 @@ export const getQuotesCached = cache(
   { tags: [cacheTags.quotes] }
 );
 
-export async function getQuoteById(id: string) {
+export async function getQuoteById(id: string): Promise<(PlainQuote & { ordenesTrabajo?: { id: string; codigo: string }[] }) | null> {
   const q = await prisma.cotizacion.findUnique({
     where: { id },
-    include: { cliente: { select: { id: true, nombre: true, ruc: true, email: true } } },
+    include: { 
+      cliente: { select: { id: true, nombre: true, ruc: true, email: true } },
+      ordenesTrabajo: { select: { id: true, codigo: true } }
+    },
   });
   if (!q) return null;
-  return serializeQuote(q, true);
+  const ser = serializeQuote(q, true);
+  // return serialized quote plus related OTs (id + codigo)
+  return { ...ser, ordenesTrabajo: q.ordenesTrabajo };
 }
 
 export async function getQuotesByClientIdPlain(clientId: string, limit = 50) {
