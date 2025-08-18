@@ -187,16 +187,16 @@ export function QuoteLinesEditor({
                 >
                   <div className="col-span-7 space-y-2">
                     <div className="flex gap-3">
-                      <div className="w-40">
+                      <div className="w-40 flex-shrink-0">
                         <Select 
                           value={p.productoId || ""} 
                           onValueChange={(v: string) => onSelectProductForPieza(idx, v || undefined)} 
                           disabled={disabled}
                         >
-                          <SelectTrigger className="h-9">
+                          <SelectTrigger className="h-9 w-full truncate">
                             <SelectValue placeholder="Seleccionar SKU..." />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="z-50 w-[20rem] max-w-[90vw]">
                             <div className="p-2">
                               <div className="relative mb-2">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -209,14 +209,14 @@ export function QuoteLinesEditor({
                               </div>
                               <div className="max-h-48 overflow-auto">
                                 {filteredInventoryPiezas.map(inv => (
-                                  <SelectItem key={inv.sku} value={inv.sku} className="flex-col items-start">
-                                    <div className="font-medium">{inv.sku}</div>
-                                    <div className="text-xs text-muted-foreground">{inv.nombre}</div>
-                                    {inv.stock != null && (
+                                  <SelectItem key={inv.sku} value={inv.sku} className="flex-col items-start gap-1 break-words">
+                                    <div className="font-medium truncate">{inv.sku}</div>
+                                    <div className="text-xs text-muted-foreground truncate">{inv.nombre}</div>
+                                    {/* {inv.stock != null && (
                                       <Badge variant="secondary" className="text-xs mt-1">
                                         Stock: {inv.stock}
                                       </Badge>
-                                    )}
+                                    )} */}
                                   </SelectItem>
                                 ))}
                                 {filteredInventoryPiezas.length === 0 && (
@@ -363,16 +363,16 @@ export function QuoteLinesEditor({
                 >
                   <div className="col-span-5 space-y-2">
                     <div className="flex gap-3">
-                      <div className="w-40">
+                      <div className="w-40 flex-shrink-0">
                         <Select 
                           value={m.productoId || ""} 
                           onValueChange={(v) => onSelectProductForMaterial(idx, v || undefined)} 
                           disabled={disabled}
                         >
-                          <SelectTrigger className="h-9">
+                          <SelectTrigger className="h-9 w-full truncate">
                             <SelectValue placeholder="Seleccionar SKU..." />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="z-50 w-[20rem] max-w-[90vw]">
                             <div className="p-2">
                               <div className="relative mb-2">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -385,14 +385,14 @@ export function QuoteLinesEditor({
                               </div>
                               <div className="max-h-48 overflow-auto">
                                 {filteredInventoryMateriales.map(inv => (
-                                  <SelectItem key={inv.sku} value={inv.sku} className="flex-col items-start">
-                                    <div className="font-medium">{inv.sku}</div>
-                                    <div className="text-xs text-muted-foreground">{inv.nombre}</div>
-                                    {inv.stock != null && (
+                                  <SelectItem key={inv.sku} value={inv.sku} className="flex-col items-start gap-1 break-words">
+                                    <div className="font-medium truncate">{inv.sku}</div>
+                                    <div className="text-xs text-muted-foreground truncate">{inv.nombre}</div>
+                                    {/* {inv.stock != null && (
                                       <Badge variant="secondary" className="text-xs mt-1">
                                         Stock: {inv.stock}
                                       </Badge>
-                                    )}
+                                    )} */}
                                   </SelectItem>
                                 ))}
                                 {filteredInventoryMateriales.length === 0 && (
@@ -405,13 +405,13 @@ export function QuoteLinesEditor({
                           </SelectContent>
                         </Select>
                       </div>
-                      {/* <Input 
+                      <Input 
                         placeholder="Descripción del material" 
                         value={m.descripcion} 
                         onChange={(e) => updateMaterial(idx, { descripcion: e.target.value })} 
                         disabled={disabled}
                         className="flex-1 h-9"
-                      /> */}
+                      />
                     </div>
                     {stock != null && (
                       <div className="flex items-center gap-2 text-xs">
