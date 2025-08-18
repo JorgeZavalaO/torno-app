@@ -52,7 +52,7 @@ export function NewSCDialog({ products, onCreate }: { products: Product[]; onCre
         if (!res.ok) throw new Error('failed');
         const data = await res.json();
         if (mounted) setOts(data || []);
-      } catch (err) {
+      } catch {
         // no crítico
       }
     })();
