@@ -9,7 +9,7 @@ import ComprasClient from "./purchases.client";
 
 export default async function PurchasesPage() {
   const me = await getCurrentUser();
-  if (!me) redirect("/handler/sign-in");
+  if (!me) redirect("/login");
 
   const [canRead, canWrite] = await Promise.all([
     userHasPermission(me.email, "purchases.read"),

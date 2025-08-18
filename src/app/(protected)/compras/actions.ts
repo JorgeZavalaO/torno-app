@@ -229,6 +229,7 @@ const OCCreateSchema = z.object({
 
 export async function createOC(fd: FormData): Promise<Result> {
   await assertCanWritePurchases();
+
   const parsed = OCCreateSchema.safeParse({
     scId: fd.get("scId"),
     proveedorId: fd.get("proveedorId"),
@@ -239,17 +240,31 @@ export async function createOC(fd: FormData): Promise<Result> {
 
   const { scId, proveedorId, codigo, items } = parsed.data;
 
-  // Validaciones básicas
-  const sc = await prisma.solicitudCompra.findUnique({ where: { id: scId }, select: { estado: true } });
+  // 1) SC aprobada
+  const sc = await prisma.solicitudCompra.findUnique({
+    where: { id: scId },
+    select: { estado: true, id: true },
+  });
   if (!sc) return { ok: false, message: "SC no existe" };
   if (sc.estado !== "APPROVED") return { ok: false, message: "SC debe estar APROBADA" };
 
+  // 2) La SC no debe tener ya una OC
+  const existingOC = await prisma.ordenCompra.findUnique({ where: { scId } });
+  if (existingOC) return { ok: false, message: "La SC ya tiene una Orden de Compra" };
+
+  // 3) Proveedor válido
+  const prov = await prisma.proveedor.findUnique({ where: { id: proveedorId }, select: { id: true } });
+  if (!prov) return { ok: false, message: "Proveedor inválido" };
+
+  // 4) Cálculo de total
   const total = items.reduce((acc, it) => acc + (it.costoUnitario * it.cantidad), 0);
 
   try {
     const oc = await prisma.ordenCompra.create({
       data: {
-        scId, proveedorId, codigo,
+        scId,
+        proveedorId,
+        codigo,
         estado: "OPEN",
         total: D(total),
         items: {
@@ -265,8 +280,25 @@ export async function createOC(fd: FormData): Promise<Result> {
     bump();
     return { ok: true, id: oc.id, codigo: oc.codigo, message: "OC creada" };
   } catch (e: unknown) {
-    if (typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === "P2002") {
-      return { ok: false, message: "Código de OC ya existe" };
+    // Mejora de mensajes
+    if (e && typeof e === "object" && "code" in e) {
+      const code = (e as { code?: string }).code;
+      // Unique constraint
+      if (code === "P2002") {
+        const meta = (e as unknown as { meta?: { target?: string | string[] } }).meta;
+        const target = Array.isArray(meta?.target)
+          ? meta.target
+          : (typeof meta?.target === "string" ? [meta.target] : []);
+        if (Array.isArray(target)) {
+          if (target.includes("codigo")) return { ok: false, message: "Código de OC ya existe" };
+          if (target.includes("scId")) return { ok: false, message: "La SC ya tiene una Orden de Compra" };
+        }
+        return { ok: false, message: "Violación de unicidad al crear la OC" };
+      }
+      // Foreign key
+      if (code === "P2003") {
+        return { ok: false, message: "Referencia inválida (proveedor o producto inexistente)" };
+      }
     }
     return { ok: false, message: "No se pudo crear OC" };
   }

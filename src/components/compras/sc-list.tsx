@@ -10,9 +10,27 @@ import { fmtCurrency } from "./types";
 import { SCBadge } from "./badges";
 import { SCRowActions } from "./sc-row-actions";
 import { Pagination } from "./pagination";
-import { Drawer } from "./drawer";
 
-export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; providers: Provider[]; canWrite: boolean; actions: Actions }) {
+// 👇 nuevo: import Dialog
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+export function SCList({
+  rows,
+  providers,
+  canWrite,
+  actions,
+}: {
+  rows: SCRow[];
+  providers: Provider[];
+  canWrite: boolean;
+  actions: Actions;
+}) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -35,7 +53,14 @@ export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; 
     <div className="space-y-4">
       <Card className="p-4 flex items-center gap-3 max-w-lg">
         <Package className="h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar por producto, SKU, solicitante o ID..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+        <Input
+          placeholder="Buscar por producto, SKU, solicitante o ID..."
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(1);
+          }}
+        />
       </Card>
 
       <Card className="overflow-hidden">
@@ -54,14 +79,28 @@ export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; 
           <TableBody>
             {paged.map((r) => (
               <TableRow key={r.id}>
-                <TableCell className="font-mono cursor-pointer hover:underline" onClick={() => setSelected(r)}>#{r.id.slice(0, 8)}</TableCell>
+                <TableCell
+                  className="font-mono cursor-pointer hover:underline"
+                  onClick={() => setSelected(r)}
+                >
+                  #{r.id.slice(0, 8)}
+                </TableCell>
                 <TableCell>
-                  <div className="font-medium">{r.solicitante.displayName ?? r.solicitante.email}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</div>
+                  <div className="font-medium">
+                    {r.solicitante.displayName ?? r.solicitante.email}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </div>
                 </TableCell>
                 <TableCell>
                   {r.ot ? (
-                    <a href={`/ot/${r.ot.id}`} className="text-sm font-medium hover:underline">{r.ot.codigo}</a>
+                    <a
+                      href={`/ot/${r.ot.id}`}
+                      className="text-sm font-medium hover:underline"
+                    >
+                      {r.ot.codigo}
+                    </a>
                   ) : (
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
@@ -107,85 +146,103 @@ export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; 
                 </TableCell>
               </TableRow>
             ))}
-            {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Sin solicitudes</TableCell></TableRow>}
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  Sin solicitudes
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>
 
       <Pagination page={page} total={total} pageSize={pageSize} onPageChange={setPage} />
 
-      <Drawer open={!!selected} onOpenChange={(o) => !o && setSelected(null)} title={selected ? `SC #${selected.id.slice(0,8)}` : undefined} width={640}>
-        {selected && (
-          <div className="space-y-3">
-            <div className="text-sm text-muted-foreground">Solicitante</div>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">{selected.solicitante.displayName ?? selected.solicitante.email}</div>
-                <div className="text-xs text-muted-foreground">{new Date(selected.createdAt).toLocaleString()}</div>
-              </div>
-              <SCBadge estado={selected.estado} />
-            </div>
-            	{selected.ot && (
-            	  <div>
-            	    <div className="text-sm text-muted-foreground mt-2">Orden de Trabajo (OT)</div>
-            	    <div className="flex items-center justify-between">
-            	      <div className="font-medium"><a href={`/ot/${selected.ot.id}`} className="hover:underline">{selected.ot.codigo}</a></div>
-            	      <div className="text-xs text-muted-foreground">Ir a OT</div>
-            	    </div>
-            	  </div>
-            	)}
-            {selected.notas && (
-              <div>
-                <div className="text-sm text-muted-foreground mb-1">Notas</div>
-                <div className="text-sm whitespace-pre-wrap">{selected.notas}</div>
-              </div>
-            )}
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">Items</div>
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>Cantidad</TableHead>
-                      <TableHead className="text-right">Costo Est.</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selected.items.map((i, idx) => (
-                      <TableRow key={i.id ?? `${i.productoId}-${idx}` }>
-                        <TableCell>{i.nombre ?? i.productoId}</TableCell>
-                        <TableCell>{i.cantidad} {i.uom}</TableCell>
-                        <TableCell className="text-right">{i.costoEstimado != null ? fmtCurrency(i.costoEstimado) : "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-            {selected.ot && (
-              <div className="p-3 bg-slate-50 rounded-md border">
+      {/* 👇 Dialog de detalle de SC */}
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="sm:max-w-[720px]">
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle>SC #{selected.id.slice(0, 8)}</DialogTitle>
+                <DialogDescription>
+                  Detalle de la solicitud de compra.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                <div className="text-sm text-muted-foreground">Solicitante</div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm text-muted-foreground">Orden de Trabajo</div>
-                    <div className="font-medium">{selected.ot.codigo}</div>
-                    <div className="text-xs text-muted-foreground">Estado: {selected.ot.estado ?? "—"}</div>
+                    <div className="font-medium">
+                      {selected.solicitante.displayName ?? selected.solicitante.email}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(selected.createdAt).toLocaleString()}
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <a href={`/ot/${selected.ot.id}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">Abrir OT</a>
-                    <a href={`/ot/${selected.ot.id}`} className="text-xs text-muted-foreground">Ver detalles</a>
+                  <SCBadge estado={selected.estado} />
+                </div>
+
+                {selected.ot && (
+                  <div>
+                    <div className="text-sm text-muted-foreground mt-2">Orden de Trabajo (OT)</div>
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium">
+                        <a href={`/ot/${selected.ot.id}`} className="hover:underline">
+                          {selected.ot.codigo}
+                        </a>
+                      </div>
+                      <div className="text-xs text-muted-foreground">Ir a OT</div>
+                    </div>
+                  </div>
+                )}
+
+                {selected.notas && (
+                  <div>
+                    <div className="text-sm text-muted-foreground mb-1">Notas</div>
+                    <div className="text-sm whitespace-pre-wrap">{selected.notas}</div>
+                  </div>
+                )}
+
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Items</div>
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead>Cantidad</TableHead>
+                          <TableHead className="text-right">Costo Est.</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selected.items.map((i, idx) => (
+                          <TableRow key={i.id ?? `${i.productoId}-${idx}`}>
+                            <TableCell>{i.nombre ?? i.productoId}</TableCell>
+                            <TableCell>
+                              {i.cantidad} {i.uom}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {i.costoEstimado != null ? fmtCurrency(i.costoEstimado) : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
-              </div>
-            )}
 
-            <div className="flex items-center justify-between pt-2">
-              <div className="text-sm text-muted-foreground">Total estimado</div>
-              <div className="font-semibold">{fmtCurrency(selected.totalEstimado)}</div>
-            </div>
-          </div>
-        )}
-      </Drawer>
+                <div className="flex items-center justify-between pt-2">
+                  <div className="text-sm text-muted-foreground">Total estimado</div>
+                  <div className="font-semibold">{fmtCurrency(selected.totalEstimado)}</div>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
