@@ -11,6 +11,7 @@ export type SCRow = {
   notas?: string;
   items: SCItem[];
   oc: { id: string; codigo: string; estado: string } | null;
+  ot?: { id: string; codigo: string; estado?: string } | null;
 };
 
 export type OCItem = { id: string; productoId: string; nombre: string; uom: string; cantidad: number; costoUnitario: number; importe: number };

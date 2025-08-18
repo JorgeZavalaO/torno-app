@@ -12,12 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import OTSelect from "./ot-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Save, Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
 import { QuoteStatusBadge } from "./quote-status-badge";
 import Link from "next/link";
+import { QuoteLinesEditor, PiezaLine, MaterialLine } from "./quote-lines-editor";
 
 type Client = { id: string; nombre: string; ruc: string };
 type CostingParams = Record<string, string | number>;
@@ -48,9 +50,11 @@ interface EditQuoteClientProps {
   clients: Client[];
   params: CostingParams;
   action: UpdateQuoteAction;
+  ots?: { id: string; codigo: string }[];
+  linkedOtId?: string | null;
 }
 
-export function EditQuoteClient({ quote, clients, params, action }: EditQuoteClientProps) {
+export function EditQuoteClient({ quote, clients, params, action, ots, linkedOtId }: EditQuoteClientProps) {
   const currency = String(params.currency || "PEN");
   const [clienteId, setClienteId] = useState<string>(quote.clienteId);
   const [qty, setQty] = useState<number>(quote.qty);
@@ -59,7 +63,14 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
   const [kwh, setKwh] = useState<number>(Number(quote.kwh) || 0);
   const [validUntil, setValidUntil] = useState<string>("");
   const [notes, setNotes] = useState<string>(quote.notes || "");
+  const [otId, setOtId] = useState<string>(linkedOtId ?? "");
   const [pending, startTransition] = useTransition();
+  const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
+  const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
+  const [forceMaterials, setForceMaterials] = useState<boolean>(false);
+  // Bandera para saber si qty/materials fueron derivados de líneas y así bloquear edición manual
+  const [derivedQty, setDerivedQty] = useState(false);
+  const [derivedMaterials, setDerivedMaterials] = useState(false);
 
   const gi = Number(params.gi ?? 0);
   const margin = Number(params.margin ?? 0);
@@ -103,12 +114,16 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
 
     const formData = new FormData();
     formData.set("clienteId", clienteId);
-    formData.set("qty", String(qty));
-    formData.set("materials", String(materials));
+  formData.set("qty", String(qty));
+  formData.set("materials", String(materials));
     formData.set("hours", String(hours));
     formData.set("kwh", String(kwh));
+  formData.set("forceMaterials", String(forceMaterials));
+  if (otId) formData.set("otId", otId);
     if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
+  if (piezasLines.length) formData.set("piezas", JSON.stringify(piezasLines));
+  if (materialesLines.length) formData.set("materialesDetalle", JSON.stringify(materialesLines));
 
     startTransition(async () => {
       const result = await action(quote.id, formData);
@@ -123,12 +138,73 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
 
   const canEdit = quote.status !== "APPROVED";
 
-  // Establecer fecha de vigencia inicial
+  // Pre-cargar líneas desde breakdown si existen
   useEffect(() => {
-    if (quote.validUntil) {
-      setValidUntil(formatDate(quote.validUntil));
+    type BreakdownShape = {
+      inputs?: {
+        piezasLines?: Array<{ productoId?: string; descripcion?: string; qty?: number }>;
+        materialesLines?: Array<{ productoId?: string; descripcion?: string; qty?: number; unitCost?: number }>;
+      };
+    } | null | undefined;
+
+    const rawBreak = (quote as unknown as { breakdown?: unknown }).breakdown as BreakdownShape;
+    const inputs = rawBreak?.inputs;
+    if (inputs?.piezasLines && Array.isArray(inputs.piezasLines) && inputs.piezasLines.length) {
+      const lines: PiezaLine[] = inputs.piezasLines.map(p => ({
+        productoId: p.productoId || undefined,
+        descripcion: p.descripcion || '',
+        qty: Number(p.qty || 0) || 0,
+      })).filter((line: PiezaLine) => !!(line.descripcion || line.productoId));
+      if (lines.length) {
+        setPiezasLines(lines);
+        const qSum = lines.reduce((s,l)=> s + (l.qty||0), 0);
+        setQty(qSum);
+        setDerivedQty(true);
+      }
     }
-  }, [quote.validUntil]);
+    if (inputs?.materialesLines && Array.isArray(inputs.materialesLines) && inputs.materialesLines.length) {
+      const mLines: MaterialLine[] = inputs.materialesLines.map(m => ({
+        productoId: m.productoId || undefined,
+        descripcion: m.descripcion || '',
+        qty: Number(m.qty || 0) || 0,
+        unitCost: Number(m.unitCost || 0) || 0,
+      })).filter((line: MaterialLine) => !!(line.descripcion || line.productoId));
+      if (mLines.length) {
+        setMaterialesLines(mLines);
+        const mSum = Number(mLines.reduce((s,l)=> s + (l.qty * l.unitCost), 0).toFixed(2));
+        setMaterials(mSum);
+        setDerivedMaterials(true);
+      }
+    }
+    if (quote.validUntil) setValidUntil(formatDate(quote.validUntil));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote.id]);
+
+  // Re-sincronizar qty si cambian líneas manualmente
+  useEffect(() => {
+    if (piezasLines.length) {
+      const qSum = piezasLines.reduce((s,l)=> s + (l.qty||0), 0);
+      if (qSum !== qty) {
+        setQty(qSum);
+        setDerivedQty(true);
+      }
+    } else if (derivedQty) {
+      setDerivedQty(false); // permitir edición manual de qty si ya no hay líneas
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piezasLines]);
+  useEffect(() => {
+    if (materialesLines.length) {
+      const mSum = Number(materialesLines.reduce((s,l)=> s + (l.qty * l.unitCost), 0).toFixed(2));
+      if (mSum !== materials) {
+        setMaterials(mSum);
+        setDerivedMaterials(true);
+      }
+    } else if (derivedMaterials) {
+      setDerivedMaterials(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [materialesLines]);
 
   return (
     <div className="space-y-6">
@@ -221,15 +297,24 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="validUntil">Vigente hasta</Label>
-                  <Input
-                    id="validUntil"
-                    type="date"
-                    value={validUntil}
-                    onChange={(e) => setValidUntil(e.target.value)}
-                    disabled={pending || !canEdit}
-                  />
+                <div>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ot">Enlazar a OT (opcional)</Label>
+                      <OTSelect value={otId} onChange={setOtId} options={ots} disabled={pending || !canEdit} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="validUntil">Vigente hasta</Label>
+                      <Input
+                        id="validUntil"
+                        type="date"
+                        value={validUntil}
+                        onChange={(e) => setValidUntil(e.target.value)}
+                        disabled={pending || !canEdit}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -250,8 +335,9 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
                     min={1}
                     value={qty}
                     onChange={(e) => setQty(Number(e.target.value))}
-                    disabled={pending || !canEdit}
+                    disabled={pending || !canEdit || derivedQty}
                   />
+                  {derivedQty && <p className="text-xs text-muted-foreground">Cantidad calculada automáticamente desde líneas de piezas.</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -263,8 +349,9 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
                     min={0}
                     value={materials}
                     onChange={(e) => setMaterials(Number(e.target.value))}
-                    disabled={pending || !canEdit}
+                    disabled={pending || !canEdit || derivedMaterials}
                   />
+                  {derivedMaterials && <p className="text-xs text-muted-foreground">Costo de materiales total calculado desde líneas de materiales.</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -295,6 +382,15 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
               </div>
             </div>
           </Card>
+
+          <QuoteLinesEditor
+            piezasLines={piezasLines}
+            setPiezasLines={setPiezasLines}
+            materialesLines={materialesLines}
+            setMaterialesLines={setMaterialesLines}
+            currency={currency}
+            disabled={pending || !canEdit}
+          />
 
           <Card className="p-6">
             <div className="space-y-4">
@@ -358,9 +454,20 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
                 Desglose de Costos
               </h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Materiales</span>
-                  <span>{formatCurrency(materials)}</span>
+                <div className="flex justify-between items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span>Materiales</span>
+                    {forceMaterials && (
+                      <span title="Forzar materiales activo: se usará el monto manual" className="inline-block text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Forzar</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span>{formatCurrency(materials)}</span>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={forceMaterials} onChange={(e) => setForceMaterials(e.target.checked)} disabled={pending || !canEdit} />
+                      Forzar materiales
+                    </label>
+                  </div>
                 </div>
                 <div className="flex justify-between">
                   <span>Mano de obra</span>

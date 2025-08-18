@@ -27,6 +27,9 @@ export default async function QuotesPage() {
     getCostingValues(),
   ]);
 
+  // Traer OTs para permitir enlazar cotizaciones (solo id y código)
+  const ots = await prisma.ordenTrabajo.findMany({ select: { id: true, codigo: true }, orderBy: { creadaEn: 'desc' } });
+
   // Mapear a tipos serializables para el cliente (Date -> string, Decimal -> number)
   const items = quotes.map((q) => ({
     id: q.id,
@@ -45,7 +48,8 @@ export default async function QuotesPage() {
       canWrite={canWrite} 
       clients={clients}
       params={params}
-      action={createQuote}
+  action={createQuote}
+  ots={ots}
     />
   );
 }

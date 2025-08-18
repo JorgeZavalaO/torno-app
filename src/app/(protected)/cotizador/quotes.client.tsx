@@ -20,6 +20,7 @@ interface QuotesClientProps {
   clients: Array<{ id: string; nombre: string; ruc: string }>;
   params: Record<string, string | number>;
   action: (fd: FormData) => Promise<{ ok: boolean; id?: string; message?: string }>;
+  ots?: { id: string; codigo: string }[];
 }
 
 export default function QuotesClient({ 
@@ -28,6 +29,7 @@ export default function QuotesClient({
   clients, 
   params, 
   action 
+  , ots
 }: QuotesClientProps) {
   return (
     <div className="p-6 space-y-6">
@@ -37,6 +39,7 @@ export default function QuotesClient({
         params={params}
         action={action}
         quotes={initialItems}
+        ots={ots}
       />
       
       <QuoteList

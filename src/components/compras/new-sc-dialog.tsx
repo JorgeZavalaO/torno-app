@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import OTSelect from "@/components/cotizador/ot-select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +12,7 @@ export function NewSCDialog({ products, onCreate }: { products: Product[]; onCre
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Array<{ productoId: string; cantidad: number; costoEstimado?: number | null }>>([]);
   const [otId, setOtId] = useState("");
+  const [ots, setOts] = useState<Array<{ id: string; codigo: string }>>([]);
   const [notas, setNotas] = useState("");
 
   const addRow = () => setRows((r) => [...r, { productoId: products[0]?.sku ?? "", cantidad: 1 }]);
@@ -41,6 +43,22 @@ export function NewSCDialog({ products, onCreate }: { products: Product[]; onCre
     setNotas("");
   }
 
+  // Cargar OTs para el selector (cliente)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/ots');
+        if (!res.ok) throw new Error('failed');
+        const data = await res.json();
+        if (mounted) setOts(data || []);
+      } catch (err) {
+        // no crítico
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -57,7 +75,7 @@ export function NewSCDialog({ products, onCreate }: { products: Product[]; onCre
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
           <div>
             <div className="text-sm text-muted-foreground">OT (opcional)</div>
-            <Input value={otId} onChange={(e) => setOtId(e.target.value)} placeholder="Código OT" />
+            <OTSelect value={otId} onChange={setOtId} options={ots} disabled={false} />
           </div>
           <div>
             <div className="text-sm text-muted-foreground">Notas</div>

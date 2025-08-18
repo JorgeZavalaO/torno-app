@@ -44,6 +44,7 @@ export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; 
             <TableRow className="bg-muted/40">
               <TableHead>ID</TableHead>
               <TableHead>Solicitante</TableHead>
+              <TableHead>OT</TableHead>
               <TableHead>Items</TableHead>
               <TableHead className="text-right">Total Est.</TableHead>
               <TableHead className="text-center">Estado</TableHead>
@@ -57,6 +58,13 @@ export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; 
                 <TableCell>
                   <div className="font-medium">{r.solicitante.displayName ?? r.solicitante.email}</div>
                   <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</div>
+                </TableCell>
+                <TableCell>
+                  {r.ot ? (
+                    <a href={`/ot/${r.ot.id}`} className="text-sm font-medium hover:underline">{r.ot.codigo}</a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <div className="text-sm">
@@ -117,6 +125,15 @@ export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; 
               </div>
               <SCBadge estado={selected.estado} />
             </div>
+            	{selected.ot && (
+            	  <div>
+            	    <div className="text-sm text-muted-foreground mt-2">Orden de Trabajo (OT)</div>
+            	    <div className="flex items-center justify-between">
+            	      <div className="font-medium"><a href={`/ot/${selected.ot.id}`} className="hover:underline">{selected.ot.codigo}</a></div>
+            	      <div className="text-xs text-muted-foreground">Ir a OT</div>
+            	    </div>
+            	  </div>
+            	)}
             {selected.notas && (
               <div>
                 <div className="text-sm text-muted-foreground mb-1">Notas</div>
@@ -146,6 +163,22 @@ export function SCList({ rows, providers, canWrite, actions }: { rows: SCRow[]; 
                 </Table>
               </div>
             </div>
+            {selected.ot && (
+              <div className="p-3 bg-slate-50 rounded-md border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Orden de Trabajo</div>
+                    <div className="font-medium">{selected.ot.codigo}</div>
+                    <div className="text-xs text-muted-foreground">Estado: {selected.ot.estado ?? "—"}</div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <a href={`/ot/${selected.ot.id}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">Abrir OT</a>
+                    <a href={`/ot/${selected.ot.id}`} className="text-xs text-muted-foreground">Ver detalles</a>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between pt-2">
               <div className="text-sm text-muted-foreground">Total estimado</div>
               <div className="font-semibold">{fmtCurrency(selected.totalEstimado)}</div>

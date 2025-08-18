@@ -30,6 +30,12 @@ export default async function EditQuotePage(props: { params: Promise<{ id: strin
     getCostingValues(),
   ]);
 
+  // Traer OTs para permitir enlazar desde la edición
+  const [ots, linkedOt] = await Promise.all([
+    prisma.ordenTrabajo.findMany({ select: { id: true, codigo: true }, orderBy: { creadaEn: 'desc' } }),
+    prisma.ordenTrabajo.findFirst({ where: { cotizacionId: id }, select: { id: true } }),
+  ]);
+
   if (!quote) redirect("/cotizador");
 
   // No permitir editar cotizaciones aprobadas
@@ -51,6 +57,7 @@ export default async function EditQuotePage(props: { params: Promise<{ id: strin
     kwh: toNum(quote.kwh),
     validUntil: quote.validUntil ?? null,
     notes: quote.notes ?? null,
+  breakdown: quote.breakdown,
     cliente: {
       id: quote.cliente!.id,
       nombre: quote.cliente!.nombre,
@@ -77,7 +84,9 @@ export default async function EditQuotePage(props: { params: Promise<{ id: strin
         }}
         clients={clients}
         params={params2}
-        action={updateQuote}
+  action={updateQuote}
+  ots={ots}
+  linkedOtId={linkedOt?.id}
       />
     </div>
   );

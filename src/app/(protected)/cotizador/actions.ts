@@ -12,6 +12,7 @@ type Result = { ok: true; message?: string; id?: string } | { ok: false; message
 
 const InputSchema = z.object({
   clienteId: z.string().uuid(),
+  otId: z.string().uuid().optional(),
   qty: z.coerce.number().int().min(1),
   materials: z.coerce.number().min(0),
   hours: z.coerce.number().min(0),
@@ -37,10 +38,51 @@ function bumpQuotesCache() {
 export async function createQuote(fd: FormData): Promise<Result> {
   await assertCanWriteQuotes();
 
+  // --- Parsing de líneas detalladas (opcional) ---
+  let piezasLines: Array<{ productoId?: string; descripcion?: string; qty: number }> = [];
+  let materialesLines: Array<{ productoId?: string; descripcion?: string; qty: number; unitCost: number }> = [];
+  try {
+    const rawP = fd.get("piezas");
+    if (rawP) {
+      const arr = JSON.parse(String(rawP));
+      if (Array.isArray(arr)) {
+        piezasLines = arr
+          .map(p => ({
+            productoId: p.productoId || undefined,
+            descripcion: p.descripcion || undefined,
+            qty: Number(p.qty || 0)
+          }))
+          .filter(p => (p.productoId || p.descripcion) && p.qty > 0);
+      }
+    }
+  } catch {}
+  try {
+    const rawM = fd.get("materialesDetalle");
+    if (rawM) {
+      const arr = JSON.parse(String(rawM));
+      if (Array.isArray(arr)) {
+        materialesLines = arr
+          .map(m => ({
+            productoId: m.productoId || undefined,
+            descripcion: m.descripcion || undefined,
+            qty: Number(m.qty || 0),
+            unitCost: Number(m.unitCost || 0)
+          }))
+          .filter(m => (m.productoId || m.descripcion) && m.qty > 0 && m.unitCost >= 0);
+      }
+    }
+  } catch {}
+
+  const forceMaterialsFlag = String(fd.get("forceMaterials") || "").toLowerCase() === "true";
+  const aggregatedQty = piezasLines.length ? piezasLines.reduce((s,p)=>s+p.qty,0) : Number(fd.get("qty") || 0);
+  const aggregatedMaterials = forceMaterialsFlag
+    ? Number(fd.get("materials") || 0)
+    : (materialesLines.length ? materialesLines.reduce((s,m)=> s + (m.qty * m.unitCost), 0) : Number(fd.get("materials") || 0));
+
   const parsed = InputSchema.safeParse({
     clienteId: fd.get("clienteId"),
-    qty: fd.get("qty"),
-    materials: fd.get("materials"),
+    qty: aggregatedQty,
+    materials: aggregatedMaterials,
     hours: fd.get("hours"),
     kwh: fd.get("kwh") ?? 0,
     validUntil: fd.get("validUntil") || undefined,
@@ -48,6 +90,12 @@ export async function createQuote(fd: FormData): Promise<Result> {
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
+  if (input.qty < 1) return { ok: false, message: "Cantidad total debe ser >= 1" };
+
+  // Validación adicional de líneas (si se enviaron) - al menos una pieza si se mandó array
+  if (fd.get("piezas") && piezasLines.length === 0) {
+    return { ok: false, message: "Agrega al menos una pieza válida" };
+  }
 
   // Traemos parámetros actuales
   const v = await getCostingValues(); // { currency, gi, margin, hourlyRate, ... }
@@ -85,6 +133,8 @@ export async function createQuote(fd: FormData): Promise<Result> {
     inputs: {
       qty: input.qty,
       materials: n2(materials), hours: n2(hours), kwh: n2(kwh),
+      piezasLines,
+      materialesLines,
     },
     params: {
       currency, gi: Number(gi.toString()), margin: Number(margin.toString()),
@@ -110,25 +160,40 @@ export async function createQuote(fd: FormData): Promise<Result> {
     },
   };
 
-  const created = await prisma.cotizacion.create({
-    data: {
-      clienteId: input.clienteId,
-      currency,
-      giPct: gi, marginPct: margin,
-      hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
+  // Crear cotización y, si se proporcionó otId, enlazarla a la OT en la misma transacción
+  const created = await prisma.$transaction(async (tx) => {
+    const cot = await tx.cotizacion.create({
+      data: {
+        clienteId: input.clienteId,
+        currency,
+        giPct: gi, marginPct: margin,
+        hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
 
-      qty: input.qty,
-      materials, hours, kwh,
+        qty: input.qty,
+        materials, hours, kwh,
 
-      costDirect: direct,
-      giAmount, subtotal, marginAmount, total, unitPrice,
-      breakdown,
+        costDirect: direct,
+        giAmount, subtotal, marginAmount, total, unitPrice,
+        breakdown,
 
-      validUntil: input.validUntil ? new Date(input.validUntil) : null,
-      notes: input.notes ?? null,
-      status: "DRAFT",
-    },
-    select: { id: true },
+        validUntil: input.validUntil ? new Date(input.validUntil) : null,
+        notes: input.notes ?? null,
+        status: "DRAFT",
+      },
+      select: { id: true },
+    });
+
+    // Si se pidió enlazar a una OT, intentamos actualizarla
+    if (input.otId) {
+      // Verificamos que la OT exista
+      const ot = await tx.ordenTrabajo.findUnique({ where: { id: input.otId }, select: { id: true, cotizacionId: true } });
+      if (!ot) throw new Error("OT no encontrada");
+      // Nota: permitimos sobreescribir cotizacionId existente. Si quieres forbidirlo, descomenta siguiente línea
+      // if (ot.cotizacionId) throw new Error("La OT ya está enlazada a otra cotización");
+      await tx.ordenTrabajo.update({ where: { id: input.otId }, data: { cotizacionId: cot.id } });
+    }
+
+    return cot;
   });
 
   bumpQuotesCache();
@@ -180,10 +245,41 @@ export async function updateQuoteStatus(
 export async function updateQuote(quoteId: string, fd: FormData): Promise<Result> {
   await assertCanWriteQuotes();
 
+  // Parsing líneas (igual que create)
+  let piezasLines: Array<{ productoId?: string; descripcion?: string; qty: number }> = [];
+  let materialesLines: Array<{ productoId?: string; descripcion?: string; qty: number; unitCost: number }> = [];
+  try {
+    const rawP = fd.get("piezas");
+    if (rawP) {
+      const arr = JSON.parse(String(rawP));
+      if (Array.isArray(arr)) {
+        piezasLines = arr
+          .map(p => ({ productoId: p.productoId || undefined, descripcion: p.descripcion || undefined, qty: Number(p.qty || 0) }))
+          .filter(p => (p.productoId || p.descripcion) && p.qty > 0);
+      }
+    }
+  } catch {}
+  try {
+    const rawM = fd.get("materialesDetalle");
+    if (rawM) {
+      const arr = JSON.parse(String(rawM));
+      if (Array.isArray(arr)) {
+        materialesLines = arr
+          .map(m => ({ productoId: m.productoId || undefined, descripcion: m.descripcion || undefined, qty: Number(m.qty || 0), unitCost: Number(m.unitCost || 0) }))
+          .filter(m => (m.productoId || m.descripcion) && m.qty > 0 && m.unitCost >= 0);
+      }
+    }
+  } catch {}
+  const aggregatedQty = piezasLines.length ? piezasLines.reduce((s,p)=>s+p.qty,0) : Number(fd.get("qty") || 0);
+  const forceMaterialsFlag = String(fd.get("forceMaterials") || "").toLowerCase() === "true";
+  const aggregatedMaterials = forceMaterialsFlag
+    ? Number(fd.get("materials") || 0)
+    : (materialesLines.length ? materialesLines.reduce((s,m)=> s + (m.qty * m.unitCost), 0) : Number(fd.get("materials") || 0));
+
   const parsed = InputSchema.safeParse({
     clienteId: fd.get("clienteId"),
-    qty: fd.get("qty"),
-    materials: fd.get("materials"),
+    qty: aggregatedQty,
+    materials: aggregatedMaterials,
     hours: fd.get("hours"),
     kwh: fd.get("kwh") ?? 0,
     validUntil: fd.get("validUntil") || undefined,
@@ -191,6 +287,8 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
+  if (input.qty < 1) return { ok: false, message: "Cantidad total debe ser >=1" };
+  if (fd.get("piezas") && piezasLines.length === 0) return { ok: false, message: "Agrega al menos una pieza válida" };
 
   try {
     const existingQuote = await prisma.cotizacion.findUnique({
@@ -238,10 +336,12 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
     const total = subtotal.plus(marginAmount);
     const unitPrice = qty.gt(0) ? total.div(qty) : total;
 
-    const breakdown = {
+  const breakdown = {
       inputs: {
         qty: input.qty,
         materials: n2(materials), hours: n2(hours), kwh: n2(kwh),
+    piezasLines,
+    materialesLines,
       },
       params: {
         currency, gi: Number(gi.toString()), margin: Number(margin.toString()),
@@ -267,25 +367,46 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
       },
     };
 
-    await prisma.cotizacion.update({
-      where: { id: quoteId },
-      data: {
-        clienteId: input.clienteId,
-        currency,
-        giPct: gi, marginPct: margin,
-        hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
+    // Actualizar cotización y manejar posible enlace/desenlace a OT en una transacción
+    await prisma.$transaction(async (tx) => {
+      await tx.cotizacion.update({
+        where: { id: quoteId },
+        data: {
+          clienteId: input.clienteId,
+          currency,
+          giPct: gi, marginPct: margin,
+          hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
 
-        qty: input.qty,
-        materials, hours, kwh,
+          qty: input.qty,
+          materials, hours, kwh,
 
-        costDirect: direct,
-        giAmount, subtotal, marginAmount, total, unitPrice,
-        breakdown,
+          costDirect: direct,
+          giAmount, subtotal, marginAmount, total, unitPrice,
+          breakdown,
 
-        validUntil: input.validUntil ? new Date(input.validUntil) : null,
-        notes: input.notes ?? null,
-        updatedAt: new Date(),
-      },
+          validUntil: input.validUntil ? new Date(input.validUntil) : null,
+          notes: input.notes ?? null,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Si se envia otId, manejamos el enlace: 1) deshacer enlace previo (si existe), 2) enlazar nueva OT
+  const newOtId = input.otId as string | undefined;
+      if (newOtId !== undefined) {
+        // Obtener OT actualmente enlazada a esta cotización (si la hay)
+        const prev = await tx.ordenTrabajo.findFirst({ where: { cotizacionId: quoteId }, select: { id: true } });
+        if (prev && prev.id !== newOtId) {
+          // Desvincular OT previa
+          await tx.ordenTrabajo.update({ where: { id: prev.id }, data: { cotizacionId: null } });
+        }
+
+        if (newOtId) {
+          const ot = await tx.ordenTrabajo.findUnique({ where: { id: newOtId }, select: { id: true, cotizacionId: true } });
+          if (!ot) throw new Error("OT no encontrada");
+          // Enlazar la OT nueva (puede sobreescribir su cotizacionId actual)
+          await tx.ordenTrabajo.update({ where: { id: newOtId }, data: { cotizacionId: quoteId } });
+        }
+      }
     });
 
     bumpQuotesCache();

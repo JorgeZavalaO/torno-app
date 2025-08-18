@@ -142,10 +142,28 @@ export async function createSC(fd: FormData): Promise<Result> {
   const solicitante = await prisma.userProfile.findFirst({ where: { email: user.email } });
   if (!solicitante) return { ok: false, message: "Usuario no registrado" };
 
+  // Resolver otId: el cliente puede enviar el UUID o el código de la OT.
+  let resolvedOtId: string | null = null;
+  if (otId) {
+    // intentar por id
+    const otById = await prisma.ordenTrabajo.findUnique({ where: { id: otId }, select: { id: true } });
+    if (otById) {
+      resolvedOtId = otById.id;
+    } else {
+      // intentar por código
+      const otByCode = await prisma.ordenTrabajo.findUnique({ where: { codigo: otId }, select: { id: true } });
+      if (otByCode) {
+        resolvedOtId = otByCode.id;
+      } else {
+        return { ok: false, message: "Orden de trabajo (OT) no encontrada" };
+      }
+    }
+  }
+
   const sc = await prisma.solicitudCompra.create({
     data: {
       solicitanteId: solicitante.id,
-      otId: otId || null,
+      otId: resolvedOtId || null,
       estado: "PENDING_ADMIN",
       totalEstimado: D(totalEstimado),
       notas: notas || null,

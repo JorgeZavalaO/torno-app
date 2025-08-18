@@ -348,6 +348,12 @@ export async function createManualSCForOT(payload: z.infer<typeof ManualSCSchema
 
   const { otId, nota } = parsed.data;
 
+  // Protección: si ya existe una SolicitudCompra relacionada a esta OT, evitar duplicados
+  const existingSC = await prisma.solicitudCompra.findFirst({ where: { otId } });
+  if (existingSC) {
+    return { ok: false, message: "Ya existe una solicitud de compra vinculada a esta OT" };
+  }
+
   // Calcular faltantes = max(qtyPlan - qtyEmit - stockDisponible, 0)
   const mats = await prisma.oTMaterial.findMany({ where: { otId } });
   if (mats.length === 0) return { ok: false, message: "No hay materiales planificados" };

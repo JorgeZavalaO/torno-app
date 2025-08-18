@@ -23,7 +23,8 @@ export const getSCsCached = cache(
         items: {
           include: { producto: { select: { nombre: true, uom: true, categoria: true } } },
         },
-        ordenCompra: { select: { id: true, codigo: true, estado: true } },
+    ordenCompra: { select: { id: true, codigo: true, estado: true } },
+  ot: { select: { id: true, codigo: true, estado: true } },
       },
       take: 100,
     });
@@ -42,7 +43,8 @@ export const getSCsCached = cache(
         cantidad: toNum(i.cantidad),
         costoEstimado: i.costoEstimado != null ? toNum(i.costoEstimado) : null,
       })),
-      oc: r.ordenCompra ?? null,
+  oc: r.ordenCompra ?? null,
+  ot: r.ot ?? null,
     }));
   },
   ["purchases:sc:list"],
