@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+  "build": "next build",
+  "postbuild": "node scripts/list-manifests.js",
     "start": "next start",
     "lint": "next lint",
     "grant:admin": "tsx prisma/grant-admin.ts"
