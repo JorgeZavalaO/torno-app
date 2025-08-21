@@ -34,6 +34,7 @@ type QuoteDetail = {
   kwh: number;
   validUntil?: Date | null;
   notes?: string | null;
+  pedidoReferencia?: string | null;
   giPct: number;
   marginPct: number;
   hourlyRate: number;
@@ -400,6 +401,19 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
               </div>
             </div>
           </Card>
+
+          {quote.pedidoReferencia && (
+            <Card className="p-6">
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                  Pedido de Referencia
+                </h3>
+                <p className="text-sm font-mono bg-muted/50 px-3 py-2 rounded border">
+                  {quote.pedidoReferencia}
+                </p>
+              </div>
+            </Card>
+          )}
 
           {quote.notes && (
             <Card className="p-6">

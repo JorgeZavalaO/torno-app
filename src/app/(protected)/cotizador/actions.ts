@@ -14,13 +14,13 @@ type Result = { ok: true; message?: string; id?: string } | { ok: false; message
 
 const InputSchema = z.object({
   clienteId: z.string().uuid(),
-  otId: z.string().uuid().optional(),
   qty: z.coerce.number().int().min(1),
   materials: z.coerce.number().min(0),
   hours: z.coerce.number().min(0),
   kwh: z.coerce.number().min(0).default(0),
   validUntil: z.string().optional(), // ISO date
   notes: z.string().max(500).optional(),
+  pedidoReferencia: z.string().max(100).optional(), // Referencia de pedido ERP
 });
 
 /* ---------- Helpers Decimal ---------- */
@@ -89,6 +89,7 @@ export async function createQuote(fd: FormData): Promise<Result> {
     kwh: fd.get("kwh") ?? 0,
     validUntil: fd.get("validUntil") || undefined,
     notes: fd.get("notes") || undefined,
+    pedidoReferencia: fd.get("pedidoReferencia") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
@@ -162,40 +163,27 @@ export async function createQuote(fd: FormData): Promise<Result> {
     },
   };
 
-  // Crear cotización y, si se proporcionó otId, enlazarla a la OT en la misma transacción
-  const created = await prisma.$transaction(async (tx) => {
-    const cot = await tx.cotizacion.create({
-      data: {
-        clienteId: input.clienteId,
-        currency,
-        giPct: gi, marginPct: margin,
-        hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
+  // Crear cotización
+  const created = await prisma.cotizacion.create({
+    data: {
+      clienteId: input.clienteId,
+      currency,
+      giPct: gi, marginPct: margin,
+      hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
 
-        qty: input.qty,
-        materials, hours, kwh,
+      qty: input.qty,
+      materials, hours, kwh,
 
-        costDirect: direct,
-        giAmount, subtotal, marginAmount, total, unitPrice,
-        breakdown,
+      costDirect: direct,
+      giAmount, subtotal, marginAmount, total, unitPrice,
+      breakdown,
 
-        validUntil: input.validUntil ? new Date(input.validUntil) : null,
-        notes: input.notes ?? null,
-        status: "DRAFT",
-      },
-      select: { id: true },
-    });
-
-    // Si se pidió enlazar a una OT, intentamos actualizarla
-    if (input.otId) {
-      // Verificamos que la OT exista
-      const ot = await tx.ordenTrabajo.findUnique({ where: { id: input.otId }, select: { id: true, cotizacionId: true } });
-      if (!ot) throw new Error("OT no encontrada");
-      // Nota: permitimos sobreescribir cotizacionId existente. Si quieres forbidirlo, descomenta siguiente línea
-      // if (ot.cotizacionId) throw new Error("La OT ya está enlazada a otra cotización");
-      await tx.ordenTrabajo.update({ where: { id: input.otId }, data: { cotizacionId: cot.id } });
-    }
-
-    return cot;
+      validUntil: input.validUntil ? new Date(input.validUntil) : null,
+      notes: input.notes ?? null,
+      pedidoReferencia: input.pedidoReferencia ?? null,
+      status: "DRAFT",
+    },
+    select: { id: true },
   });
 
   bumpQuotesCache();
@@ -286,6 +274,7 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
     kwh: fd.get("kwh") ?? 0,
     validUntil: fd.get("validUntil") || undefined,
     notes: fd.get("notes") || undefined,
+    pedidoReferencia: fd.get("pedidoReferencia") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
@@ -369,46 +358,27 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
       },
     };
 
-    // Actualizar cotización y manejar posible enlace/desenlace a OT en una transacción
-    await prisma.$transaction(async (tx) => {
-      await tx.cotizacion.update({
-        where: { id: quoteId },
-        data: {
-          clienteId: input.clienteId,
-          currency,
-          giPct: gi, marginPct: margin,
-          hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
+    // Actualizar cotización
+    await prisma.cotizacion.update({
+      where: { id: quoteId },
+      data: {
+        clienteId: input.clienteId,
+        currency,
+        giPct: gi, marginPct: margin,
+        hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
 
-          qty: input.qty,
-          materials, hours, kwh,
+        qty: input.qty,
+        materials, hours, kwh,
 
-          costDirect: direct,
-          giAmount, subtotal, marginAmount, total, unitPrice,
-          breakdown,
+        costDirect: direct,
+        giAmount, subtotal, marginAmount, total, unitPrice,
+        breakdown,
 
-          validUntil: input.validUntil ? new Date(input.validUntil) : null,
-          notes: input.notes ?? null,
-          updatedAt: new Date(),
-        },
-      });
-
-      // Si se envia otId, manejamos el enlace: 1) deshacer enlace previo (si existe), 2) enlazar nueva OT
-  const newOtId = input.otId as string | undefined;
-      if (newOtId !== undefined) {
-        // Obtener OT actualmente enlazada a esta cotización (si la hay)
-        const prev = await tx.ordenTrabajo.findFirst({ where: { cotizacionId: quoteId }, select: { id: true } });
-        if (prev && prev.id !== newOtId) {
-          // Desvincular OT previa
-          await tx.ordenTrabajo.update({ where: { id: prev.id }, data: { cotizacionId: null } });
-        }
-
-        if (newOtId) {
-          const ot = await tx.ordenTrabajo.findUnique({ where: { id: newOtId }, select: { id: true, cotizacionId: true } });
-          if (!ot) throw new Error("OT no encontrada");
-          // Enlazar la OT nueva (puede sobreescribir su cotizacionId actual)
-          await tx.ordenTrabajo.update({ where: { id: newOtId }, data: { cotizacionId: quoteId } });
-        }
-      }
+        validUntil: input.validUntil ? new Date(input.validUntil) : null,
+        notes: input.notes ?? null,
+        pedidoReferencia: input.pedidoReferencia ?? null,
+        updatedAt: new Date(),
+      },
     });
 
     bumpQuotesCache();

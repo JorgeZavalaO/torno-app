@@ -151,9 +151,10 @@ model Cotizacion {
   unitPrice    Decimal     @db.Decimal(18,2)
   breakdown    Json
 
-  status       QuoteStatus @default(DRAFT)
-  validUntil   DateTime?
-  notes        String?
+  status         QuoteStatus @default(DRAFT)
+  validUntil     DateTime?
+  notes          String?
+  pedidoReferencia String?   // Referencia de pedido ERP
 
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt

@@ -24,6 +24,7 @@ export type PlainQuote = {
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   validUntil: Date | null;
   notes: string | null;
+  pedidoReferencia: string | null;
   createdAt: Date;
   updatedAt: Date;
   cliente?: { id: string; nombre: string; ruc: string; email?: string | null };
@@ -44,7 +45,7 @@ type PrismaLikeQuote = {
   costDirect: unknown; giAmount: unknown; subtotal: unknown; marginAmount: unknown; total: unknown; unitPrice: unknown;
   breakdown: unknown;
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
-  validUntil: Date | null; notes: string | null;
+  validUntil: Date | null; notes: string | null; pedidoReferencia: string | null;
   createdAt: Date; updatedAt: Date;
   cliente?: { id: string; nombre: string; ruc: string; email?: string | null };
 };
@@ -76,6 +77,7 @@ export function serializeQuote(q: PrismaLikeQuote, withClient = true): PlainQuot
     status: q.status,
     validUntil: q.validUntil ?? null,
     notes: q.notes ?? null,
+    pedidoReferencia: q.pedidoReferencia ?? null,
     createdAt: q.createdAt,
     updatedAt: q.updatedAt,
     cliente: withClient && q.cliente

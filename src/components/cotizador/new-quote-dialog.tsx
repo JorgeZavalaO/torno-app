@@ -22,7 +22,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import OTSelect from "./ot-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -52,7 +51,6 @@ interface NewQuoteDialogProps {
   clients: Client[];
   params: CostingParams;
   action: CreateQuoteAction;
-  ots?: { id: string; codigo: string }[];
 }
 
 export function NewQuoteDialog({ 
@@ -61,7 +59,6 @@ export function NewQuoteDialog({
   clients, 
   params, 
   action 
-  , ots
 }: NewQuoteDialogProps) {
   const currency = String(params.currency || "PEN");
   const [clienteId, setClienteId] = useState<string>("");
@@ -71,7 +68,7 @@ export function NewQuoteDialog({
   const [kwh, setKwh] = useState<number>(0);
   const [validUntil, setValidUntil] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
-  const [otId, setOtId] = useState<string>("");
+  const [pedidoReferencia, setPedidoReferencia] = useState<string>("");
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
   const [forceMaterials, setForceMaterials] = useState<boolean>(false);
@@ -118,6 +115,7 @@ export function NewQuoteDialog({
     setHours(0);
     setKwh(0);
     setNotes("");
+    setPedidoReferencia("");
   setPiezasLines([]);
   setMaterialesLines([]);
     // Mantener la fecha de vigencia
@@ -134,9 +132,9 @@ export function NewQuoteDialog({
     formData.set("hours", String(hours));
     formData.set("kwh", String(kwh));
   formData.set("forceMaterials", String(Boolean(forceMaterials)));
-  if (otId) formData.set("otId", otId);
-    if (validUntil) formData.set("validUntil", validUntil);
+  if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
+  if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
   if (piezasLines.length) formData.set("piezas", JSON.stringify(piezasLines));
   if (materialesLines.length) formData.set("materialesDetalle", JSON.stringify(materialesLines));
 
@@ -270,13 +268,19 @@ export function NewQuoteDialog({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="ot" className="text-sm font-medium">Enlazar a OT (opcional)</Label>
-                        <OTSelect
-                          value={otId}
-                          onChange={setOtId}
-                          options={ots}
+                        <Label htmlFor="pedidoReferencia" className="text-sm font-medium">Pedido de Referencia</Label>
+                        <Input
+                          id="pedidoReferencia"
+                          type="text"
+                          placeholder="Número de pedido ERP..."
+                          value={pedidoReferencia}
+                          onChange={(e) => setPedidoReferencia(e.target.value)}
                           disabled={pending}
+                          className="h-11"
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Referencia del pedido en el sistema ERP (opcional)
+                        </p>
                       </div>
 
                       <div className="space-y-2">

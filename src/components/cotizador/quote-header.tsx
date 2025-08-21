@@ -22,7 +22,6 @@ interface QuoteHeaderProps {
   params: CostingParams;
   action: CreateQuoteAction;
   quotes: Quote[];
-  ots?: { id: string; codigo: string }[];
 }
 
 export function QuoteHeader({ 
@@ -31,7 +30,6 @@ export function QuoteHeader({
   params, 
   action, 
   quotes 
-  , ots
 }: QuoteHeaderProps) {
   const [showNewDialog, setShowNewDialog] = useState(false);
 
@@ -138,7 +136,6 @@ export function QuoteHeader({
           clients={clients}
           params={params}
           action={action}
-          ots={ots}
         />
       )}
     </>

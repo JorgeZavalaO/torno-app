@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import OTSelect from "./ot-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -36,6 +35,7 @@ type QuoteDetail = {
   kwh: unknown;
   validUntil?: Date | null;
   notes?: string | null;
+  pedidoReferencia?: string | null;
   cliente: {
     id: string;
     nombre: string;
@@ -50,11 +50,9 @@ interface EditQuoteClientProps {
   clients: Client[];
   params: CostingParams;
   action: UpdateQuoteAction;
-  ots?: { id: string; codigo: string }[];
-  linkedOtId?: string | null;
 }
 
-export function EditQuoteClient({ quote, clients, params, action, ots, linkedOtId }: EditQuoteClientProps) {
+export function EditQuoteClient({ quote, clients, params, action }: EditQuoteClientProps) {
   const currency = String(params.currency || "PEN");
   const [clienteId, setClienteId] = useState<string>(quote.clienteId);
   const [qty, setQty] = useState<number>(quote.qty);
@@ -63,7 +61,7 @@ export function EditQuoteClient({ quote, clients, params, action, ots, linkedOtI
   const [kwh, setKwh] = useState<number>(Number(quote.kwh) || 0);
   const [validUntil, setValidUntil] = useState<string>("");
   const [notes, setNotes] = useState<string>(quote.notes || "");
-  const [otId, setOtId] = useState<string>(linkedOtId ?? "");
+  const [pedidoReferencia, setPedidoReferencia] = useState<string>(quote.pedidoReferencia || "");
   const [pending, startTransition] = useTransition();
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
@@ -119,9 +117,9 @@ export function EditQuoteClient({ quote, clients, params, action, ots, linkedOtI
     formData.set("hours", String(hours));
     formData.set("kwh", String(kwh));
   formData.set("forceMaterials", String(forceMaterials));
-  if (otId) formData.set("otId", otId);
     if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
+    if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
   if (piezasLines.length) formData.set("piezas", JSON.stringify(piezasLines));
   if (materialesLines.length) formData.set("materialesDetalle", JSON.stringify(materialesLines));
 
@@ -300,8 +298,18 @@ export function EditQuoteClient({ quote, clients, params, action, ots, linkedOtI
                 <div>
                   <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="ot">Enlazar a OT (opcional)</Label>
-                      <OTSelect value={otId} onChange={setOtId} options={ots} disabled={pending || !canEdit} />
+                      <Label htmlFor="pedidoReferencia">Pedido de Referencia</Label>
+                      <Input
+                        id="pedidoReferencia"
+                        type="text"
+                        placeholder="Número de pedido ERP..."
+                        value={pedidoReferencia}
+                        onChange={(e) => setPedidoReferencia(e.target.value)}
+                        disabled={pending || !canEdit}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Referencia del pedido en el sistema ERP (opcional)
+                      </p>
                     </div>
 
                     <div className="space-y-2">
