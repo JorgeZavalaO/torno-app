@@ -70,6 +70,18 @@ export function NewProductDialog({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
+            <Label>Sku (opcional)</Label>
+            <Input
+              value={sku}
+              onChange={e=>setSku(e.target.value)}
+              placeholder="Ej.: MP-001"
+              className="uppercase" 
+            />
+            <p className="text-xs text-muted-foreground mt-1">El sku se generará automáticamente, si no se especifica
+            </p>
+          </div>
+
+          <div className="md:col-span-2">
             <Label>Nombre</Label>
             <Input value={nombre} onChange={e=>setNombre(e.target.value)} />
           </div>
