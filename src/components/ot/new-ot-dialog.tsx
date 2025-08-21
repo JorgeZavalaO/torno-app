@@ -16,10 +16,10 @@ export type NewOTDialogPayload = {
   cotizacionId?: string;
   notas?: string;
   prioridad?: "LOW"|"MEDIUM"|"HIGH"|"URGENT";
-  acabado?: string;
+  acabado?: string; // valores permitidos: NONE | TROPICALIZADO | PINTADO | ZINCADO (frontend guarda string legible)
 };
 
-interface Product { sku: string; nombre: string; uom: string }
+interface Product { sku: string; nombre: string; uom: string; categoria?: string }
 
 export function NewOTDialog({ products, clients, onCreate, isCreating }:{
   products: Product[];
@@ -33,7 +33,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
   const [materiales, setMateriales] = useState<{sku: string; qty: number}[]>([]);
   const [clienteId, setClienteId] = useState<string|undefined>();
   const [prioridad, setPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">("MEDIUM");
-  const [acabado, setAcabado] = useState("");
+  const [acabado, setAcabado] = useState("NONE");
   const [notas, setNotas] = useState("");
 
   const reset = () => {
@@ -42,7 +42,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
     setMateriales([]);
     setClienteId(undefined);
     setPrioridad("MEDIUM");
-    setAcabado("");
+  setAcabado("NONE");
     setNotas("");
   };
 
@@ -60,7 +60,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
       materiales: materiales.filter(m => m.sku && m.qty>0),
       clienteId,
       prioridad,
-      acabado: acabado.trim() || undefined,
+    acabado: acabado === "NONE" ? undefined : acabado,
       notas: notas.trim() || undefined,
     });
     reset();
@@ -106,13 +106,18 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
               <PrioritySelect value={prioridad} onChange={setPrioridad} />
             </div>
             <div>
-              <label className="text-sm font-semibold">Piezas a fabricar</label>
+              <label className="text-sm font-semibold">Piezas a fabricar (solo productos categoría FABRICACION)</label>
               <p className="text-xs text-muted-foreground mb-2">Ingresa manualmente piezas; no se descuenta inventario ahora, solo planifica la producción.</p>
               <div className="space-y-3">
-                {piezas.map((p,i)=>(
+                {piezas.map((p,i)=>{
+                  const piezasFabricacion = products.filter(pr => (pr.categoria||"").toUpperCase()==="FABRICACION");
+                  return (
                   <div key={i} className="grid grid-cols-12 gap-2">
                     <div className="col-span-3">
-                      <Input placeholder="Código (opcional)" value={p.sku||""} onChange={e=>updatePieza(i,'sku',e.target.value)} />
+                      <select className="w-full h-9 border rounded-md px-2" value={p.sku||""} onChange={e=>updatePieza(i,'sku',e.target.value)}>
+                        <option value="">SKU (opcional)</option>
+                        {piezasFabricacion.map(pr => <option key={pr.sku} value={pr.sku}>{pr.nombre} ({pr.sku})</option>)}
+                      </select>
                     </div>
                     <div className="col-span-7">
                       <Input placeholder="Descripción" value={p.descripcion||""} onChange={e=>updatePieza(i,'descripcion',e.target.value)} />
@@ -124,7 +129,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
                       <Button size="sm" variant="ghost" onClick={()=>removePieza(i)}>Eliminar</Button>
                     </div>
                   </div>
-                ))}
+                )})}
                 <Button size="sm" variant="outline" onClick={addPieza}><Plus className="h-3 w-3 mr-1"/> Añadir pieza</Button>
               </div>
             </div>
@@ -133,21 +138,23 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
         {step===2 && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <label className="text-sm font-semibold flex items-center gap-2"><Layers className="h-4 w-4" /> Materiales Planificados</label>
+              <label className="text-sm font-semibold flex items-center gap-2"><Layers className="h-4 w-4" /> Materiales Planificados (todas las categorías excepto FABRICACION)</label>
               <Button size="sm" variant="outline" onClick={addMaterial}><Plus className="h-3 w-3 mr-1"/>Agregar</Button>
             </div>
             <p className="text-xs text-muted-foreground">Estos materiales se usarán para verificar cobertura y faltantes (la SC es manual desde el detalle).</p>
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {materiales.map((m,i)=>(
+              {materiales.map((m,i)=>{
+                const materialesOpts = products.filter(pr => (pr.categoria||"").toUpperCase() !== "FABRICACION");
+                return (
                 <div key={i} className="flex gap-2 items-center">
                   <select value={m.sku} onChange={e=>updateMaterial(i,'sku',e.target.value)} className="flex-1 h-9 border rounded-md px-2">
                     <option value="">Producto...</option>
-                    {products.map(p=> <option key={p.sku} value={p.sku}>{p.nombre} ({p.sku})</option> )}
+                    {materialesOpts.map(p=> <option key={p.sku} value={p.sku}>{p.nombre} ({p.sku})</option> )}
                   </select>
                   <Input type="number" min={1} value={m.qty} onChange={e=>updateMaterial(i,'qty',Number(e.target.value))} className="w-24" />
                   <Button size="sm" variant="ghost" onClick={()=>removeMaterial(i)}>×</Button>
                 </div>
-              ))}
+              )})}
               {materiales.length===0 && <div className="text-xs text-muted-foreground">Sin materiales aún.</div>}
             </div>
           </div>
@@ -155,8 +162,13 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
         {step===3 && (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-semibold">Tipo de acabado</label>
-              <Input value={acabado} onChange={e=>setAcabado(e.target.value)} placeholder="Ej: anodizado, pintura, pulido..." />
+              <label className="text-sm font-semibold">Acabado</label>
+              <select className="w-full h-9 border rounded-md px-2" value={acabado} onChange={e=>setAcabado(e.target.value)}>
+                <option value="NONE">Ninguno</option>
+                <option value="TROPICALIZADO">Tropicalizado</option>
+                <option value="PINTADO">Pintado</option>
+                <option value="ZINCADO">Zincado</option>
+              </select>
             </div>
             <div>
               <label className="text-sm font-semibold">Notas</label>
@@ -165,7 +177,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
             <div className="text-xs text-muted-foreground border rounded-md p-3 space-y-1">
               <div><strong>{piezas.filter(p=> (p.sku||p.descripcion)&&p.qty>0).length}</strong> pieza(s) válidas</div>
               <div><strong>{materiales.filter(m=>m.sku&&m.qty>0).length}</strong> material(es) planificados</div>
-              <div>Prioridad: <strong>{prioridad}</strong>{acabado?` · Acabado: ${acabado}`:""}</div>
+              <div>Prioridad: <strong>{prioridad}</strong>{acabado&&acabado!=="NONE"?` · Acabado: ${acabado}`:""}</div>
             </div>
           </div>
         )}

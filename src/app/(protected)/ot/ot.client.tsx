@@ -20,7 +20,7 @@ import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
 import { StatusBadge } from "@/components/ot/status-badge";
 import type { OTListRow } from "@/app/server/queries/ot";
 
-type Product = { sku: string; nombre: string; uom: string };
+type Product = { sku: string; nombre: string; uom: string; categoria?: string };
 type OT = OTListRow; // usamos misma forma; creadaEn siempre Date
 
 type CreateOTPayload = {

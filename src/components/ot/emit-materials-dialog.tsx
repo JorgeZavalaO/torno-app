@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // ...existing code...
 
 type MatRow = { sku: string; nombre: string; uom?: string; plan: number; emit: number; pend: number };
-type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>>;
+type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>> & { categoria?: string }[];
 
 export default function EmitMaterialsDialog({
   open, onOpenChange, materials, products, onEmit
@@ -65,7 +65,7 @@ export default function EmitMaterialsDialog({
                           </SelectItem>
                         ))}
                         <div className="px-2 py-1 text-xs text-muted-foreground">— Todos —</div>
-                        {products.map(p=>(
+                        {products.filter(p=> (p.categoria ? String(p.categoria).toUpperCase() !== 'FABRICACION' : true)).map(p=> (
                           <SelectItem key={`all-${p.sku}-${i}`} value={p.sku}>
                             {p.nombre} ({p.sku})
                           </SelectItem>

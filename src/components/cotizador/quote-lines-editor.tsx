@@ -51,7 +51,7 @@ export function QuoteLinesEditor({
   const totalQty = piezasLines.reduce((s, p) => s + p.qty, 0);
 
   // inventory options (sku, nombre, uom, lastCost, stock)
-  const [inventory, setInventory] = useState<{ sku: string; nombre: string; uom: string; lastCost: number; stock?: number }[]>([]);
+  const [inventory, setInventory] = useState<{ sku: string; nombre: string; categoria?: string; uom: string; lastCost: number; stock?: number }[]>([]);
   const [searchPieza, setSearchPieza] = useState("");
   const [searchMaterial, setSearchMaterial] = useState("");
 
@@ -89,15 +89,19 @@ export function QuoteLinesEditor({
   };
 
   const filteredInventoryPiezas = useMemo(() => {
-    if (!searchPieza.trim()) return inventory;
+    // Solo productos de categoría FABRICACION
+    const base = inventory.filter(p => (p.categoria ?? '').toUpperCase() === 'FABRICACION');
+    if (!searchPieza.trim()) return base;
     const q = searchPieza.toLowerCase();
-    return inventory.filter(p => p.sku.toLowerCase().includes(q) || p.nombre.toLowerCase().includes(q));
+    return base.filter(p => p.sku.toLowerCase().includes(q) || p.nombre.toLowerCase().includes(q));
   }, [inventory, searchPieza]);
 
   const filteredInventoryMateriales = useMemo(() => {
-    if (!searchMaterial.trim()) return inventory;
+    // Todas las categorías excepto FABRICACION
+    const base = inventory.filter(p => (p.categoria ?? '').toUpperCase() !== 'FABRICACION');
+    if (!searchMaterial.trim()) return base;
     const q = searchMaterial.toLowerCase();
-    return inventory.filter(p => p.sku.toLowerCase().includes(q) || p.nombre.toLowerCase().includes(q));
+    return base.filter(p => p.sku.toLowerCase().includes(q) || p.nombre.toLowerCase().includes(q));
   }, [inventory, searchMaterial]);
 
   const checkMaterialQtyStock = async (idx: number, newQty: number) => {

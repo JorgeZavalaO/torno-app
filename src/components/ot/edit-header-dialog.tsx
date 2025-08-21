@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import type { Prioridad } from "./priority-badge";
 
 type OT = NonNullable<Awaited<ReturnType<typeof import("@/app/server/queries/ot").getOTDetail>>>["ot"];
-type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>>;
+type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>> & { categoria?: string }[];
 type ClientsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getClientsMini>>;
 
 const NONE = "__none__"; // centinela para "Sin cliente"
@@ -96,7 +96,15 @@ export default function EditHeaderDialog({
 
           <div className="space-y-2">
             <Label>Acabado</Label>
-            <Input value={acabado} onChange={e=>setAcabado(e.target.value)} />
+            <Select value={acabado || "NONE"} onValueChange={(v)=> setAcabado(v === "NONE" ? "" : v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">Ninguno</SelectItem>
+                <SelectItem value="TROPICALIZADO">Tropicalizado</SelectItem>
+                <SelectItem value="PINTADO">Pintado</SelectItem>
+                <SelectItem value="ZINCADO">Zincado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -116,7 +124,9 @@ export default function EditHeaderDialog({
                     <Select value={r.sku} onValueChange={(v)=> setRow(i, { sku: v })}>
                       <SelectTrigger><SelectValue placeholder="Producto" /></SelectTrigger>
                       <SelectContent>
-                        {products.map(p=> <SelectItem key={p.sku} value={p.sku}>{p.nombre} ({p.sku})</SelectItem>)}
+                        {products.filter(p=> (p.categoria ? String(p.categoria).toUpperCase() !== 'FABRICACION' : true)).map(p=> (
+                          <SelectItem key={p.sku} value={p.sku}>{p.nombre} ({p.sku})</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

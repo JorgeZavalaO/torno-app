@@ -148,6 +148,22 @@ export async function createOT(fd: FormData): Promise<R> {
   }
 
   // Piezas: si el SKU no existe, se guarda como pieza libre (productoId=null)
+  // Reglas de categoría: piezas con SKU deben ser FABRICACION; materiales no pueden ser FABRICACION
+  if (allSkus.length) {
+    const prods = await prisma.producto.findMany({ where: { sku: { in: allSkus } }, select: { sku: true, categoria: true } });
+    const catMap = new Map(prods.map(pr => [pr.sku, pr.categoria?.toString().toUpperCase()]));
+    // Validar materiales
+    const badMats = payload.materiales.filter(m => (catMap.get(m.sku) === 'FABRICACION'));
+    if (badMats.length) {
+      return { ok: false, message: `Materiales con categoría inválida (FABRICACION): ${badMats.map(b=>b.sku).join(', ')}` } as const;
+    }
+    // Validar piezas con SKU
+    const badPiezas = payload.piezas.filter(p => p.sku && existing.has(p.sku) && catMap.get(p.sku!) !== 'FABRICACION');
+    if (badPiezas.length) {
+      return { ok: false, message: `Piezas deben ser de categoría FABRICACION: ${badPiezas.map(b=>b.sku).join(', ')}` } as const;
+    }
+  }
+
   const piezasSafe = payload.piezas.map(p => {
     const skuOk = p.sku && existing.has(p.sku);
     const descripcion =
@@ -470,7 +486,8 @@ export async function setOTState(id: string, estado: "DRAFT"|"OPEN"|"IN_PROGRESS
 }
 
 /** Compat con UI: addMaterial ya no se usa (se edita en cabecera/plan) */
-export async function addMaterial(_: FormData): Promise<R> {
+// Obsoleto, se mantiene por compatibilidad; no usar
+export async function addMaterial(): Promise<R> {
   return { ok: false, message: "Obsoleto: usa 'Editar cabecera / plan' para materiales." };
 }
 

@@ -19,7 +19,7 @@ export default async function OTPage() {
 
   const [rows, products, clients] = await Promise.all([
     getOTListCached(),
-    prisma.producto.findMany({ orderBy: { nombre: "asc" }, select: { sku: true, nombre: true, uom: true } }),
+    prisma.producto.findMany({ orderBy: { nombre: "asc" }, select: { sku: true, nombre: true, uom: true, categoria: true } }),
     getClientsCached().then(cs => cs.map(c => ({ id: c.id, nombre: c.nombre }))),
   ]);
 

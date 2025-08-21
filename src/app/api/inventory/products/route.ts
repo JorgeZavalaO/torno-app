@@ -11,7 +11,14 @@ export async function GET() {
 
   const products = await getProductsWithStock();
 
-  // Transform to lightweight options (incluye stock)
-  const opts = products.map(p => ({ sku: p.sku, nombre: p.nombre, uom: p.uom, lastCost: p.lastCost, stock: p.stock }));
+  // Transform to lightweight options (incluye stock y categoría para filtrado en UI de cotizador)
+  const opts = products.map(p => ({ 
+    sku: p.sku, 
+    nombre: p.nombre, 
+    categoria: p.categoria, 
+    uom: p.uom, 
+    lastCost: p.lastCost, 
+    stock: p.stock 
+  }));
   return NextResponse.json({ ok: true, products: opts });
 }

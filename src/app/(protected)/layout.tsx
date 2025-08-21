@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/app/lib/auth";
 import SidebarNavServer from "@/components/sidebar/sidebar-nav.server";
 import { redirect } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner"
 
 export default async function ProtectedLayout({
   children,
@@ -27,6 +28,7 @@ export default async function ProtectedLayout({
             {children}
           </div>
         </main>
+        <Toaster />
       </SidebarInset>
     </SidebarProvider>
   );

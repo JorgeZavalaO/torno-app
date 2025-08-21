@@ -185,7 +185,7 @@ export const getOTDetail = cache(
 export const getProductsMini = cache(
   async () => {
     const rows = await prisma.producto.findMany({
-      select: { sku: true, nombre: true, uom: true },
+  select: { sku: true, nombre: true, uom: true, categoria: true },
       orderBy: { nombre: "asc" },
       take: 2000,
     });
