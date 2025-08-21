@@ -341,7 +341,10 @@ export async function receiveOC(fd: FormData): Promise<Result> {
     include: { items: true },
   });
   if (!oc) return { ok: false, message: "OC no encontrada" };
-  if (oc.estado !== "OPEN") return { ok: false, message: "La OC no está abierta" };
+  // Permitir recepción mientras la OC esté OPEN o PARTIAL (puede haber recepciones sucesivas)
+  if (!(oc.estado === "OPEN" || oc.estado === "PARTIAL")) return { ok: false, message: "La OC no está abierta para recepción" };
+
+  console.log("[receiveOC] inicio", { ocId, estado: oc.estado, facturaUrl, rawItems: items });
 
   // Calcular cantidades pedidas por producto y recibidas previas por producto
   const orderedBySku = oc.items.reduce<Record<string, number>>((acc, it) => {
@@ -360,19 +363,24 @@ export async function receiveOC(fd: FormData): Promise<Result> {
   const pendingBySku = Object.fromEntries(
     Object.entries(orderedBySku).map(([sku, total]) => [sku, Number(total) - Number(receivedBySku[sku] ?? 0)])
   );
+  console.log("[receiveOC] computed", { orderedBySku, receivedBySku, pendingBySku });
 
   // Resolver recepción total vs parcial
   const isPartialPayload = Array.isArray(items) && items.length > 0;
 
+  let finalEstado: "OPEN" | "PARTIAL" | "RECEIVED" = "OPEN";
+
   await prisma.$transaction(async (tx) => {
-    if (!isPartialPayload) {
-      // Recepción total: ingresar todo lo pendiente de cada renglón
+  if (!isPartialPayload) {
+      // Recepción total: ingresar solo lo que queda pendiente por SKU (evita reingresar movimientos previos)
       for (const it of oc.items) {
+        const pending = Number(pendingBySku[it.productoId] ?? 0);
+        if (pending <= 0) continue; // nada por ingresar
         await tx.movimiento.create({
           data: {
             productoId: it.productoId,
             tipo: "INGRESO_COMPRA",
-            cantidad: it.cantidad, // positivo
+            cantidad: new Prisma.Decimal(pending), // positivo
             costoUnitario: it.costoUnitario,
             refTabla: "OC",
             refId: oc.codigo,
@@ -380,8 +388,9 @@ export async function receiveOC(fd: FormData): Promise<Result> {
           },
         });
         await tx.producto.update({ where: { sku: it.productoId }, data: { costo: it.costoUnitario } });
+        pendingBySku[it.productoId] = 0;
       }
-    } else {
+  } else {
       // Recepción parcial: validar contra pendientes por SKU
       // Construir mapa de costo por SKU (usa el último costoUnitario de la OC para ese SKU)
       const costBySku = oc.items.reduce<Record<string, number>>((acc, it) => {
@@ -392,7 +401,7 @@ export async function receiveOC(fd: FormData): Promise<Result> {
       for (const entry of items!) {
         const sku = entry.productoId;
         const qty = Number(entry.cantidad);
-        const pending = Number(pendingBySku[sku] ?? 0);
+    const pending = Number(pendingBySku[sku] ?? 0);
         if (!(sku in orderedBySku)) {
           throw new Error(`Producto no pertenece a la OC: ${sku}`);
         }
@@ -415,21 +424,28 @@ export async function receiveOC(fd: FormData): Promise<Result> {
         });
         await tx.producto.update({ where: { sku }, data: { costo: new Prisma.Decimal(costBySku[sku] ?? 0) } });
         pendingBySku[sku] = pending - qty;
+    console.log("[receiveOC] parcial item", { sku, qty, pendingAfter: pendingBySku[sku] });
       }
     }
 
-    // Determinar si quedó completamente recepcionada
-    const remainsPending = Object.values(pendingBySku).some((v) => Number(v) > 0);
+    // Determinar estado final tras los movimientos aplicados
+    const totalPendiente = Object.values(pendingBySku).reduce((s, v) => s + Number(v), 0);
+    const totalPedido = Object.values(orderedBySku).reduce((s, v) => s + Number(v), 0);
+  if (totalPendiente === 0) finalEstado = "RECEIVED";
+  else if (totalPendiente === totalPedido) finalEstado = oc.estado as typeof finalEstado; // se mantiene estado anterior si no se recibió nada nuevo
+  else finalEstado = "PARTIAL";
+
     await tx.ordenCompra.update({
       where: { id: oc.id },
       data: {
-        estado: remainsPending ? "OPEN" : "RECEIVED",
+        estado: finalEstado,
         facturaUrl: facturaUrl ?? oc.facturaUrl ?? null,
         fecha: new Date(),
       },
     });
+  console.log("[receiveOC] final", { finalEstado, totalPendiente, totalPedido });
   });
 
   bump();
-  return { ok: true, message: "Mercadería recepcionada" };
+  return { ok: true, message: "Mercadería recepcionada", newEstado: finalEstado } as unknown as Result & { newEstado?: string };
 }

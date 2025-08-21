@@ -17,6 +17,7 @@ export function SCBadge({ estado }: { estado: SCRow["estado"] }) {
 export function OCBadge({ estado }: { estado: OCRow["estado"] }) {
   const conf: Record<OCRow["estado"], { label: string; className: string }> = {
     OPEN: { label: "Abierta", className: "bg-blue-100 text-blue-800 hover:bg-blue-200" },
+    PARTIAL: { label: "Parcial", className: "bg-amber-100 text-amber-800 hover:bg-amber-200" },
     RECEIVED: { label: "Recepcionada", className: "bg-green-100 text-green-800 hover:bg-green-200" },
     CLOSED: { label: "Cerrada", className: "bg-gray-100 text-gray-800 hover:bg-gray-200" },
     CANCELLED: { label: "Cancelada", className: "bg-red-100 text-red-800 hover:bg-red-200" },

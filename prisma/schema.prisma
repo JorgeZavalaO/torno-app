@@ -224,6 +224,7 @@ enum EstadoSC {
 
 enum EstadoOC {
   OPEN
+  PARTIAL
   RECEIVED
   CLOSED
   CANCELLED

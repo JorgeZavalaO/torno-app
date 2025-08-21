@@ -14,16 +14,17 @@ export type SCRow = {
   ot?: { id: string; codigo: string; estado?: string } | null;
 };
 
-export type OCItem = { id: string; productoId: string; nombre: string; uom: string; cantidad: number; costoUnitario: number; importe: number };
+export type OCItem = { id: string; productoId: string; nombre: string; uom: string; cantidad: number; costoUnitario: number; importe: number; pendiente?: number };
 export type OCRow = {
   id: string;
   codigo: string;
-  estado: "OPEN" | "RECEIVED" | "CLOSED" | "CANCELLED";
+  estado: "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED" | "CANCELLED";
   fecha: string | Date;
   total: number;
   proveedor: { id: string; nombre: string; ruc: string };
   scId: string;
   items: OCItem[];
+  pendienteTotal?: number;
 };
 
 export type Actions = {
@@ -33,7 +34,7 @@ export type Actions = {
   createSC: (fd: FormData) => Promise<{ ok: boolean; message?: string; id?: string }>;
   setSCState: (id: string, estado: SCRow["estado"], nota?: string) => Promise<{ ok: boolean; message?: string }>;
   createOC: (fd: FormData) => Promise<{ ok: boolean; message?: string; id?: string; codigo?: string }>;
-  receiveOC: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+  receiveOC: (fd: FormData) => Promise<{ ok: boolean; message?: string; newEstado?: string }>;
 };
 
 export const fmtCurrency = (n: number, c = "PEN") => new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n);
