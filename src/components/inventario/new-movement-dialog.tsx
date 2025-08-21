@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -24,6 +25,7 @@ export function NewMovementDialog({
   actions: { createMovement: (fd: FormData) => Promise<{ok:boolean; message?:string}> };
   onSuccess: (msg: string) => void;
 }) {
+  const router = useRouter();
   const [productoId, setProductoId] = useState(products[0]?.sku ?? "");
   const [tipo, setTipo] = useState<typeof types[number]["v"]>("INGRESO_COMPRA");
   const [cantidad, setCantidad] = useState(1);
@@ -56,7 +58,7 @@ export function NewMovementDialog({
         onSuccess(r.message ?? "Movimiento registrado");
         onOpenChange(false);
         reset();
-        location.reload();
+        router.refresh();
       } else {
         toast.error(r.message);
       }

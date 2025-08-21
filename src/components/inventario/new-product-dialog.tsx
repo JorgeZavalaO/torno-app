@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ export function NewProductDialog({
   onSuccess: (msg: string) => void;
   actions: { createProduct: (fd: FormData) => Promise<{ok:boolean; message?:string; sku?: string}> };
 }) {
+  const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [categoria, setCategoria] = useState<(typeof CATEGORIES)[number]>(CATEGORIES[0]);
   const [uom, setUom] = useState("pz");
@@ -44,7 +46,7 @@ export function NewProductDialog({
         onSuccess(`${r.message ?? "Producto creado"} (${r.sku})`);
         onOpenChange(false);
         reset();
-        location.reload();
+        router.refresh();
       } else toast.error(r.message);
     });
   };

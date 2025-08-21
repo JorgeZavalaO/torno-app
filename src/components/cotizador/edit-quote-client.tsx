@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,6 +64,7 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
   const [notes, setNotes] = useState<string>(quote.notes || "");
   const [pedidoReferencia, setPedidoReferencia] = useState<string>(quote.pedidoReferencia || "");
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
   const [forceMaterials, setForceMaterials] = useState<boolean>(false);
@@ -127,6 +129,7 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
       const result = await action(quote.id, formData);
       if (result.ok) {
         toast.success("Cotización actualizada exitosamente");
+        router.refresh();
         window.location.href = `/cotizador/${quote.id}`;
       } else {
         toast.error(result.message ?? "Error al actualizar la cotización");

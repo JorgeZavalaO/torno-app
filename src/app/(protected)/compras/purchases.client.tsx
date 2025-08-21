@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { Actions, OCRow, Product, Provider, SCRow } from "@/components/compras/types";
 import { NewSCDialog } from "@/components/compras/new-sc-dialog";
@@ -17,6 +18,7 @@ export default function ComprasClient({ canWrite, providers, scs, ocs, products,
   products: Product[];
   actions: Actions;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<"sc" | "oc" | "prov">("sc");
 
   return (
@@ -41,7 +43,7 @@ export default function ComprasClient({ canWrite, providers, scs, ocs, products,
                 console.error(r.message);
               } else {
                 // reload para refrescar datos
-                location.reload();
+                router.refresh();
               }
             }}
           />

@@ -227,6 +227,23 @@ export async function updateOTHeader(payload: z.infer<typeof UpdateHeaderSchema>
 
   const { id, clienteId, prioridad, notas, acabado, materialesPlan } = parsed.data;
 
+  // Validación: materiales no pueden ser de categoría FABRICACION; y los SKUs deben existir
+  if (Array.isArray(materialesPlan) && materialesPlan.length > 0) {
+    const skus = Array.from(new Set(materialesPlan.map(m => m.sku).filter(Boolean)));
+    if (skus.length > 0) {
+      const prods = await prisma.producto.findMany({ where: { sku: { in: skus } }, select: { sku: true, categoria: true } });
+      const existing = new Set(prods.map(p => p.sku));
+      const missing = skus.filter(s => !existing.has(s));
+      if (missing.length) {
+        return { ok: false, message: `Producto(s) inexistente(s): ${missing.join(", ")}` };
+      }
+      const bad = prods.filter(p => String(p.categoria).toUpperCase() === 'FABRICACION').map(p => p.sku);
+      if (bad.length) {
+        return { ok: false, message: `Material(es) con categoría inválida (FABRICACION): ${bad.join(", ")}` };
+      }
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.ordenTrabajo.update({
       where: { id },
@@ -234,7 +251,7 @@ export async function updateOTHeader(payload: z.infer<typeof UpdateHeaderSchema>
         clienteId: (clienteId ?? undefined) || null,
         prioridad: prioridad ?? undefined,
         notas: notas?.trim() ?? undefined,
-        acabado: acabado?.trim() ?? undefined,
+  acabado: acabado?.trim() ?? undefined,
       },
     });
 

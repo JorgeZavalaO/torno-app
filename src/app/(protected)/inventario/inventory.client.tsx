@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 // (Botones se manejan en componentes hijos)
@@ -29,6 +30,7 @@ export default function InventoryClient({
   productOptions: ProductOption[];
   actions: Actions;
 }) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [showNewMovement, setShowNewMovement] = useState(false);

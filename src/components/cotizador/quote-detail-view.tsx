@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -59,6 +60,7 @@ interface QuoteDetailViewProps {
 
 export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   const handleQuickStatusChange = (newStatus: "APPROVED" | "REJECTED") => {
     if (!canWrite) return;
@@ -77,6 +79,7 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
         
         if (result.ok) {
           toast.success(result.message || "Estado actualizado correctamente");
+          router.refresh();
           window.location.reload();
         } else {
           toast.error(result.message || "Error al actualizar el estado");
@@ -199,6 +202,7 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
                       const r = await createOTFromQuote(quote.id);
                       if (r.ok) {
                         toast.success(r.message || 'OT creada');
+                        router.refresh();
                         window.location.href = `/ot/${r.id}`;
                       } else {
                         toast.error(r.message);

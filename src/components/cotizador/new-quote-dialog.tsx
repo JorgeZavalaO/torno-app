@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -73,6 +74,7 @@ export function NewQuoteDialog({
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
   const [forceMaterials, setForceMaterials] = useState<boolean>(false);
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   const gi = Number(params.gi ?? 0);
   const margin = Number(params.margin ?? 0);
@@ -144,6 +146,7 @@ export function NewQuoteDialog({
         toast.success("Cotización creada exitosamente");
         resetForm();
         onOpenChange(false);
+        router.refresh();
         if (result.id) {
           window.location.href = `/cotizador/${result.id}`;
         }

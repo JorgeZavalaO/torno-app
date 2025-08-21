@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 // ...existing code...
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { toast } from "sonner";
 import type { OCRow } from "./types";
 
 export function OCReceive({ order, onReceive }: { order: OCRow; onReceive: (payload: { facturaUrl?: string; items?: Array<{ productoId: string; cantidad: number }> }) => Promise<{ ok: boolean; message?: string; newEstado?: string }> }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [refDoc, setRefDoc] = useState("");
   const [qtys, setQtys] = useState<Record<string, number>>({});
@@ -122,6 +124,7 @@ export function OCReceive({ order, onReceive }: { order: OCRow; onReceive: (payl
                   const r = await onReceive({});
                   if (r.ok) {
                     toast.success(r.message || "Recepción registrada");
+                    router.refresh();
                     setOpen(false);
                   } else toast.error(r.message || "Error");
                 } else {
@@ -133,6 +136,7 @@ export function OCReceive({ order, onReceive }: { order: OCRow; onReceive: (payl
                   const r = await onReceive({ items });
                   if (r.ok) {
                     toast.success(r.message || "Recepción registrada");
+                    router.refresh();
                     setOpen(false);
                   } else toast.error(r.message || "Error");
                 }
