@@ -7,11 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { unidadesMedida } from "./uoms";
-
-const categories = [
-  "MATERIA_PRIMA","HERRAMIENTA_CORTE","CONSUMIBLE","REPUESTO"
-] as const;
+import { unidadesMedida } from "../../app/(protected)/inventario/uoms";
+import { CATEGORIES } from "@/lib/product-categories";
 
 export function NewProductDialog({
   open, onOpenChange, onSuccess, actions,
@@ -22,14 +19,14 @@ export function NewProductDialog({
   actions: { createProduct: (fd: FormData) => Promise<{ok:boolean; message?:string; sku?: string}> };
 }) {
   const [nombre, setNombre] = useState("");
-  const [categoria, setCategoria] = useState<(typeof categories)[number]>("MATERIA_PRIMA");
+  const [categoria, setCategoria] = useState<(typeof CATEGORIES)[number]>(CATEGORIES[0]);
   const [uom, setUom] = useState("pz");
   const [costo, setCosto] = useState(0);
   const [stockMinimo, setStockMinimo] = useState<number | "">("");
   const [pending, start] = useTransition();
 
   const reset = () => {
-    setNombre(""); setCategoria("MATERIA_PRIMA"); setUom("pz"); setCosto(0); setStockMinimo("");
+    setNombre(""); setCategoria(CATEGORIES[0]); setUom("pz"); setCosto(0); setStockMinimo("");
   };
 
   const submit = () => {
@@ -67,10 +64,10 @@ export function NewProductDialog({
           </div>
           <div>
             <Label>Categoría</Label>
-            <Select value={categoria} onValueChange={v=>setCategoria(v as typeof categories[number])}>
+      <Select value={categoria} onValueChange={v=>setCategoria(v as (typeof CATEGORIES)[number])}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {categories.map(c => <SelectItem key={c} value={c}>{c.replace("_"," ")}</SelectItem>)}
+        {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c.replace("_"," ")}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

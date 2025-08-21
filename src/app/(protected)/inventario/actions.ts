@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { CategoryEnum } from "@/lib/product-categories";
+import { CategoriaProducto } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import { revalidatePath, revalidateTag } from "next/cache";
@@ -16,7 +18,7 @@ const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 const ProductSchema = z.object({
   sku: z.string().min(1),
   nombre: z.string().min(2),
-  categoria: z.enum(["MATERIA_PRIMA","HERRAMIENTA_CORTE","CONSUMIBLE","REPUESTO"]),
+  categoria: CategoryEnum,
   uom: z.string().min(1),
   costo: z.coerce.number().min(0),
   stockMinimo: z.coerce.number().min(0).optional().nullable(),
@@ -67,7 +69,7 @@ export async function createProduct(fd: FormData): Promise<r> {
     
     await prisma.producto.create({
       data: {
-        sku, nombre, categoria, uom,
+        sku, nombre, categoria: categoria as unknown as CategoriaProducto, uom,
         costo: D(costo),
         stockMinimo: stockMinimo != null ? D(stockMinimo) : null,
       },
@@ -100,7 +102,7 @@ export async function updateProduct(fd: FormData): Promise<r> {
     await prisma.producto.update({
       where: { sku },
       data: {
-        nombre, categoria, uom,
+        nombre, categoria: categoria as unknown as CategoriaProducto, uom,
         costo: D(costo),
         stockMinimo: stockMinimo != null ? D(stockMinimo) : null,
       },
@@ -222,7 +224,7 @@ export async function importProducts(file: File): Promise<r> {
       const [nombre, categoria, uom, costo, stockMinimo] = columns;
       
       // Validar categoría
-      if (!['MATERIA_PRIMA', 'HERRAMIENTA_CORTE', 'CONSUMIBLE', 'REPUESTO'].includes(categoria)) {
+  if (!['MATERIA_PRIMA', 'HERRAMIENTA_CORTE', 'CONSUMIBLE', 'REPUESTO', 'FABRICACION'].includes(categoria)) {
         continue;
       }
       
@@ -234,7 +236,7 @@ export async function importProducts(file: File): Promise<r> {
         data: {
           sku,
           nombre: nombre.trim(),
-          categoria: categoria as "MATERIA_PRIMA" | "HERRAMIENTA_CORTE" | "CONSUMIBLE" | "REPUESTO",
+          categoria: categoria as "MATERIA_PRIMA" | "HERRAMIENTA_CORTE" | "CONSUMIBLE" | "REPUESTO" | "FABRICACION",
           uom: uom.trim(),
           costo: D(parseFloat(costo) || 0),
           stockMinimo: stockMinimo?.trim() ? D(parseFloat(stockMinimo)) : null,

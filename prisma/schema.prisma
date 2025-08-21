@@ -170,6 +170,7 @@ enum CategoriaProducto {
   HERRAMIENTA_CORTE
   CONSUMIBLE
   REPUESTO
+  FABRICACION
 }
 
 enum TipoMovimiento {

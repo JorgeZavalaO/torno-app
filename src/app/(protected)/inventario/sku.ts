@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/app/lib/prisma";
+import { CATEGORY_PREFIX } from "@/lib/product-categories";
 
 /**
  * Genera un SKU único basado en la categoría y un contador
@@ -8,10 +9,7 @@ import { prisma } from "@/app/lib/prisma";
  */
 export async function generateSKU(categoria: string): Promise<string> {
   const prefixMap: Record<string, string> = {
-    MATERIA_PRIMA: "MP",
-    HERRAMIENTA_CORTE: "HC",
-    CONSUMIBLE: "CO",
-    REPUESTO: "RP",
+    ...CATEGORY_PREFIX,
   };
 
   const prefix = prefixMap[categoria] || "XX";

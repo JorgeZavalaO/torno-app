@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FileUp, Download } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { CATEGORIES } from "@/lib/product-categories";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function ImportProductsDialog({
@@ -28,13 +29,18 @@ export function ImportProductsDialog({
   };
 
   const downloadTemplate = () => {
-    // CSV template: SKU,Nombre,Categoría,UOM,Costo,StockMinimo
+    // CSV template: Nombre,Categoría,UOM,Costo,StockMinimo
+    const sampleRows = [
+      `Ejemplo Pieza 1,${CATEGORIES[0]},kg,120.50,10`,
+      `Ejemplo Pieza 2,${CATEGORIES[1]},pz,350.00,2`,
+      `Ejemplo Pieza 3,${CATEGORIES[4]},pz,150.00,5`,
+      `Ejemplo Pieza 4,${CATEGORIES[2]},l,45.75,5`,
+      `Ejemplo Pieza 5,${CATEGORIES[3]},und,78.20,`,
+    ];
+
     const templateContent = [
       "Nombre,Categoría,UOM,Costo,StockMinimo",
-      "Ejemplo Pieza 1,MATERIA_PRIMA,kg,120.50,10",
-      "Ejemplo Pieza 2,HERRAMIENTA_CORTE,pz,350.00,2",
-      "Ejemplo Pieza 3,CONSUMIBLE,l,45.75,5",
-      "Ejemplo Pieza 4,REPUESTO,und,78.20,"
+      ...sampleRows,
     ].join("\n");
     
     const blob = new Blob([templateContent], { type: "text/csv" });
