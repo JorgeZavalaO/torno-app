@@ -64,12 +64,14 @@ export async function createProduct(fd: FormData): Promise<r> {
   const { nombre, categoria, uom, costo, stockMinimo } = parsed.data;
 
   try {
-    // Generar SKU automáticamente si no se proporciona
-    const sku = parsed.data.sku || await generateSKU(categoria);
+
+    // Si no se proporcionó SKU, generarlo automáticamente
+    const manual = parsed.data.sku?.toString().trim().toUpperCase();
+    const sku = manual && manual.length > 0 ? manual : await generateSKU(categoria);
     
     await prisma.producto.create({
       data: {
-        sku, nombre, categoria: categoria as unknown as CategoriaProducto, uom,
+        sku, nombre, categoria: categoria as CategoriaProducto, uom,
         costo: D(costo),
         stockMinimo: stockMinimo != null ? D(stockMinimo) : null,
       },

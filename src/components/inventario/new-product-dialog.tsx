@@ -20,6 +20,7 @@ export function NewProductDialog({
   actions: { createProduct: (fd: FormData) => Promise<{ok:boolean; message?:string; sku?: string}> };
 }) {
   const router = useRouter();
+  const [sku, setSku] = useState("");
   const [nombre, setNombre] = useState("");
   const [categoria, setCategoria] = useState<(typeof CATEGORIES)[number]>(CATEGORIES[0]);
   const [uom, setUom] = useState("pz");
@@ -28,12 +29,20 @@ export function NewProductDialog({
   const [pending, start] = useTransition();
 
   const reset = () => {
-    setNombre(""); setCategoria(CATEGORIES[0]); setUom("pz"); setCosto(0); setStockMinimo("");
+    setSku("");
+    setNombre("");
+    setCategoria(CATEGORIES[0]);
+    setUom("pz");
+    setCosto(0);
+    setStockMinimo("");
   };
 
   const submit = () => {
     if (!nombre) return toast.error("Completa el nombre del producto");
     const fd = new FormData();
+    const skuClean = sku.trim().toUpperCase();
+    if (skuClean) fd.set("sku", skuClean);
+
     fd.set("nombre", nombre.trim());
     fd.set("categoria", categoria);
     fd.set("uom", uom);
