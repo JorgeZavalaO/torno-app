@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import { Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { deleteQuote } from "@/app/(protected)/cotizador/actions";
 
@@ -29,6 +30,7 @@ interface QuoteDeleteDialogProps {
 
 export function QuoteDeleteDialog({ quote, open, onOpenChange }: QuoteDeleteDialogProps) {
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   const handleDelete = () => {
     startTransition(async () => {
@@ -37,7 +39,7 @@ export function QuoteDeleteDialog({ quote, open, onOpenChange }: QuoteDeleteDial
       if (result.ok) {
         toast.success(result.message || "Cotización eliminada correctamente");
         onOpenChange(false);
-        window.location.reload();
+  startTransition(() => router.refresh());
       } else {
         toast.error(result.message || "Error al eliminar la cotización");
       }

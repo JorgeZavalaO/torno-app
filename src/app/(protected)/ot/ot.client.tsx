@@ -109,7 +109,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
             stock: 0,
             faltante: 0,
         }));
-        const newOt: OT = {
+  const newOt: OT = {
           id: r.id,
           codigo: r.codigo,
           estado: "OPEN",
@@ -123,8 +123,9 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
           progresoMateriales: 0,
           progresoPiezas: 0,
         };
-        setItems(prev => [newOt, ...prev]);
-        toast.success(`OT ${r.codigo} creada exitosamente`);
+  setItems(prev => [newOt, ...prev]);
+  toast.success(`OT ${r.codigo} creada exitosamente`);
+  refresh();
       } else if (!r.ok) {
         toast.error(r.message || "Error al crear la OT");
       } else {

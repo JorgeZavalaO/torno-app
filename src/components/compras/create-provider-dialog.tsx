@@ -4,10 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { startTransition } from "react";
 
 export function CreateProviderDialog({ onCreate }: { onCreate: (fd: FormData) => Promise<{ ok: boolean; message?: string; id?: string }> }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const [nombre, setNombre] = useState("");
   const [ruc, setRuc] = useState("");
@@ -32,7 +35,7 @@ export function CreateProviderDialog({ onCreate }: { onCreate: (fd: FormData) =>
         setOpen(false);
         setNombre(""); setRuc(""); setContacto(""); setEmail(""); setTelefono("");
         // refrescar datos (server actions ya revalidan tags)
-        location.reload();
+        startTransition(() => router.refresh());
       } else {
         toast.error(res.message || "No se pudo crear");
       }

@@ -1,5 +1,6 @@
 "use client";
-import { useTransition } from "react";
+import { useTransition, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Edit3 } from "lucide-react";
@@ -16,15 +17,16 @@ export default function ClienteModal({
   const [pending, start] = useTransition();
   const title = mode === "create" ? "Nuevo Cliente" : "Editar Cliente";
 
+  const router = useRouter();
   const onSubmit = (fd: FormData) =>
     start(async () => {
       const res = await action(fd);
       if (res.ok) {
         toast.success(res.message ?? "Guardado");
+        startTransition(() => router.refresh());
       } else {
         toast.error(res.message ?? "Error");
       }
-      if (res.ok) window.location.reload(); // simple y efectivo; si prefieres, levanta estado arriba
     });
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, startTransition } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,7 +16,6 @@ import { StatusBadge } from "@/components/ot/status-badge";
 import { PrioritySelect } from "@/components/ot/priority-select";
 import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
 import { useRouter } from "next/navigation";
-import { startTransition } from "react";
 
 type Mat = { id: string; productoId: string; nombre: string; uom: string; qtyPlan: number; qtyEmit: number; qtyPend: number };
 type Mov = { id: string; fecha: string|Date; sku: string; nombre: string; uom: string; tipo: string; cantidad: number; costoUnitario: number; importe: number; nota?: string };
@@ -114,7 +113,7 @@ export default function OTDetailClient({ canWrite, detail, actions, clients }:{
     if (r.ok) {
       toast.success("Producción registrada");
       setPiezaQtys({});
-      location.reload();
+  startTransition(() => router.refresh());
     } else {
       toast.error(r.message);
     }
@@ -731,6 +730,7 @@ function RegistrarParteForm({ otId, onSubmit }: {
   const [horas, setHoras] = useState<number>(1);
   const [maquina, setMaquina] = useState("");
   const [nota, setNota] = useState("");
+  const router = useRouter();
 
   const handleSubmit = async () => {
     const fd = new FormData();
@@ -745,7 +745,7 @@ function RegistrarParteForm({ otId, onSubmit }: {
       setHoras(1); 
       setMaquina(""); 
       setNota(""); 
-      location.reload(); 
+      startTransition(() => router.refresh());
     } else {
       toast.error(r.message);
     }

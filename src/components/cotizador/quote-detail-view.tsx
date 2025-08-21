@@ -79,8 +79,7 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
         
         if (result.ok) {
           toast.success(result.message || "Estado actualizado correctamente");
-          router.refresh();
-          window.location.reload();
+          startTransition(() => router.refresh());
         } else {
           toast.error(result.message || "Error al actualizar el estado");
         }
@@ -202,8 +201,11 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
                       const r = await createOTFromQuote(quote.id);
                       if (r.ok) {
                         toast.success(r.message || 'OT creada');
-                        router.refresh();
-                        window.location.href = `/ot/${r.id}`;
+                        // refresh and navigate to new OT
+                        startTransition(() => {
+                          router.refresh();
+                          window.location.href = `/ot/${r.id}`;
+                        });
                       } else {
                         toast.error(r.message);
                       }

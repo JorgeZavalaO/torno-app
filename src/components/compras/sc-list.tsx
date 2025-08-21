@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -31,6 +32,7 @@ export function SCList({
   canWrite: boolean;
   actions: Actions;
 }) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -126,9 +128,9 @@ export function SCList({
                     onApprove={async (next) => {
                       const rr = await actions.setSCState(r.id, next);
                       if (rr.ok) {
-                        toast.success(rr.message || "Estado actualizado");
-                        location.reload();
-                      } else toast.error(rr.message);
+                          toast.success(rr.message || "Estado actualizado");
+                          startTransition(() => router.refresh());
+                        } else toast.error(rr.message);
                     }}
                     onCreateOC={async (payload) => {
                       const fd = new FormData();
@@ -139,7 +141,7 @@ export function SCList({
                       const rr = await actions.createOC(fd);
                       if (rr.ok) {
                         toast.success(rr.message || "OC creada");
-                        location.reload();
+                        startTransition(() => router.refresh());
                       } else toast.error(rr.message);
                     }}
                   />

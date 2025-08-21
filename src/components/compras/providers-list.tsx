@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { toast } from "sonner";
 import type { Actions, Provider } from "./types";
 
 export function ProvidersList({ providers, actions }: { providers: Provider[]; actions?: Pick<Actions, "updateProvider" | "deleteProvider"> }) {
+  const router = useRouter();
   const [editing, setEditing] = useState<Provider | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,7 +22,7 @@ export function ProvidersList({ providers, actions }: { providers: Provider[]; a
     setLoading(false);
     if (r.ok) {
       toast.success(r.message || "Proveedor eliminado");
-      location.reload();
+      startTransition(() => router.refresh());
     } else toast.error(r.message);
   }
 
@@ -78,7 +80,7 @@ export function ProvidersList({ providers, actions }: { providers: Provider[]; a
           const r = await actions.updateProvider(fd);
           if (r.ok) {
             toast.success(r.message || "Proveedor actualizado");
-            location.reload();
+            startTransition(() => router.refresh());
           } else toast.error(r.message);
         }}
       />

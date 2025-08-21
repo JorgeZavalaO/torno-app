@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useDeferredValue, useMemo, useState, useTransition } from "react";
+import { memo, useDeferredValue, useMemo, useState, useTransition, startTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Search, Trash2, FileText } from "lucide-react";
 import ClienteModal from "./cliente-modal";
 import ImportModal from "./import-modal";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Client = {
@@ -28,6 +29,7 @@ type Actions = {
 export default function ClientesClient({
   initialItems, canWrite, actions,
 }: { initialItems: Client[]; canWrite: boolean; actions: Actions }) {
+  const router = useRouter();
   const [items, setItems] = useState<Client[]>(initialItems);
   const [q, setQ] = useState("");
   const [quotesOpen, setQuotesOpen] = useState<{ open: boolean; client?: Client | null }>({ open: false, client: null });
@@ -68,7 +70,7 @@ export default function ClientesClient({
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Lista de Clientes</h1>
         <div className="flex gap-2">
-          {canWrite && <ImportModal onImported={() => window.location.reload()} importAction={actions.importClients} />}
+          {canWrite && <ImportModal onImported={() => startTransition(() => router.refresh())} importAction={actions.importClients} />}
           {canWrite && <ClienteModal mode="create" action={actions.createClient} />}
         </div>
       </div>

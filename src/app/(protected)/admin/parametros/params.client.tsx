@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition, useCallback } from "react";
+import { useMemo, useState, useTransition, useCallback, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +97,7 @@ export default function ParamsClient({
 
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [pending, start] = useTransition();
+  const router = useRouter();
 
   // Validación en tiempo real
   const validateValue = useCallback((type: string, value: number | string): { isValid: boolean; message?: string } => {
@@ -190,7 +192,7 @@ export default function ParamsClient({
       const res = await actions.resetDefaults();
       if (res.ok) {
         toast.success(res.message ?? "Valores restablecidos");
-        setTimeout(() => location.reload(), 1000);
+        startTransition(() => router.refresh());
       } else {
         toast.error(res.message ?? "Error al restablecer");
       }

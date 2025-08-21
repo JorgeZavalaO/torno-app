@@ -105,9 +105,25 @@ export default function InventoryClient({
       {/* Modales */}
       {canWrite && (
         <>
-          <NewProductDialog open={showNewProduct} onOpenChange={setShowNewProduct} onSuccess={(msg) => toast.success(msg)} actions={actions} />
-          <NewMovementDialog open={showNewMovement} onOpenChange={setShowNewMovement} products={productOptions} onSuccess={(msg) => toast.success(msg)} actions={actions} />
-          <ImportProductsDialog open={showImport} onOpenChange={setShowImport} onSuccess={(msg) => toast.success(msg)} actions={actions} />
+          <NewProductDialog
+            open={showNewProduct}
+            onOpenChange={setShowNewProduct}
+            onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
+            actions={actions}
+          />
+          <NewMovementDialog
+            open={showNewMovement}
+            onOpenChange={setShowNewMovement}
+            products={productOptions}
+            onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
+            actions={actions}
+          />
+          <ImportProductsDialog
+            open={showImport}
+            onOpenChange={setShowImport}
+            onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
+            actions={actions}
+          />
         </>
       )}
     </div>

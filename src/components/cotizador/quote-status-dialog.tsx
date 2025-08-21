@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -72,7 +73,8 @@ export function QuoteStatusDialog({ quote, open, onOpenChange }: QuoteStatusDial
   const [newStatus, setNewStatus] = useState<QuoteStatus>(quote.status);
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
-
+  const router = useRouter();
+  
   const currentOption = statusOptions.find(opt => opt.value === quote.status);
   const newOption = statusOptions.find(opt => opt.value === newStatus);
 
@@ -94,13 +96,13 @@ export function QuoteStatusDialog({ quote, open, onOpenChange }: QuoteStatusDial
       return;
     }
 
-    startTransition(async () => {
+  startTransition(async () => {
       const result = await updateQuoteStatus(quote.id, newStatus, notes.trim() || undefined);
       
       if (result.ok) {
         toast.success(result.message || "Estado actualizado correctamente");
         onOpenChange(false);
-        window.location.reload();
+        startTransition(() => router.refresh());
       } else {
         toast.error(result.message || "Error al actualizar el estado");
       }
