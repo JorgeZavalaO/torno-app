@@ -194,6 +194,14 @@ export function SCList({
                           startTransition(() => router.refresh());
                         } else toast.error(rr.message);
                       }}
+                      onUpdateCosts={async ({ scId, items }) => {
+                      const fd = new FormData();
+                      fd.set("scId", scId);
+                      fd.set("items", JSON.stringify(items));
+                      const rr = await actions.updateSCCosts(fd);
+                      if (rr.ok) { toast.success(rr.message || "Costos actualizados"); startTransition(() => router.refresh()); }
+                      else toast.error(rr.message);
+                    }}
                     />
                   </TableCell>
                 </TableRow>

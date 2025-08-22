@@ -219,6 +219,53 @@ export async function setSCState(scId: string, estado: "PENDING_ADMIN"|"PENDING_
   return { ok: true, message: "Estado actualizado" };
 }
 
+/* ----------------- SC: actualizar costos estimados ------------------ */
+const SCUpdateCostsSchema = z.object({
+  scId: z.string().uuid(),
+  items: z.array(z.object({
+    id: z.string().uuid(),
+    costoEstimado: z.coerce.number().min(0).nullable().optional(), // null/undefined => limpiar
+  })).min(1),
+});
+
+export async function updateSCCosts(fd: FormData): Promise<Result> {
+  await assertCanWritePurchases();
+  const parsed = SCUpdateCostsSchema.safeParse({
+    scId: fd.get("scId"),
+    items: JSON.parse(String(fd.get("items") || "[]")),
+  });
+  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
+
+  const { scId, items } = parsed.data;
+
+  // Reglas: permitir editar si la SC aún no tiene OCs o si sigue en revisión.
+  const sc = await prisma.solicitudCompra.findUnique({
+    where: { id: scId },
+    select: { estado: true, ordenesCompra: { select: { id: true }, take: 1 } },
+  });
+  if (!sc) return { ok: false, message: "SC no encontrada" };
+
+  const tieneOCs = (sc.ordenesCompra?.length || 0) > 0;
+  const editable = sc.estado === "PENDING_ADMIN" || sc.estado === "PENDING_GERENCIA" || (!tieneOCs && sc.estado === "APPROVED");
+  if (!editable) return { ok: false, message: "La SC ya no permite editar costos" };
+
+  await prisma.$transaction(async (tx) => {
+    for (const it of items) {
+      await tx.sCItem.update({
+        where: { id: it.id },
+        data: { costoEstimado: it.costoEstimado == null ? null : D(it.costoEstimado) },
+      });
+    }
+    // recomputar totalEstimado rápido
+    const reload = await tx.sCItem.findMany({ where: { scId }, select: { cantidad: true, costoEstimado: true } });
+    const total = reload.reduce((acc, r) => acc + Number(r.cantidad) * Number(r.costoEstimado ?? 0), 0);
+    await tx.solicitudCompra.update({ where: { id: scId }, data: { totalEstimado: D(total) } });
+  });
+
+  bump();
+  return { ok: true, message: "Costos actualizados" };
+}
+
 /* ----------------- Orden de Compra (OC) ------------------ */
 const OCCreateSchema = z.object({
   scId: z.string().uuid(),

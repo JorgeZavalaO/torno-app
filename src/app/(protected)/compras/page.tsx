@@ -4,7 +4,7 @@ import { userHasPermission } from "@/app/lib/rbac";
 import { getProvidersCached, getSCsCached, getOCsCached } from "@/app/server/queries/purchases";
 import { prisma } from "@/app/lib/prisma";
 
-import { createProvider, createSC, setSCState, createOC, receiveOC, updateProvider, deleteProvider } from "./actions";
+import { createProvider, createSC, setSCState, createOC, receiveOC, updateProvider, deleteProvider, updateSCCosts } from "./actions";
 import ComprasClient from "./purchases.client";
 
 export default async function PurchasesPage() {
@@ -37,7 +37,7 @@ export default async function PurchasesPage() {
       scs={scs}
       ocs={ocs}
       products={products}
-      actions={{ createProvider, createSC, setSCState, createOC, receiveOC, updateProvider, deleteProvider }}
+      actions={{ createProvider, createSC, setSCState, createOC, receiveOC, updateProvider, deleteProvider, updateSCCosts }}
     />
   );
 }

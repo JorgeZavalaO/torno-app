@@ -59,6 +59,7 @@ export type Actions = {
   setSCState: (id: string, estado: SCRow["estado"], nota?: string) => Promise<{ ok: boolean; message?: string }>;
   createOC: (fd: FormData) => Promise<{ ok: boolean; message?: string; id?: string; codigo?: string }>;
   receiveOC: (fd: FormData) => Promise<{ ok: boolean; message?: string; newEstado?: string }>;
+  updateSCCosts: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 };
 
 export const fmtCurrency = (n: number, c = "PEN") => new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n);

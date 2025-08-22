@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, Factory, X } from "lucide-react";
+import { toast } from "sonner";
 import type { Provider, SCRow } from "./types";
 import {
   Dialog,
@@ -13,22 +14,73 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-/**
- * Reestructurado para multi-OC por SC:
- * - Siempre permite "Crear OC" cuando la SC está APPROVED (aunque ya existan OCs).
- * - Permite ingresar cantidades por ítem (default = pendiente).
- * - Valida que no exceda el pendiente.
- * - Agrega un "Rellenar todo" rápido.
- * - Al confirmar, agrupa por producto para construir el payload:
- *    [{ productoId, cantidadTotal, costoUnitarioPromedioPonderado }]
- *   (El server action createOC repartirá contra pendientes por producto).
- */
+function EditCostsDialog({ items, onSubmit }: {
+  items: Array<{ id: string; label: string; costoEstimado: number|null }>;
+  onSubmit: (items: Array<{ id: string; costoEstimado: number|null }>) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [vals, setVals] = useState<Record<string, number|string>>(
+    Object.fromEntries(items.map(i => [i.id, i.costoEstimado ?? ""]))
+  );
+
+  useEffect(() => {
+    setVals(Object.fromEntries(items.map(i => [i.id, i.costoEstimado ?? ""])));
+  }, [items]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">Editar costos</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>Costos estimados</DialogTitle>
+          <DialogDescription>Actualiza el costo unitario estimado por ítem.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 max-h-[45vh] overflow-auto pr-1">
+          {items.map(it => (
+            <div key={it.id} className="grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-8 truncate">{it.label}</div>
+              <div className="col-span-4">
+                <Input
+                  type="number" inputMode="decimal" min={0} step="0.01"
+                  value={vals[it.id] ?? ""} placeholder="0.00"
+                  onChange={e => setVals(v => ({ ...v, [it.id]: e.target.value }))}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button onClick={() => {
+            const payload = items.map(it => {
+              const raw = String(vals[it.id] ?? "").trim();
+              return { id: it.id, costoEstimado: raw === "" ? null : Number(raw) };
+            });
+            // soportar onSubmit async o sync
+            Promise.resolve(onSubmit(payload))
+              .then(() => {
+                toast.success("Costos enviados");
+                setOpen(false);
+              })
+              .catch(() => {
+                toast.error("No se pudieron enviar los costos");
+              });
+          }}>Guardar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function SCRowActions({
   row,
   canWrite,
   providers,
   onApprove,
   onCreateOC,
+  onUpdateCosts,
 }: {
   row: SCRow;
   canWrite: boolean;
@@ -39,7 +91,11 @@ export function SCRowActions({
     codigo: string;
     items: Array<{ productoId: string; cantidad: number; costoUnitario: number }>;
   }) => void;
+  onUpdateCosts: (payload: { scId: string; items: Array<{ id: string; costoEstimado: number|null }> }) => void;
 }) {
+  // visible si SC es editable (mismas reglas del server)
+  const editable = row.estado === "PENDING_ADMIN" || row.estado === "PENDING_GERENCIA" || ((row.ocs?.length ?? 0) === 0 && row.estado === "APPROVED");
+
   const hasProviders = providers.length > 0;
   const defaultCodigo = useMemo(
     () => `OC-${new Date().getFullYear()}-${Math.random().toString().slice(2, 6)}`,
@@ -62,6 +118,7 @@ export function SCRowActions({
 
   // Estado local de cantidades a ordenar por ítem
   const [qtyByKey, setQtyByKey] = useState<Record<string, number>>({});
+  const [unitCostBySku, setUnitCostBySku] = useState<Record<string, number>>({});
 
   // Inicializamos cantidades por defecto = pendiente
   useEffect(() => {
@@ -73,6 +130,28 @@ export function SCRowActions({
     setQtyByKey(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id]);
+
+  useEffect(() => {
+    // agrupar por producto usando las cantidades actuales y costoEstimado por ítem
+    const tmp = new Map<string, { sumCost:number; sumQty:number }>();
+    row.items.forEach((i, idx) => {
+      const k = makeKey(i, idx);
+      const qty = Number(qtyByKey[k] || 0);
+      if (qty <= 0) return;
+      const est = Number(i.costoEstimado ?? 0);
+      const cur = tmp.get(i.productoId) ?? { sumCost: 0, sumQty: 0 };
+      cur.sumCost += est * qty; cur.sumQty += qty;
+      tmp.set(i.productoId, cur);
+    });
+    const next: Record<string, number> = {};
+    tmp.forEach((v, sku) => { next[sku] = v.sumQty > 0 ? Number((v.sumCost / v.sumQty).toFixed(2)) : 0; });
+    setUnitCostBySku(prev => {
+      // conservar lo que el usuario ya tocó (no lo pises si existe)
+      const merged: Record<string, number> = { ...next };
+      for (const [k,v] of Object.entries(prev)) if (!Number.isNaN(v) && v > 0) merged[k] = v;
+      return merged;
+    });
+  }, [row.items, qtyByKey]);
 
   // Validaciones
   const anyQty = useMemo(() => Object.values(qtyByKey).some(v => Number(v) > 0), [qtyByKey]);
@@ -108,6 +187,12 @@ export function SCRowActions({
 
   return (
     <div className="flex items-center justify-center gap-2">
+      {editable && (
+        <EditCostsDialog
+          items={row.items.map(i => ({ id: i.id!, label: `${i.nombre ?? i.productoId} (${i.uom})`, costoEstimado: i.costoEstimado ?? null }))}
+          onSubmit={(items) => onUpdateCosts({ scId: row.id, items })}
+        />
+      )}
       {row.estado === "PENDING_ADMIN" && (
         <>
           <Button
@@ -261,6 +346,38 @@ export function SCRowActions({
                   </table>
                 </div>
 
+                {/* Tabla para ajustar costo unitario final por SKU */}
+                <div className="rounded-md border mt-3">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="text-left p-2">Producto</th>
+                        <th className="text-right p-2">Costo Unitario (final)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from(new Set(row.items.map(i => i.productoId))).map(sku => {
+                        const anyQty = row.items.some((i, idx) => (qtyByKey[makeKey(i, idx)] || 0) > 0 && i.productoId === sku);
+                        if (!anyQty) return null;
+                        const label = row.items.find(i => i.productoId === sku)?.nombre ?? sku;
+                        return (
+                          <tr key={sku}>
+                            <td className="p-2 truncate" title={`${label} — ${sku}`}>{label} <span className="text-xxs text-muted-foreground font-mono">({sku})</span></td>
+                            <td className="p-2 text-right">
+                              <Input
+                                className="h-8"
+                                type="number" inputMode="decimal" min={0} step="0.01"
+                                value={unitCostBySku[sku] ?? 0}
+                                onChange={e => setUnitCostBySku(m => ({ ...m, [sku]: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
                 {/* Footer con validaciones */}
                 <div className="flex items-center justify-between pt-3">
                   <div className="text-xs">
@@ -301,13 +418,16 @@ export function SCRowActions({
                       const lines = Array.from(acc.entries()).map(([productoId, v]) => ({
                         productoId,
                         cantidad: Number(v.qty),
-                        costoUnitario: v.sumQtyForAvg > 0 ? Number((v.sumCost / v.sumQtyForAvg).toFixed(2)) : 0,
+                        costoUnitario: Number(unitCostBySku[productoId] ?? (v.sumQtyForAvg > 0 ? Number((v.sumCost / v.sumQtyForAvg).toFixed(2)) : 0)),
                       }));
 
                       if (lines.length === 0) {
                         // Si no se ingresó nada, no creamos OC
                         return;
                       }
+
+                      // valida que no haya costo negativo
+                      if (lines.some(l => l.costoUnitario < 0)) return;
 
                       onCreateOC({ proveedorId, codigo, items: lines });
                       setOpen(false);
