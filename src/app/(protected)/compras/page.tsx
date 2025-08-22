@@ -32,6 +32,7 @@ export default async function PurchasesPage() {
         ...p,
         email: p.email ?? undefined,
         telefono: p.telefono ?? undefined,
+        direccion: p.direccion ?? undefined,
       }))}
       scs={scs}
       ocs={ocs}

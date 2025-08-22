@@ -25,6 +25,7 @@ const ProviderSchema = z.object({
   contacto: z.string().optional(),
   email: z.string().email().optional(),
   telefono: z.string().optional(),
+  direccion: z.string().optional(),
 });
 
 export async function createProvider(fd: FormData): Promise<Result> {
@@ -35,6 +36,7 @@ export async function createProvider(fd: FormData): Promise<Result> {
     contacto: fd.get("contacto") || undefined,
     email: fd.get("email") || undefined,
     telefono: fd.get("telefono") || undefined,
+    direccion: fd.get("direccion") || undefined,
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos del proveedor" };
   try {
@@ -56,6 +58,7 @@ const ProviderUpdateSchema = z.object({
   contacto: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
   telefono: z.string().optional().or(z.literal("")),
+  direccion: z.string().optional().or(z.literal("")),
 });
 
 export async function updateProvider(fd: FormData): Promise<Result> {
@@ -67,6 +70,7 @@ export async function updateProvider(fd: FormData): Promise<Result> {
     contacto: (fd.get("contacto") || undefined) as string | undefined,
     email: (fd.get("email") || undefined) as string | undefined,
     telefono: (fd.get("telefono") || undefined) as string | undefined,
+    direccion: (fd.get("direccion") || undefined) as string | undefined,
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos del proveedor" };
 
@@ -243,40 +247,88 @@ export async function createOC(fd: FormData): Promise<Result> {
   // 1) SC aprobada
   const sc = await prisma.solicitudCompra.findUnique({
     where: { id: scId },
-    select: { estado: true, id: true },
+    include: { items: { select: { id: true, productoId: true, cantidad: true, } } },
   });
   if (!sc) return { ok: false, message: "SC no existe" };
   if (sc.estado !== "APPROVED") return { ok: false, message: "SC debe estar APROBADA" };
 
-  // 2) La SC no debe tener ya una OC
-  const existingOC = await prisma.ordenCompra.findUnique({ where: { scId } });
-  if (existingOC) return { ok: false, message: "La SC ya tiene una Orden de Compra" };
-
-  // 3) Proveedor válido
+  // 2) Proveedor válido
   const prov = await prisma.proveedor.findUnique({ where: { id: proveedorId }, select: { id: true } });
   if (!prov) return { ok: false, message: "Proveedor inválido" };
 
-  // 4) Cálculo de total
-  const total = items.reduce((acc, it) => acc + (it.costoUnitario * it.cantidad), 0);
+  // 3) Calcular ASIGNADO previo por SCItem
+  const scItemIds = sc.items.map(i => i.id);
+  const asignados = await prisma.oCItem.groupBy({
+    by: ["scItemId"],
+    _sum: { cantidad: true },
+    where: { scItemId: { in: scItemIds } },
+  });
+  const asignadoMap = new Map(scItemIds.map(id => [id, 0]));
+  for (const a of asignados) asignadoMap.set(a.scItemId!, Number(a._sum.cantidad || 0));
+
+  // 4) Pendiente por SCItem
+  const pendientePorSCItem = new Map(
+    sc.items.map(i => [i.id, Math.max(0, Number(i.cantidad) - Number(asignadoMap.get(i.id) || 0))])
+  );
+  // 5) Asignación automática por producto (FIFO)
+  type SplitLine = { productoId: string; scItemId: string; cantidad: number; costoUnitario: number };
+  const splits: SplitLine[] = [];
+
+  for (const it of items) {
+    let porAsignar = Number(it.cantidad);
+    if (porAsignar <= 0) continue;
+
+    // SCItems del mismo producto, ordenados (si tienes createdAt úsalo, aquí va por orden natural)
+    const candidatos = sc.items.filter(sci => sci.productoId === it.productoId);
+
+    for (const sci of candidatos) {
+      const pend = Number(pendientePorSCItem.get(sci.id) || 0);
+      if (pend <= 0) continue;
+
+      const take = Math.min(porAsignar, pend);
+      if (take > 0) {
+        splits.push({
+          productoId: it.productoId,
+          scItemId: sci.id,
+          cantidad: take,
+          costoUnitario: Number(it.costoUnitario),
+        });
+        pendientePorSCItem.set(sci.id, pend - take);
+        porAsignar -= take;
+        if (porAsignar <= 0) break;
+      }
+    }
+
+    if (porAsignar > 0) {
+      return { ok: false, message: `Cantidad supera lo pendiente para el producto ${it.productoId}` };
+    }
+  }
+
+  const total = splits.reduce((acc, s) => acc + s.costoUnitario * s.cantidad, 0);
 
   try {
-    const oc = await prisma.ordenCompra.create({
-      data: {
-        scId,
-        proveedorId,
-        codigo,
-        estado: "OPEN",
-        total: D(total),
-        items: {
-          create: items.map(it => ({
-            productoId: it.productoId,
-            cantidad: D(it.cantidad),
-            costoUnitario: D(it.costoUnitario),
-          })),
+    const oc = await prisma.$transaction(async (tx) => {
+      const created = await tx.ordenCompra.create({
+        data: {
+          scId,
+          proveedorId,
+          codigo,
+          estado: "OPEN",
+          total: D(total),
+          items: {
+            create: splits.map(s => ({
+              productoId: s.productoId,
+              cantidad: D(s.cantidad),
+              costoUnitario: D(s.costoUnitario),
+              scItemId: s.scItemId, // <— vínculo de cobertura
+            })),
+          },
         },
-      },
-      select: { id: true, codigo: true },
+        select: { id: true, codigo: true },
+      });
+      return created;
     });
+
     bump();
     return { ok: true, id: oc.id, codigo: oc.codigo, message: "OC creada" };
   } catch (e: unknown) {
@@ -291,7 +343,6 @@ export async function createOC(fd: FormData): Promise<Result> {
           : (typeof meta?.target === "string" ? [meta.target] : []);
         if (Array.isArray(target)) {
           if (target.includes("codigo")) return { ok: false, message: "Código de OC ya existe" };
-          if (target.includes("scId")) return { ok: false, message: "La SC ya tiene una Orden de Compra" };
         }
         return { ok: false, message: "Violación de unicidad al crear la OC" };
       }

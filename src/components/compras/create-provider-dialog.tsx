@@ -17,6 +17,7 @@ export function CreateProviderDialog({ onCreate }: { onCreate: (fd: FormData) =>
   const [contacto, setContacto] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [direccion, setDireccion] = useState("");
 
   async function handleSubmit() {
     if (!nombre || nombre.trim().length < 2) return toast.error("Nombre inválido");
@@ -29,11 +30,12 @@ export function CreateProviderDialog({ onCreate }: { onCreate: (fd: FormData) =>
       if (contacto.trim()) fd.set("contacto", contacto.trim());
       if (email.trim()) fd.set("email", email.trim());
       if (telefono.trim()) fd.set("telefono", telefono.trim());
+      if (direccion.trim()) fd.set("direccion", direccion.trim());
       const res = await onCreate(fd);
       if (res.ok) {
         toast.success(res.message || "Proveedor creado");
         setOpen(false);
-        setNombre(""); setRuc(""); setContacto(""); setEmail(""); setTelefono("");
+        setNombre(""); setRuc(""); setContacto(""); setEmail(""); setTelefono("");setDireccion("");
         // refrescar datos (server actions ya revalidan tags)
         startTransition(() => router.refresh());
       } else {
@@ -68,6 +70,10 @@ export function CreateProviderDialog({ onCreate }: { onCreate: (fd: FormData) =>
             <div className="text-sm text-muted-foreground">Contacto (opcional)</div>
             <Input value={contacto} onChange={(e) => setContacto(e.target.value)} placeholder="Nombre del contacto" />
           </div>
+          <div>
+            <div className="text-sm text-muted-foreground">Dirección (opcional)</div>
+            <Input value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Calle 123, Ciudad" />
+          </div>          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <div className="text-sm text-muted-foreground">Email (opcional)</div>

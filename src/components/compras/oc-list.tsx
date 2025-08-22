@@ -8,7 +8,7 @@ import { fmtCurrency } from "./types";
 import type { Actions, OCRow } from "./types";
 import { OCReceive } from "./oc-receive";
 import { Pagination } from "./pagination";
-import { Drawer } from "./drawer";
+import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 export function OCList({ rows, canWrite, actions }: { rows: OCRow[]; canWrite: boolean; actions: Actions }) {
@@ -118,52 +118,58 @@ export function OCList({ rows, canWrite, actions }: { rows: OCRow[]; canWrite: b
 
       <Pagination page={page} total={total} pageSize={pageSize} onPageChange={setPage} />
 
-      <Drawer open={!!selected} onOpenChange={(o) => !o && setSelected(null)} title={selected ? `OC ${selected.codigo}` : undefined} width={640}>
-        {selected && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-sm text-muted-foreground">Proveedor</div>
-                <div className="font-medium">{selected.proveedor.nombre}</div>
-                <div className="text-xs text-muted-foreground">{selected.proveedor.ruc}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-muted-foreground">Fecha</div>
-                <div className="text-sm">{new Date(selected.fecha).toLocaleDateString()}</div>
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">Items</div>
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>Cantidad</TableHead>
-                      <TableHead className="text-right">Costo Unit.</TableHead>
-                      <TableHead className="text-right">Importe</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selected.items.map((i) => (
-                      <TableRow key={i.id}>
-                        <TableCell>{i.nombre}</TableCell>
-                        <TableCell>{i.cantidad} {i.uom}</TableCell>
-                        <TableCell className="text-right">{fmtCurrency(i.costoUnitario)}</TableCell>
-                        <TableCell className="text-right">{fmtCurrency(i.importe)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-            <div className="flex items-center justify-between pt-2">
-              <div className="text-sm text-muted-foreground">Total</div>
-              <div className="font-semibold">{fmtCurrency(selected.total)}</div>
-            </div>
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="!max-w-[640px]" style={{ width: Math.min(640, typeof window !== 'undefined' ? window.innerWidth - 40 : 640) }}>
+          <div className="flex items-center justify-between mb-2">
+            <DialogTitle>{selected ? `OC ${selected.codigo}` : ""}</DialogTitle>
+            <DialogClose className="text-sm text-muted-foreground hover:underline">Cerrar</DialogClose>
           </div>
-        )}
-      </Drawer>
+          {selected && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-sm text-muted-foreground">Proveedor</div>
+                  <div className="font-medium">{selected.proveedor.nombre}</div>
+                  <div className="text-xs text-muted-foreground">{selected.proveedor.ruc}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">Fecha</div>
+                  <div className="text-sm">{new Date(selected.fecha).toLocaleDateString()}</div>
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground mb-1">Items</div>
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Cantidad</TableHead>
+                        <TableHead className="text-right">Costo Unit.</TableHead>
+                        <TableHead className="text-right">Importe</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selected.items.map((i) => (
+                        <TableRow key={i.id}>
+                          <TableCell>{i.nombre}</TableCell>
+                          <TableCell>{i.cantidad} {i.uom}</TableCell>
+                          <TableCell className="text-right">{fmtCurrency(i.costoUnitario)}</TableCell>
+                          <TableCell className="text-right">{fmtCurrency(i.importe)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <div className="text-sm text-muted-foreground">Total</div>
+                <div className="font-semibold">{fmtCurrency(selected.total)}</div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

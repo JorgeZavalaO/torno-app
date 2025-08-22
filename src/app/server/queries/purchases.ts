@@ -8,7 +8,7 @@ export const getProvidersCached = cache(
   async () =>
     prisma.proveedor.findMany({
       orderBy: { nombre: "asc" },
-      select: { id: true, nombre: true, ruc: true, email: true, telefono: true },
+      select: { id: true, nombre: true, ruc: true, email: true, telefono: true, direccion: true },
     }),
   ["purchases:providers:list"],
   { tags: [cacheTags.providers], revalidate: 120 }
@@ -20,32 +20,57 @@ export const getSCsCached = cache(
       orderBy: { createdAt: "desc" },
       include: {
         solicitante: { select: { id: true, email: true, displayName: true } },
-        items: {
-          include: { producto: { select: { nombre: true, uom: true, categoria: true } } },
+        items: { include: { producto: { select: { nombre: true, uom: true } } } },
+        ordenesCompra: {
+          select: { id: true, codigo: true, estado: true },
         },
-    ordenCompra: { select: { id: true, codigo: true, estado: true } },
-  ot: { select: { id: true, codigo: true, estado: true } },
       },
       take: 100,
     });
-    return rows.map(r => ({
-      id: r.id,
-      estado: r.estado,
-      createdAt: r.createdAt,
-      solicitante: r.solicitante,
-      totalEstimado: toNum(r.totalEstimado),
-      notas: r.notas ?? undefined,
-      items: r.items.map(i => ({
-        id: i.id,
-        productoId: i.productoId,
-        nombre: i.producto.nombre,
-        uom: i.producto.uom,
-        cantidad: toNum(i.cantidad),
-        costoEstimado: i.costoEstimado != null ? toNum(i.costoEstimado) : null,
-      })),
-  oc: r.ordenCompra ?? null,
-  ot: r.ot ?? null,
-    }));
+
+    // Cobertura por SCItem (suma de OCItem.cantidad)
+    const allScItemIds = rows.flatMap(r => r.items.map(i => i.id));
+    const ocLinks = await prisma.oCItem.groupBy({
+      by: ["scItemId"],
+      _sum: { cantidad: true },
+      where: { scItemId: { in: allScItemIds } },
+    });
+    const sumByScItem = new Map(ocLinks.map(x => [x.scItemId!, Number(x._sum.cantidad || 0)]));
+
+    return rows.map(r => {
+      const items = r.items.map(i => {
+        const pedido = Number(i.cantidad);
+        const cubierto = Number(sumByScItem.get(i.id) || 0);
+        const pendiente = Math.max(0, Number((pedido - cubierto).toFixed(3)));
+        return {
+          id: i.id,
+          productoId: i.productoId,
+          nombre: i.producto.nombre,
+          uom: i.producto.uom,
+          cantidad: pedido,
+          costoEstimado: i.costoEstimado != null ? Number(i.costoEstimado) : null,
+          cubierto,
+          pendiente,
+        };
+      });
+      const orderedTotal = items.reduce((a, it) => a + it.cubierto, 0);
+      const qtyTotal     = items.reduce((a, it) => a + it.cantidad, 0);
+      const pendingTotal = Math.max(0, Number((qtyTotal - orderedTotal).toFixed(3)));
+
+      return {
+        id: r.id,
+        estado: r.estado,
+        createdAt: r.createdAt,
+        solicitante: r.solicitante,
+        totalEstimado: Number(r.totalEstimado ?? 0),
+        notas: r.notas ?? undefined,
+        items,
+        // 🔄 ahora lista:
+        ocs: r.ordenesCompra,
+        orderedTotal,
+        pendingTotal,
+      };
+    });
   },
   ["purchases:sc:list"],
   { tags: [cacheTags.purchasesSC], revalidate: 60 }

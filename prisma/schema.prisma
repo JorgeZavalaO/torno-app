@@ -94,7 +94,7 @@ model Cliente {
 
 enum ParamType {
   NUMBER
-  PERCENT   // 0.15 => 15% (la UI lo muestra/edita como 15)
+  PERCENT   
   CURRENCY
   TEXT
 }
@@ -239,6 +239,7 @@ model Proveedor {
   contacto  String?
   email     String?
   telefono  String?
+  direccion String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -257,7 +258,8 @@ model SolicitudCompra {
 
   solicitante   UserProfile @relation(fields: [solicitanteId], references: [id])
   items         SCItem[]
-  ordenCompra   OrdenCompra?
+  // ordenCompra   OrdenCompra?
+  ordenesCompra OrdenCompra[]
 
   ot            OrdenTrabajo? @relation(fields: [otId], references: [id], onDelete: SetNull)
 
@@ -274,13 +276,14 @@ model SCItem {
 
   solicitudCompra SolicitudCompra @relation(fields: [scId], references: [id])
   producto        Producto        @relation(fields: [productoId], references: [sku])
+  ocItems         OCItem[]
 
   @@index([scId])
 }
 
 model OrdenCompra {
   id            String     @id @default(uuid())
-  scId          String     @unique
+  scId          String
   proveedorId   String
   codigo        String     @unique
   estado        EstadoOC   @default(OPEN)
@@ -293,6 +296,7 @@ model OrdenCompra {
   items           OCItem[]
 
   @@index([estado, fecha])
+  @@index([scId, fecha])
 }
 
 model OCItem {
@@ -301,6 +305,9 @@ model OCItem {
   productoId    String  // Producto.sku
   cantidad      Decimal @db.Decimal(12,3)
   costoUnitario Decimal @db.Decimal(12,2)
+
+  scItemId      String?
+  scItem        SCItem?   @relation(fields: [scItemId], references: [id])
 
   ordenCompra   OrdenCompra @relation(fields: [ocId], references: [id])
   producto      Producto    @relation(fields: [productoId], references: [sku])

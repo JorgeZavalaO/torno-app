@@ -33,6 +33,7 @@ export function ProvidersList({ providers, actions }: { providers: Provider[]; a
           <TableRow className="bg-muted/40">
             <TableHead>Nombre</TableHead>
             <TableHead>RUC</TableHead>
+            <TableHead>Dirección</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Teléfono</TableHead>
             {actions && <TableHead className="text-center">Acciones</TableHead>}
@@ -43,6 +44,7 @@ export function ProvidersList({ providers, actions }: { providers: Provider[]; a
             <TableRow key={p.id}>
               <TableCell>{p.nombre}</TableCell>
               <TableCell className="font-mono">{p.ruc}</TableCell>
+              <TableCell>{p.direccion ?? "—"}</TableCell>
               <TableCell>{p.email ?? "—"}</TableCell>
               <TableCell>{p.telefono ?? "—"}</TableCell>
               {actions && (
@@ -57,7 +59,7 @@ export function ProvidersList({ providers, actions }: { providers: Provider[]; a
           ))}
           {providers.length === 0 && (
             <TableRow>
-              <TableCell colSpan={actions ? 5 : 4} className="py-10 text-center text-muted-foreground">
+              <TableCell colSpan={actions ? 6 : 5} className="py-10 text-center text-muted-foreground">
                 Sin proveedores
               </TableCell>
             </TableRow>
@@ -77,6 +79,7 @@ export function ProvidersList({ providers, actions }: { providers: Provider[]; a
           if (payload.contacto !== undefined) fd.set("contacto", payload.contacto);
           if (payload.email !== undefined) fd.set("email", payload.email);
           if (payload.telefono !== undefined) fd.set("telefono", payload.telefono);
+          if (payload.direccion !== undefined) fd.set("direccion", payload.direccion);
           const r = await actions.updateProvider(fd);
           if (r.ok) {
             toast.success(r.message || "Proveedor actualizado");
@@ -93,13 +96,14 @@ type ProviderWithOptionalContact = Provider & { contacto?: string | null };
 function EditProviderDialog({ provider, onOpenChange, onSubmit }: {
   provider: ProviderWithOptionalContact | null;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (payload: { id: string; nombre?: string; ruc?: string; contacto?: string; email?: string; telefono?: string }) => void;
+  onSubmit: (payload: { id: string; nombre?: string; ruc?: string; contacto?: string; email?: string; telefono?: string; direccion?: string }) => void;
 }) {
   const [nombre, setNombre] = useState(provider?.nombre ?? "");
   const [ruc, setRuc] = useState(provider?.ruc ?? "");
   const [contacto, setContacto] = useState(provider?.contacto ?? "");
   const [email, setEmail] = useState(provider?.email ?? "");
   const [telefono, setTelefono] = useState(provider?.telefono ?? "");
+  const [direccion, setDireccion] = useState(provider?.direccion ?? "");
 
   useEffect(() => {
     setNombre(provider?.nombre ?? "");
@@ -107,6 +111,7 @@ function EditProviderDialog({ provider, onOpenChange, onSubmit }: {
     setContacto(provider?.contacto ?? "");
     setEmail(provider?.email ?? "");
     setTelefono(provider?.telefono ?? "");
+    setDireccion(provider?.direccion ?? "");
   }, [provider]);
 
   const open = !!provider;
@@ -130,6 +135,12 @@ function EditProviderDialog({ provider, onOpenChange, onSubmit }: {
             <div className="text-sm text-muted-foreground">Contacto (opcional)</div>
             <Input value={contacto} onChange={(e) => setContacto(e.target.value)} placeholder="Nombre del contacto" />
           </div>
+
+          <div>
+            <div className="text-sm text-muted-foreground">Dirección (opcional)</div> 
+            <Input value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Calle 123, Ciudad" />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <div className="text-sm text-muted-foreground">Email (opcional)</div>
@@ -144,7 +155,7 @@ function EditProviderDialog({ provider, onOpenChange, onSubmit }: {
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={() => onSubmit({ id: provider!.id, nombre, ruc, contacto, email, telefono })}>Guardar</Button>
+          <Button onClick={() => onSubmit({ id: provider!.id, nombre, ruc, contacto, email, telefono, direccion })}>Guardar</Button>
         </div>
       </DialogContent>
     </Dialog>

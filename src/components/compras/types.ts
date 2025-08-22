@@ -1,7 +1,28 @@
-export type Provider = { id: string; nombre: string; ruc: string; email?: string; telefono?: string };
-export type Product = { sku: string; nombre: string; uom: string };
+export type Provider = { id: string;
+  nombre: string;
+  ruc: string;
+  email?: string;
+  telefono?: string
+  direccion?: string;
+};
 
-export type SCItem = { id?: string; productoId: string; nombre?: string; uom?: string; cantidad: number; costoEstimado?: number | null };
+export type Product = { 
+  sku: string;
+  nombre: string;
+  uom: string
+};
+
+export type SCItem = {
+  id: string;
+  productoId: string;
+  nombre?: string;
+  uom?: string;
+  cantidad: number;
+  costoEstimado?: number | null;
+  cubierto?: number;
+  pendiente?: number;
+};
+
 export type SCRow = {
   id: string;
   estado: "PENDING_ADMIN" | "PENDING_GERENCIA" | "APPROVED" | "REJECTED" | "CANCELLED";
@@ -10,8 +31,11 @@ export type SCRow = {
   totalEstimado: number;
   notas?: string;
   items: SCItem[];
-  oc: { id: string; codigo: string; estado: string } | null;
+  ocs: { id: string; codigo: string; estado: string }[];
   ot?: { id: string; codigo: string; estado?: string } | null;
+
+  orderedTotal?: number;
+  pendingTotal?: number;
 };
 
 export type OCItem = { id: string; productoId: string; nombre: string; uom: string; cantidad: number; costoUnitario: number; importe: number; pendiente?: number };
