@@ -5,7 +5,7 @@ export { ControlDashboard } from "./control-dashboard";
 export { KPIDashboard } from "./kpi-dashboard";
 export { ProductionCharts } from "./production-charts";
 export { WIPTable } from "./wip-table";
-export { QuickRegistration } from "./quick-registration";
+export { UnifiedRegistration } from "./unified-registration";
 export { RankingTabs } from "./ranking-tabs";
 
 // Hooks

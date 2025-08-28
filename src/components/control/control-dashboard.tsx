@@ -9,7 +9,7 @@ import { RefreshCw, BarChart3, ListTodo, Clock, Trophy } from "lucide-react";
 import { KPIDashboard } from "./kpi-dashboard";
 import { ProductionCharts } from "./production-charts";
 import { WIPTable } from "./wip-table";
-import { QuickRegistration } from "./quick-registration";
+import { UnifiedRegistration } from "./unified-registration";
 import { RankingTabs } from "./ranking-tabs";
 import { useAutoRefresh, useTimeAgo } from "./hooks";
 import type { Overview, QuickLog, Actions } from "./types";
@@ -158,7 +158,7 @@ export function ControlDashboard({
 
         {/* Quick Registration Tab */}
         <TabsContent value="registros" className="mt-6">
-          <QuickRegistration 
+          <UnifiedRegistration 
             quicklog={quicklog}
             actions={actions}
             canWrite={canWrite}

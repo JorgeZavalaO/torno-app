@@ -37,6 +37,9 @@ export type Overview = {
 export type QuickLogPieza = {
   id: string;
   titulo: string;
+  // Cantidad planificada de la pieza (qtyPlan)
+  cantidad?: number;
+  // Cantidad pendiente por producir
   pend: number;
 };
 
@@ -54,6 +57,5 @@ export type QuickLog = {
 };
 
 export type Actions = {
-  logProduction: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
-  logFinishedPieces: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
+  logWorkAndPieces: (fd: FormData) => Promise<{ok:boolean; message?:string}>;
 };

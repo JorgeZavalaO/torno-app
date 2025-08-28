@@ -25,7 +25,8 @@ const SingleHoursSchema = z.object({
   horas: z.number().positive(),
   maquina: z.string().max(100).optional(),
   nota: z.string().max(300).optional(),
-  userId: z.string().uuid().optional(),
+  // Acepta cuid o cualquier id de usuario válido de dominio (no forzar UUID)
+  userId: z.string().min(1).optional(),
 });
 
 const BulkHoursSchema = z.object({
@@ -34,7 +35,7 @@ const BulkHoursSchema = z.object({
 
 const PiecesSchema = z.object({
   otId: z.string().uuid(),
-  items: z.array(z.object({ piezaId: z.string().uuid(), cantidad: z.number().positive() })).min(1)
+  items: z.array(z.object({ piezaId: z.string().min(1), cantidad: z.number().positive() })).min(1)
 });
 
 export async function logHours(entry: z.infer<typeof SingleHoursSchema>){
@@ -61,6 +62,7 @@ export async function logHoursBulk(entries: z.infer<typeof SingleHoursSchema>[])
   if(!me) return { ok:false as const, message:"Sesión inválida" };
   const user = await prisma.userProfile.findFirst({ where:{ email: me.email }, select:{ id:true } });
   if(!user) return { ok:false as const, message:"Usuario no registrado" };
+  console.log("logHoursBulk entries:", entries);
   const parsed = BulkHoursSchema.safeParse({ entries });
   if(!parsed.success) return { ok:false as const, message:"Datos inválidos" };
 
@@ -72,6 +74,7 @@ export async function logHoursBulk(entries: z.infer<typeof SingleHoursSchema>[])
 
 export async function logPieces(payload: z.infer<typeof PiecesSchema>){
   await assertCanWriteWorkorders();
+  console.log("logPieces payload:", payload);
   const parsed = PiecesSchema.safeParse(payload);
   if(!parsed.success) return { ok:false as const, message:"Datos inválidos" };
   const { otId, items } = parsed.data;

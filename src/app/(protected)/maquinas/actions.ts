@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/app/lib/prisma";
 import { assertCanWriteWorkorders } from "@/app/lib/guards";
 
+
 type R = { ok: true; message?: string; id?: string } | { ok: false; message: string };
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 
@@ -133,3 +134,4 @@ export async function closeMaintenance(fd: FormData): Promise<R> {
   bumpAll(mm.maquinaId);
   return { ok: true, message: "Mantenimiento cerrado" };
 }
+
