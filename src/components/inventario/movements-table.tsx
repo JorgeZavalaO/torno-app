@@ -8,10 +8,11 @@ import type { MovementRow } from "./types";
 
 export interface MovementsTableProps {
   movements: MovementRow[];
+  currency?: string;
 }
 
-export const MovementsTable: React.FC<MovementsTableProps> = ({ movements }) => {
-  const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: "PEN" }).format(n);
+export const MovementsTable: React.FC<MovementsTableProps> = ({ movements, currency = "PEN" }) => {
+  const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
   return (
     <Card className="overflow-hidden">
       <Table>

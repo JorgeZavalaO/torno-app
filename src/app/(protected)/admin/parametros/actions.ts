@@ -42,7 +42,7 @@ export async function updateOne(fd: FormData): Promise<Result> {
       return { ok: false, message: "Los datos proporcionados no son válidos" };
     }
 
-    const { key, type, value } = parsed.data;
+  const { key, type, value } = parsed.data;
 
     // Validaciones específicas por tipo
     if (type === "PERCENT" && (Number(value ?? 0) < 0 || Number(value ?? 0) > 100)) {
@@ -59,6 +59,37 @@ export async function updateOne(fd: FormData): Promise<Result> {
         : type === "PERCENT"
           ? { valueNumber: new Prisma.Decimal(Number(value ?? 0) / 100), valueText: null }
           : { valueNumber: new Prisma.Decimal(Number(value ?? 0)), valueText: null };
+
+    // Si estamos actualizando la moneda base (currency), debemos convertir
+    // los parámetros tipo CURRENCY entre PEN <-> USD utilizando usdRate.
+    if (key === "currency") {
+      const newCurrency = String(value ?? "PEN").toUpperCase();
+      // Obtener usdRate actual
+      const rateParam = await prisma.costingParam.findUnique({ where: { key: "usdRate" }, select: { valueNumber: true } });
+      const usdRate = rateParam?.valueNumber ? Number(rateParam.valueNumber.toString()) : 3.5;
+
+      // Si cambiamos a USD, convertimos valores CURRENCY almacenados (que asumimos en PEN) a USD = PEN / usdRate
+      // Si cambiamos a PEN, convertimos valores que estaban en USD a PEN = USD * usdRate
+      const currentCurrencyParam = await prisma.costingParam.findUnique({ where: { key: "currency" }, select: { valueText: true } });
+      const currentCurrency = (currentCurrencyParam?.valueText ?? "PEN").toUpperCase();
+
+      if (currentCurrency !== newCurrency) {
+        const toUSD = newCurrency === "USD" && currentCurrency === "PEN";
+        const toPEN = newCurrency === "PEN" && currentCurrency === "USD";
+        if (toUSD || toPEN) {
+          const currencyParams = await prisma.costingParam.findMany({ where: { type: "CURRENCY" }, select: { id: true, key: true, valueNumber: true } });
+          const txOps = currencyParams.map(p => {
+            const val = p.valueNumber ? Number(p.valueNumber.toString()) : 0;
+            const newVal = toUSD ? (val / usdRate) : (val * usdRate);
+            return prisma.costingParam.update({ where: { key: p.key }, data: { valueNumber: new Prisma.Decimal(newVal) } });
+          });
+          // Ejecutar la conversión en transacción junto con la actualización del parámetro currency
+          await prisma.$transaction([ prisma.costingParam.update({ where: { key }, data }), ...txOps ]);
+          bump();
+          return { ok: true, message: `Moneda cambiada a ${newCurrency}` };
+        }
+      }
+    }
 
     await prisma.costingParam.update({ where: { key }, data });
     bump();
@@ -123,6 +154,7 @@ export async function resetDefaults(): Promise<Result> {
     
     const defaults: Record<string, { type: "TEXT"|"PERCENT"|"CURRENCY"|"NUMBER"; v: number | string }> = {
       currency:        { type: "TEXT",     v: "PEN" },
+  usdRate:         { type: "NUMBER",   v: 3.5 },
       gi:              { type: "PERCENT",  v: 15 },
       margin:          { type: "PERCENT",  v: 20 },
       hourlyRate:      { type: "CURRENCY", v: 75 },

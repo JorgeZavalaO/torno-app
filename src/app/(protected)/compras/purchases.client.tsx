@@ -10,7 +10,8 @@ import { OCList } from "@/components/compras/oc-list";
 import { ProvidersList } from "@/components/compras/providers-list";
 import { CreateProviderDialog } from "@/components/compras/create-provider-dialog";
 
-export default function ComprasClient({ canWrite, providers, scs, ocs, products, actions }: {
+export default function ComprasClient({ currency, canWrite, providers, scs, ocs, products, actions }: {
+  currency: string;
   canWrite: boolean;
   providers: Provider[];
   scs: SCRow[];
@@ -64,7 +65,7 @@ export default function ComprasClient({ canWrite, providers, scs, ocs, products,
 
         {/* OC */}
         <TabsContent value="oc" className="space-y-4">
-          <OCList rows={ocs} canWrite={canWrite} actions={actions} />
+          <OCList rows={ocs} canWrite={canWrite} actions={actions} currency={currency} />
         </TabsContent>
 
         {/* Proveedores */}

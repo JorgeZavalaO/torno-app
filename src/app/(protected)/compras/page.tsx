@@ -6,6 +6,7 @@ import { prisma } from "@/app/lib/prisma";
 
 import { createProvider, createSC, setSCState, createOC, receiveOC, updateProvider, deleteProvider, updateSCCosts } from "./actions";
 import ComprasClient from "./purchases.client";
+import { getCostingParamByKey } from "@/app/server/queries/costing-params";
 
 export default async function PurchasesPage() {
   const me = await getCurrentUser();
@@ -25,8 +26,12 @@ export default async function PurchasesPage() {
     prisma.producto.findMany({ orderBy: { nombre: "asc" }, select: { sku: true, nombre: true, uom: true } }),
   ]);
 
+  const currencyParam = await getCostingParamByKey("currency");
+  const currency = String(currencyParam?.valueText ?? "PEN").toUpperCase();
+
   return (
     <ComprasClient
+  currency={currency}
       canWrite={canWrite}
       providers={providers.map(p => ({
         ...p,

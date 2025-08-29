@@ -14,6 +14,15 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     valueText: "PEN", 
     unit: "Código ISO-4217" 
   },
+  // Tipo de cambio USD -> PEN (valor: PEN por 1 USD)
+  {
+    key: "usdRate",
+    label: "Tipo de cambio USD → PEN",
+    group: "general",
+    type: "NUMBER",
+    valueNumber: new Prisma.Decimal("3.50"),
+    unit: "PEN por USD"
+  },
   
   // Margin settings
   { 

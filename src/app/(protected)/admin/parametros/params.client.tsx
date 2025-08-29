@@ -140,6 +140,9 @@ export default function ParamsClient({
     }));
   }, [validateValue]);
 
+  // Detectar moneda actual seleccionada (si existe)
+  const currentCurrency = items.find(i => i.key === "currency")?.uiValue ?? "PEN";
+
   const groups = useMemo(() => {
     const g = new Map<string, ItemWithUI[]>();
     for (const it of items) {
@@ -314,13 +317,39 @@ export default function ParamsClient({
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {arr.map((item) => (
-                  <ParameterField
-                    key={item.id}
-                    item={item}
-                    canWrite={canWrite}
-                    onChange={(v) => updateItem(item.id, v)}
-                    onSave={() => saveOne(item)}
-                  />
+                  item.key === "currency" ? (
+                    <div key={item.id} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">{item.label ?? item.key}</Label>
+                        {item.hasChanges && (
+                          <Badge variant="secondary" className="text-xs">Modificado</Badge>
+                        )}
+                      </div>
+                      <div className="flex gap-2 items-center">
+                        <select
+                          className="border rounded px-3 py-2"
+                          value={String(item.uiValue ?? "PEN")}
+                          onChange={(e) => updateItem(item.id, e.target.value)}
+                          disabled={!canWrite}
+                        >
+                          <option value="PEN">PEN</option>
+                          <option value="USD">USD</option>
+                        </select>
+                        {canWrite && item.hasChanges && item.isValid && (
+                          <Button size="sm" onClick={() => saveOne(item)}>Guardar</Button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <ParameterField
+                      key={item.id}
+                      item={item}
+                      currency={String(currentCurrency)}
+                      canWrite={canWrite}
+                      onChange={(v) => updateItem(item.id, v)}
+                      onSave={() => saveOne(item)}
+                    />
+                  )
                 ))}
               </div>
             </div>
@@ -352,11 +381,13 @@ export default function ParamsClient({
 
 function ParameterField({
   item,
+  currency,
   canWrite,
   onChange,
   onSave,
 }: {
   item: ItemWithUI;
+  currency?: string;
   canWrite: boolean;
   onChange: (v: number | string) => void;
   onSave: () => Promise<void>;
@@ -432,7 +463,7 @@ function ParameterField({
 
   // NUMBER / CURRENCY / PERCENT
   const step = item.type === "PERCENT" ? "0.01" : "0.01";
-  const suffix = item.type === "PERCENT" ? "%" : (item.unit?.split("/")[0] || "");
+  const suffix = item.type === "PERCENT" ? "%" : (item.type === "CURRENCY" ? (currency ?? (item.unit?.split("/")[0] || "")) : (item.unit?.split("/")[0] || ""));
 
   return (
     <div className="space-y-3">

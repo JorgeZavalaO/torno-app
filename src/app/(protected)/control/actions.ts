@@ -62,7 +62,9 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
     userId: fd.get("userId"),
     items: fd.get("items"),
   };
-  console.log("Raw FormData:", rawData);
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("Raw FormData:", rawData);
+  }
 
   // Validación básica primero
   const basicParsed = SimpleSchema.safeParse(rawData);
@@ -189,7 +191,9 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
     }
   }
 
-  console.log("Processed data:", { otId, horas, maquina, maquinaId, maquinas, nota, userId, items });
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("Processed data:", { otId, horas, maquina, maquinaId, maquinas, nota, userId, items });
+  }
 
   // Verificar que hay algo que registrar
   const hasHours = (horas && horas > 0) || (maquinas && maquinas.length > 0);

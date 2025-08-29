@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,16 @@ export default function OTDetailClient({
   const [openEdit, setOpenEdit] = useState(false);
   const [openEmit, setOpenEmit] = useState(false);
   const [openSC, setOpenSC] = useState(false);
+
+  // Refresh helper: ejecuta router.refresh() y repite tras un pequeño delay
+  // para asegurar que la revalidación del servidor (revalidatePath) haya aplicado
+  // y evitar que el cliente vea contenido stale a la primera petición.
+  const refreshAndEnsure = async () => {
+    startTransition(() => router.refresh());
+    // Espera breve para que la revalidación del servidor pueda completarse
+    await new Promise((res) => setTimeout(res, 350));
+    startTransition(() => router.refresh());
+  };
 
   const coveragePct = Math.round(kpis.progresoMateriales * 100);
   const piezasPct = Math.round(kpis.progresoPiezas * 100);
@@ -105,7 +115,7 @@ export default function OTDetailClient({
               const p = actions.startOTManually({ otId: ot.id });
               await toast.promise(p, { loading: "Validando…", success: (r)=> r.message || "OT iniciada", error: (e)=> e?.message || "No se pudo iniciar" });
               await actions.recompute(ot.id);
-              router.refresh();
+              await refreshAndEnsure();
             }} disabled={!canStart}>
               <Play className="h-4 w-4 mr-1" /> Iniciar OT
             </Button>
@@ -231,7 +241,7 @@ export default function OTDetailClient({
       {/* Modales */}
       {canWrite && (
         <>
-          <EditHeaderDialog
+            <EditHeaderDialog
             open={openEdit}
             onOpenChange={setOpenEdit}
             ot={ot}
@@ -241,10 +251,10 @@ export default function OTDetailClient({
               const p = actions.updateOTHeader(payload);
               await toast.promise(p, { loading: "Guardando…", success: (r)=> r.message || "Actualizado", error: "Error" });
               await actions.recompute(ot.id);
-              router.refresh();
+              await refreshAndEnsure();
             }}
           />
-          <EmitMaterialsDialog
+      <EmitMaterialsDialog
             open={openEmit}
             onOpenChange={setOpenEmit}
             materials={matsPlan}
@@ -252,17 +262,17 @@ export default function OTDetailClient({
             onEmit={async (items: { sku: string; qty: number }[])=>{
               const p = actions.emitOTMaterials({ otId: ot.id, items });
               await toast.promise(p, { loading: "Emitiendo…", success: (r)=> r.message || "Materiales emitidos", error: "Error" });
-              await actions.recompute(ot.id);
-              router.refresh();
+        await actions.recompute(ot.id);
+        await refreshAndEnsure();
             }}
           />
-          <RequestSCDialog
+      <RequestSCDialog
             open={openSC}
             onOpenChange={setOpenSC}
             onConfirm={async (nota?: string)=>{
               const p = actions.createManualSCForOT({ otId: ot.id, nota });
               await toast.promise(p, { loading: "Creando solicitud…", success: (r)=> r.message || "Solicitud de compra creada", error: "Error" });
-              router.refresh();
+        await refreshAndEnsure();
             }}
           />
         </>

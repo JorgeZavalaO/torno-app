@@ -12,7 +12,12 @@ const D = (n: number | string | null | undefined) => new Prisma.Decimal(n ?? 0);
 
 function bumpAll(otId?: string) {
   revalidatePath("/ot", "page");                 // listado
-  if (otId) revalidatePath(`/ot/${otId}`, "page"); // detalle
+  // OT detalle
+  if (otId) revalidatePath(`/ot/${otId}`, "page");
+  // También refrescar paneles y secciones que dependen de OTs / stock
+  revalidatePath("/control", "page");
+  revalidatePath("/maquinas", "page");
+  revalidatePath("/inventario", "page");
 }
 
 /* ------------------- Helpers de negocio / estado ------------------- */

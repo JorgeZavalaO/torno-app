@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -25,12 +25,13 @@ interface FormErrors {
 }
 
 export function NewProductDialog({
-  open, onOpenChange, onSuccess, actions,
+  open, onOpenChange, onSuccess, actions, currency = "PEN",
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSuccess: (msg: string) => void;
   actions: { createProduct: (fd: FormData) => Promise<{ok: boolean; message?: string; sku?: string}> };
+  currency?: string;
 }) {
   const router = useRouter();
   const [sku, setSku] = useState("");
@@ -300,7 +301,7 @@ export function NewProductDialog({
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
-                    $
+                    {currency === "USD" ? "$" : "S/"}
                   </span>
                   <Input
                     id="costo"
@@ -379,10 +380,10 @@ export function NewProductDialog({
                   <span className="text-muted-foreground">Unidad:</span>
                   <span>{unidadesMedida.find(u => u.value === uom)?.label} ({uom})</span>
                 </div>
-                {costo !== "" && Number(costo) > 0 && (
+        {costo !== "" && Number(costo) > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Costo:</span>
-                    <span className="font-mono">${Number(costo).toFixed(2)}</span>
+          <span className="font-mono">{currency === "USD" ? "$" : "S/"}{Number(costo).toFixed(2)}</span>
                   </div>
                 )}
                 {stockMinimo !== "" && Number(stockMinimo) > 0 && (

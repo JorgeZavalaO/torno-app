@@ -18,12 +18,14 @@ import { MovementsTable } from "@/components/inventario/movements-table";
 import type { ProductRow, MovementRow, ProductOption, Actions } from "@/components/inventario/types";
 
 export default function InventoryClient({
+  currency,
   canWrite,
   products,
   recentMovs,
   productOptions,
   actions,
 }:{
+  currency: string;
   canWrite: boolean;
   products: ProductRow[];
   recentMovs: MovementRow[];
@@ -64,7 +66,7 @@ export default function InventoryClient({
     );
   }, [q, products, showLowOnly]);
 
-  const fmt = (n: number, c = "PEN") => new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n);
+  const fmt = (n: number, c = currency) => new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n);
 
   return (
     <div className="p-6 space-y-6">
@@ -91,14 +93,14 @@ export default function InventoryClient({
             <Input placeholder="Buscar por SKU o nombre..." value={q} onChange={e => setQ(e.target.value)} />
           </Card>
 
-          <InventoryStats products={filtered} />
+          <InventoryStats products={filtered} currency={currency} />
 
-          <ProductTable products={filtered} fmtCurrency={(n:number)=>fmt(n)} />
+          <ProductTable products={filtered} fmtCurrency={(n:number)=>fmt(n, currency)} />
         </TabsContent>
 
         {/* Movimientos */}
         <TabsContent value="movs" className="space-y-4">
-          <MovementsTable movements={recentMovs} />
+          <MovementsTable movements={recentMovs} currency={currency} />
         </TabsContent>
       </Tabs>
 
@@ -106,12 +108,14 @@ export default function InventoryClient({
       {canWrite && (
         <>
           <NewProductDialog
+            currency={currency}
             open={showNewProduct}
             onOpenChange={setShowNewProduct}
             onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
             actions={actions}
           />
           <NewMovementDialog
+            currency={currency}
             open={showNewMovement}
             onOpenChange={setShowNewMovement}
             products={productOptions}

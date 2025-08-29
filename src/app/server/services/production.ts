@@ -62,7 +62,9 @@ export async function logHoursBulk(entries: z.infer<typeof SingleHoursSchema>[])
   if(!me) return { ok:false as const, message:"Sesión inválida" };
   const user = await prisma.userProfile.findFirst({ where:{ email: me.email }, select:{ id:true } });
   if(!user) return { ok:false as const, message:"Usuario no registrado" };
-  console.log("logHoursBulk entries:", entries);
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("logHoursBulk entries:", entries);
+  }
   const parsed = BulkHoursSchema.safeParse({ entries });
   if(!parsed.success) return { ok:false as const, message:"Datos inválidos" };
 
@@ -74,7 +76,9 @@ export async function logHoursBulk(entries: z.infer<typeof SingleHoursSchema>[])
 
 export async function logPieces(payload: z.infer<typeof PiecesSchema>){
   await assertCanWriteWorkorders();
-  console.log("logPieces payload:", payload);
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("logPieces payload:", payload);
+  }
   const parsed = PiecesSchema.safeParse(payload);
   if(!parsed.success) return { ok:false as const, message:"Datos inválidos" };
   const { otId, items } = parsed.data;

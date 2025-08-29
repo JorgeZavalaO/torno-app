@@ -1,3 +1,4 @@
+// src/app/(protected)/ot/ot.client.tsx
 "use client";
 
 import { useMemo, useState, startTransition } from "react";
@@ -9,11 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { NotificationBubble } from "@/components/ui/notification-bubble";
 import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart } from "lucide-react";
+import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart, ArrowUpDown } from "lucide-react";
 import { PriorityBadge } from "@/components/ot/priority-badge";
 import { NewOTDialog } from "@/components/ot/new-ot-dialog";
 import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
@@ -21,7 +23,7 @@ import { StatusBadge } from "@/components/ot/status-badge";
 import type { OTListRow } from "@/app/server/queries/ot";
 
 type Product = { sku: string; nombre: string; uom: string; categoria?: string };
-type OT = OTListRow; // usamos misma forma; creadaEn siempre Date
+type OT = OTListRow;
 
 type CreateOTPayload = {
   piezas: { sku?: string; descripcion?: string; qty: number }[];
@@ -46,45 +48,67 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
   canWrite: boolean; rows: OT[]; products: Product[]; actions: Actions; clients: ClientOption[];
 }) {
   const [q, setQ] = useState("");
-  // Estado local para permitir inserción optimista y que el toast permanezca (evitamos reload total)
   const [items, setItems] = useState<OT[]>(rows as OT[]);
   const [isCreating, setIsCreating] = useState(false);
+
   const [filterPrioridad, setFilterPrioridad] = useState<"ALL"|"LOW"|"MEDIUM"|"HIGH"|"URGENT">("ALL");
   const [filterClienteId, setFilterClienteId] = useState<string|undefined>(undefined);
+  const [quickState, setQuickState] = useState<"ALL"|"SHORTAGE"|"OPEN"|"IN_PROGRESS">("ALL");
   const [sortBy, setSortBy] = useState<"fecha"|"prioridad">("fecha");
+  const [sortDir, setSortDir] = useState<"desc"|"asc">("desc");
 
   const router = useRouter();
   const refresh = () => startTransition(() => router.refresh());
-  
-  const filtered = useMemo(()=>{
-    const s = q.trim().toLowerCase();
-    let out = items.filter(o =>
-      (!s || o.codigo.toLowerCase().includes(s) || (o.clienteNombre ?? "").toLowerCase().includes(s) || o.materiales.some(m => m.nombre.toLowerCase().includes(s) || m.productoId.toLowerCase().includes(s))) &&
-      (filterPrioridad === "ALL" || o.prioridad === filterPrioridad) &&
-      (!filterClienteId || o.clienteId === filterClienteId)
-    );
-    // sort
-    if (sortBy === "prioridad") {
-      const rank = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
-      out = [...out].sort((a,b)=> (rank[a.prioridad] - rank[b.prioridad]) || (new Date(b.creadaEn).getTime() - new Date(a.creadaEn).getTime()));
-    } else {
-      out = [...out].sort((a,b)=> new Date(b.creadaEn).getTime() - new Date(a.creadaEn).getTime());
-    }
-    return out;
-  }, [q, items, filterPrioridad, filterClienteId, sortBy]);
 
   const shortageCount = useMemo(()=> items.filter(r => r.hasShortage).length, [items]);
   const inProgressCount = useMemo(()=> items.filter(r => r.estado === "IN_PROGRESS").length, [items]);
   const openCount = useMemo(()=> items.filter(r => r.estado === "OPEN").length, [items]);
 
+  const filtered = useMemo(()=>{
+    const s = q.trim().toLowerCase();
+    let out = items.filter(o =>
+      (!s || o.codigo.toLowerCase().includes(s) || (o.clienteNombre ?? "").toLowerCase().includes(s)
+        || o.materiales.some(m => m.nombre.toLowerCase().includes(s) || m.productoId.toLowerCase().includes(s))) &&
+      (filterPrioridad === "ALL" || o.prioridad === filterPrioridad) &&
+      (!filterClienteId || o.clienteId === filterClienteId) &&
+      (
+        quickState === "ALL" ||
+        (quickState === "SHORTAGE" && o.hasShortage) ||
+        (quickState === "OPEN" && o.estado === "OPEN") ||
+        (quickState === "IN_PROGRESS" && o.estado === "IN_PROGRESS")
+      )
+    );
+
+    // orden
+    if (sortBy === "prioridad") {
+      const rank = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
+      out = [...out].sort((a,b)=> {
+        const pr = rank[a.prioridad] - rank[b.prioridad];
+        if (pr !== 0) return pr;
+        const da = new Date(a.creadaEn).getTime();
+        const db = new Date(b.creadaEn).getTime();
+        return sortDir === "desc" ? db - da : da - db;
+      });
+    } else {
+      out = [...out].sort((a,b)=> {
+        const da = new Date(a.creadaEn).getTime();
+        const db = new Date(b.creadaEn).getTime();
+        return sortDir === "desc" ? db - da : da - db;
+      });
+    }
+    return out;
+  }, [q, items, filterPrioridad, filterClienteId, quickState, sortBy, sortDir]);
+
+  const shortageCountAll = shortageCount;
+  const inProgressCountAll = inProgressCount;
+  const openCountAll = openCount;
+
   const handleCreateOT = async (payload: CreateOTPayload) => {
     setIsCreating(true);
     try {
       const fd = new FormData();
-      // piezas
       const piezas = payload.piezas.map(p => ({ productoId: p.sku || null, descripcion: p.descripcion || null, qtyPlan: p.qty }));
       fd.set("piezas", JSON.stringify(piezas));
-      // materiales map from sku to productoId
       const mats = payload.materiales.map(m => ({ productoId: m.sku, qtyPlan: m.qty }));
       fd.set("materiales", JSON.stringify(mats));
       if (payload.clienteId) fd.set("clienteId", payload.clienteId);
@@ -93,39 +117,28 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
       if (payload.prioridad) fd.set("prioridad", payload.prioridad);
       if (payload.acabado) fd.set("acabado", payload.acabado);
       fd.set("autoSC", String(payload.autoSC ?? true));
-      
+
       const r = await actions.createOT(fd);
       if (r.ok && r.id && r.codigo) {
-        // Construcción optimista mínima (hasta próxima revalidación o navegación)
-  const now = new Date();
-  const matOptimistic: OT["materiales"] = mats.map(m => ({
+        const now = new Date();
+        const matOptimistic: OT["materiales"] = JSON.parse(fd.get("materiales") as string).map((m: { productoId: string; qtyPlan: number }) => ({
           id: `tmp-${Math.random().toString(36).slice(2)}`,
           productoId: m.productoId,
           nombre: products.find(p=>p.sku===m.productoId)?.nombre || m.productoId,
           uom: products.find(p=>p.sku===m.productoId)?.uom || "u",
-            qtyPlan: m.qtyPlan,
-            qtyEmit: 0,
-            qtyPend: m.qtyPlan,
-            stock: 0,
-            faltante: 0,
+          qtyPlan: m.qtyPlan, qtyEmit: 0, qtyPend: m.qtyPlan, stock: 0, faltante: 0,
         }));
-  const newOt: OT = {
-          id: r.id,
-          codigo: r.codigo,
-          estado: "OPEN",
-          prioridad: payload.prioridad || "MEDIUM",
-          creadaEn: now,
+        const newOt: OT = {
+          id: r.id, codigo: r.codigo, estado: "OPEN",
+          prioridad: payload.prioridad || "MEDIUM", creadaEn: now,
           clienteId: payload.clienteId || null,
           clienteNombre: payload.clienteId ? (clients.find(c=>c.id===payload.clienteId)?.nombre || null) : null,
-          notas: payload.notas,
-          materiales: matOptimistic,
-          hasShortage: false,
-          progresoMateriales: 0,
-          progresoPiezas: 0,
+          notas: payload.notas, materiales: matOptimistic,
+          hasShortage: false, progresoMateriales: 0, progresoPiezas: 0,
         };
-  setItems(prev => [newOt, ...prev]);
-  toast.success(`OT ${r.codigo} creada exitosamente`);
-  refresh();
+        setItems(prev => [newOt, ...prev]);
+        toast.success(`OT ${r.codigo} creada exitosamente`);
+        refresh();
       } else if (!r.ok) {
         toast.error(r.message || "Error al crear la OT");
       } else {
@@ -144,7 +157,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
           {shortageCount > 0 && <NotificationBubble count={shortageCount} title="OTs con faltantes de material" />}
         </div>
         {canWrite && (
-          <NewOTDialog 
+          <NewOTDialog
             products={products}
             clients={clients}
             onCreate={handleCreateOT}
@@ -153,7 +166,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
         )}
       </div>
 
-      {/* Statistics Cards */}
+      {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
@@ -166,38 +179,35 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
             </div>
           </div>
         </Card>
-        
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
               <TrendingUp className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <div className="text-2xl font-bold">{inProgressCount}</div>
+              <div className="text-2xl font-bold">{inProgressCountAll}</div>
               <div className="text-sm text-muted-foreground">En Proceso</div>
             </div>
           </div>
         </Card>
-        
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-red-100 rounded-lg">
               <AlertTriangle className="h-5 w-5 text-red-600" />
             </div>
             <div>
-              <div className="text-2xl font-bold">{shortageCount}</div>
+              <div className="text-2xl font-bold">{shortageCountAll}</div>
               <div className="text-sm text-muted-foreground">Con Faltantes</div>
             </div>
           </div>
         </Card>
-        
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-yellow-100 rounded-lg">
               <ShoppingCart className="h-5 w-5 text-yellow-600" />
             </div>
             <div>
-              <div className="text-2xl font-bold">{openCount}</div>
+              <div className="text-2xl font-bold">{openCountAll}</div>
               <div className="text-sm text-muted-foreground">Abiertas</div>
             </div>
           </div>
@@ -216,52 +226,119 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
         </TabsList>
 
         <TabsContent value="lista" className="space-y-4">
-          {/* Search Bar */}
-          <Card className="p-4 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-end">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar por código, cliente o material..." 
-                  value={q} 
-                  onChange={e=>setQ(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Prioridad</label>
-                <div className="flex flex-wrap gap-2">
-                  {(["ALL","URGENT","HIGH","MEDIUM","LOW"] as const).map(p => (
-                    <button key={p} onClick={()=>setFilterPrioridad(p)}
-                      className={`h-9 px-3 rounded-md border text-sm ${filterPrioridad===p?"bg-primary text-primary-foreground border-primary":"hover:bg-muted"}`}>
-                      {p==="ALL"?"Todas":p==="URGENT"?"Urgente":p==="HIGH"?"Alta":p==="MEDIUM"?"Media":"Baja"}
-                    </button>
-                  ))}
+          {/* === FILTER BAR (mejorado con aire) === */}
+          <Card
+            className="p-6 rounded-xl sticky top-2 z-10 border-slate-200 bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/50 shadow-sm"
+          >
+            <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr] items-start">
+              {/* Columna izquierda: búsqueda + estados + ordenar */}
+              <div className="space-y-5">
+                <div>
+                  <label className="text-sm font-medium block mb-2">Buscar</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Código, cliente o material…"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      className="pl-10 h-10"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">Estados</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      {key:"ALL", label:"Total", count: items.length, cls:""},
+                      {key:"SHORTAGE", label:"Faltantes", count: shortageCountAll, cls:"bg-red-100 text-red-800"},
+                      {key:"OPEN", label:"Abiertas", count: openCountAll, cls:"bg-blue-100 text-blue-800"},
+                      {key:"IN_PROGRESS", label:"En proceso", count: inProgressCountAll, cls:"bg-indigo-100 text-indigo-800"},
+                    ] as const).map(chip => (
+                      <button
+                        key={chip.key}
+                        onClick={()=> setQuickState(chip.key as typeof quickState)}
+                        className={`px-3 h-8 rounded-full text-xs font-medium border transition
+                          ${quickState === chip.key ? "border-foreground/30" : "border-transparent hover:border-foreground/20"} ${chip.cls}`}
+                      >
+                        {chip.label}
+                        <span className="ml-1 opacity-80">{chip.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">Ordenar por</label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <select
+                      className="w-full h-10 border rounded-md px-2"
+                      value={sortBy}
+                      onChange={e=>setSortBy(e.target.value as "fecha"|"prioridad")}
+                    >
+                      <option value="fecha">Fecha (recientes primero)</option>
+                      <option value="prioridad">Prioridad</option>
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 sm:w-28"
+                      onClick={()=> setSortDir(d => d==="desc" ? "asc" : "desc")}
+                      title={`Dirección: ${sortDir === "desc" ? "Descendente" : "Ascendente"}`}
+                    >
+                      <ArrowUpDown className="h-4 w-4 mr-2" />
+                      {sortDir === "desc" ? "Desc" : "Asc"}
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div>
-                <ClientSelect clients={clients} value={filterClienteId} onChange={setFilterClienteId} />
+
+              {/* Columna derecha: prioridad + cliente + limpiar */}
+              <div className="space-y-6">
+                <div>
+                  <label className="text-sm font-medium block mb-2">Prioridad</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(["ALL","URGENT","HIGH","MEDIUM","LOW"] as const).map(p => (
+                      <button
+                        key={p}
+                        onClick={()=>setFilterPrioridad(p)}
+                        className={`h-9 px-3 rounded-md border text-sm transition-colors
+                          ${filterPrioridad===p ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
+                      >
+                        {p==="ALL"?"Todas":p==="URGENT"?"Urgente":p==="HIGH"?"Alta":p==="MEDIUM"?"Media":"Baja"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <ClientSelect clients={clients} value={filterClienteId} onChange={setFilterClienteId} />
+                </div>
+
+                <Separator />
+
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    className="h-10"
+                    onClick={()=>{
+                      setQ("");
+                      setFilterPrioridad("ALL");
+                      setFilterClienteId(undefined);
+                      setQuickState("ALL");
+                      setSortBy("fecha");
+                      setSortDir("desc");
+                    }}
+                  >
+                    Limpiar
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Ordenar por</label>
-                <select className="w-full h-9 border rounded-md px-2" value={sortBy} onChange={e=>setSortBy(e.target.value as "fecha"|"prioridad")}>
-                  <option value="fecha">Fecha (recientes primero)</option>
-                  <option value="prioridad">Prioridad</option>
-                </select>
-              </div>
-              <div className="flex gap-2 lg:justify-end">
-                <Button variant="outline" size="sm" onClick={()=>{ setQ(""); setFilterPrioridad("ALL"); setFilterClienteId(undefined); setSortBy("fecha"); }}>Limpiar</Button>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><Badge variant="outline">Total</Badge> {items.length}</span>
-              <span className="inline-flex items-center gap-1"><Badge className="bg-red-100 text-red-800">Faltantes</Badge> {items.filter(r=>r.hasShortage).length}</span>
-              <span className="inline-flex items-center gap-1"><Badge className="bg-blue-100 text-blue-800">Abiertas</Badge> {items.filter(r=>r.estado==="OPEN").length}</span>
-              <span className="inline-flex items-center gap-1"><Badge className="bg-indigo-100 text-indigo-800">En proceso</Badge> {items.filter(r=>r.estado==="IN_PROGRESS").length}</span>
             </div>
           </Card>
+          {/* === /FILTER BAR === */}
 
-          {/* OT Table */}
+          {/* Tabla */}
           <Card className="overflow-hidden">
             <Table>
               <TableHeader>
@@ -303,8 +380,8 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                                 {m.qtyEmit}/{m.qtyPlan} {m.uom}
                               </span>
                             </div>
-                            <ProgressBar 
-                              value={m.qtyEmit} 
+                            <ProgressBar
+                              value={m.qtyEmit}
                               max={m.qtyPlan}
                               variant={m.faltante > 0 ? "error" : m.qtyEmit === m.qtyPlan ? "success" : "default"}
                               size="sm"
@@ -339,9 +416,9 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
                         {canWrite && o.hasShortage && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
+                          <Button
+                            size="sm"
+                            variant="outline"
                             className="text-orange-600 hover:text-orange-700 border-orange-200 hover:border-orange-300"
                             onClick={async ()=>{
                               const r = await actions.createSCFromShortages(o.id);
@@ -366,9 +443,9 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                     </TableCell>
                   </TableRow>
                 ))}
-        {filtered.length === 0 && (
+                {filtered.length === 0 && (
                   <TableRow>
-          <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                       {q ? "No se encontraron OTs que coincidan con la búsqueda" : "No hay órdenes de trabajo"}
                     </TableCell>
                   </TableRow>

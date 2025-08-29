@@ -11,7 +11,7 @@ import { Pagination } from "./pagination";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-export function OCList({ rows, canWrite, actions }: { rows: OCRow[]; canWrite: boolean; actions: Actions }) {
+export function OCList({ rows, canWrite, actions, currency = "PEN" }: { rows: OCRow[]; canWrite: boolean; actions: Actions; currency?: string }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -62,7 +62,7 @@ export function OCList({ rows, canWrite, actions }: { rows: OCRow[]; canWrite: b
                   <div className="text-xs text-muted-foreground">{o.proveedor.ruc}</div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{new Date(o.fecha).toLocaleDateString()}</TableCell>
-                <TableCell className="text-right font-medium">{fmtCurrency(o.total)}</TableCell>
+                <TableCell className="text-right font-medium">{fmtCurrency(o.total, currency)}</TableCell>
                 <TableCell className="text-center">
                   <OCBadge estado={o.estado} />
                 </TableCell>
@@ -154,8 +154,8 @@ export function OCList({ rows, canWrite, actions }: { rows: OCRow[]; canWrite: b
                         <TableRow key={i.id}>
                           <TableCell>{i.nombre}</TableCell>
                           <TableCell>{i.cantidad} {i.uom}</TableCell>
-                          <TableCell className="text-right">{fmtCurrency(i.costoUnitario)}</TableCell>
-                          <TableCell className="text-right">{fmtCurrency(i.importe)}</TableCell>
+                          <TableCell className="text-right">{fmtCurrency(i.costoUnitario, currency)}</TableCell>
+                          <TableCell className="text-right">{fmtCurrency(i.importe, currency)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -164,7 +164,7 @@ export function OCList({ rows, canWrite, actions }: { rows: OCRow[]; canWrite: b
               </div>
               <div className="flex items-center justify-between pt-2">
                 <div className="text-sm text-muted-foreground">Total</div>
-                <div className="font-semibold">{fmtCurrency(selected.total)}</div>
+                <div className="font-semibold">{fmtCurrency(selected.total, currency)}</div>
               </div>
             </div>
           )}

@@ -53,13 +53,14 @@ interface FormErrors {
 }
 
 export function NewMovementDialog({
-  open, onOpenChange, products, actions, onSuccess
+  open, onOpenChange, products, actions, onSuccess, currency = "PEN"
 }: {
   open: boolean; 
   onOpenChange: (o: boolean) => void;
   products: Array<{ sku: string; nombre: string; uom: string }>;
   actions: { createMovement: (fd: FormData) => Promise<{ok: boolean; message?: string}> };
   onSuccess: (msg: string) => void;
+  currency?: string;
 }) {
   const router = useRouter();
   const [productoId, setProductoId] = useState("");
@@ -310,12 +311,12 @@ export function NewMovementDialog({
           </div>
 
           {/* Cost Summary */}
-          {cantidad && costoUnitario && (
+    {cantidad && costoUnitario && (
             <div className="p-3 bg-muted/50 rounded-lg">
               <div className="flex justify-between items-center text-sm">
                 <span>Valor total del movimiento:</span>
                 <span className="font-mono font-medium">
-                  ${(Number(cantidad) * Number(costoUnitario)).toFixed(2)}
+      {currency === "USD" ? "$" : "S/"}{(Number(cantidad) * Number(costoUnitario)).toFixed(2)}
                 </span>
               </div>
             </div>

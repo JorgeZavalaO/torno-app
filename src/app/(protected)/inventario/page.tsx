@@ -5,6 +5,7 @@ import { getProductsWithStock, getRecentMovements } from "@/app/server/queries/i
 import InventoryClient from "./inventory.client";
 import { pingInventory, createProduct, updateProduct, deleteProduct, createMovement, importProducts } from "./actions";
 import { prisma } from "@/app/lib/prisma";
+import { getCostingParamByKey } from "@/app/server/queries/costing-params";
 
 export default async function InventoryPage() {
   const me = await getCurrentUser();
@@ -31,8 +32,13 @@ export default async function InventoryPage() {
     select: { sku: true, nombre: true, uom: true },
   });
 
+  // Moneda actual del sistema
+  const currencyParam = await getCostingParamByKey("currency");
+  const currency = String(currencyParam?.valueText ?? "PEN").toUpperCase();
+
   return (
     <InventoryClient
+  currency={currency}
       canWrite={canWrite}
       products={products}
       recentMovs={recents}
