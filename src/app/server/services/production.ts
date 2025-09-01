@@ -69,7 +69,15 @@ export async function logHoursBulk(entries: z.infer<typeof SingleHoursSchema>[])
   if(!parsed.success) return { ok:false as const, message:"Datos inválidos" };
 
   const otIds = Array.from(new Set(parsed.data.entries.map(e=>e.otId)));
-  await prisma.parteProduccion.createMany({ data: parsed.data.entries.map(e=>({ otId: e.otId, userId: e.userId ?? user.id, horas: D(e.horas), maquina: e.maquina ?? null, nota: e.nota ?? null })) });
+  await prisma.$transaction(async (tx)=>{
+    await tx.parteProduccion.createMany({ data: parsed.data.entries.map(e=>({ otId: e.otId, userId: e.userId ?? user.id, horas: D(e.horas), maquina: e.maquina ?? null, nota: e.nota ?? null })) });
+    // Si alguna OT está en OPEN y recibe horas, pasar a IN_PROGRESS
+    const ots = await tx.ordenTrabajo.findMany({ where: { id: { in: otIds } }, select: { id: true, estado: true } });
+    const toStart = ots.filter(o => o.estado === "OPEN").map(o => o.id);
+    if (toStart.length) {
+      await tx.ordenTrabajo.updateMany({ where: { id: { in: toStart } }, data: { estado: "IN_PROGRESS" } });
+    }
+  });
   bump(otIds);
   return { ok:true as const, message:"Partes registrados" };
 }
@@ -124,6 +132,24 @@ export async function logPieces(payload: z.infer<typeof PiecesSchema>){
         const prod = await tx.producto.findUnique({ where:{ sku: pz.productoId }, select:{ costo:true } });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await tx.movimiento.create({ data:{ productoId: pz.productoId, tipo: "INGRESO_OT" as any, cantidad: D(it.cantidad), costoUnitario: D(Number(prod?.costo ?? 0)), refTabla:"OT", refId: ot.codigo, nota:"Producción terminada" } as any });
+      }
+    }
+
+    // Si la OT está en proceso y todas las piezas alcanzan el plan, marcar como DONE
+    const curr = await tx.ordenTrabajo.findUnique({ where: { id: otId }, select: { estado: true } });
+    if (curr?.estado === "IN_PROGRESS") {
+      // Recalcular piezas tras la actualización
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const txPzRead: { findMany: (args: unknown)=>Promise<Array<{ qtyPlan: Prisma.Decimal; qtyHecha: Prisma.Decimal }>> } = (tx as unknown as { oTPieza:any }).oTPieza;
+      const piezasPost = await txPzRead.findMany({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        where: { otId } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        select: { qtyPlan: true, qtyHecha: true } as any,
+      });
+      const allComplete = piezasPost.length > 0 && piezasPost.every(p => Number(p.qtyHecha) >= Number(p.qtyPlan));
+      if (allComplete) {
+        await tx.ordenTrabajo.update({ where: { id: otId }, data: { estado: "DONE" } });
       }
     }
   });

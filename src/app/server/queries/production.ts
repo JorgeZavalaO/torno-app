@@ -109,22 +109,28 @@ export const getProductionOverviewCached = cache(
       },
     });
 
-    const wip = ots.map((o) => {
+  const wipAll = ots.map((o) => {
       const plan = o.piezas.reduce((s, p) => s + Number(p.qtyPlan), 0);
       const hecho = o.piezas.reduce((s, p) => s + Number(p.qtyHecha), 0);
       const pct = plan > 0 ? Math.min(100, (hecho / plan) * 100) : 0;
+      const avancePct = Math.round(pct * 10) / 10;
+      // Si el avance está al 100%, considerar el estado como DONE para la UI
+      const estadoEfectivo = avancePct >= 100 ? "DONE" : o.estado;
       return {
         id: o.id,
         codigo: o.codigo,
-        estado: o.estado,
+        estado: estadoEfectivo,
         prioridad: o.prioridad,
         clienteNombre: o.cliente?.nombre ?? null,
         piezasPlan: plan,
         piezasHechas: hecho,
-        avancePct: Math.round(pct * 10) / 10, // Redondeo a 1 decimal
+        avancePct,
         creadaEn: o.creadaEn,
       };
-    }).filter(w => w.piezasPlan > 0); // Solo OTs con piezas planeadas
+  }).filter(w => w.piezasPlan > 0);
+
+  // En control mostrar solo activas (excluir DONE)
+  const wip = wipAll.filter(w => w.estado !== "DONE");
 
     const totalPlan = wip.reduce((s, x) => s + x.piezasPlan, 0);
     const totalHecho = wip.reduce((s, x) => s + x.piezasHechas, 0);
