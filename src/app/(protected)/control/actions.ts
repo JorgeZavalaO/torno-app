@@ -146,10 +146,17 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
     nota = data.nota.trim();
   }
 
-  // Procesar usuario
+  // Procesar usuarios
   let userId: string | undefined;
   if (data.userId && typeof data.userId === "string" && data.userId.trim()) {
     userId = data.userId.trim();
+  }
+  
+  // Procesar segundo usuario
+  let userId2: string | undefined;
+  const uid2 = fd.get("userId2");
+  if (uid2 && typeof uid2 === "string" && uid2.trim()) {
+    userId2 = uid2.trim();
   }
 
   // Procesar items/piezas
@@ -192,7 +199,7 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    console.debug("Processed data:", { otId, horas, maquina, maquinaId, maquinas, nota, userId, items });
+    console.debug("Processed data:", { otId, horas, maquina, maquinaId, maquinas, nota, userId, userId2, items });
   }
 
   // Verificar que hay algo que registrar
@@ -223,12 +230,15 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
   if (Array.isArray(maquinas) && maquinas.length) {
     for (const m of maquinas) {
       if (Number.isFinite(m.horas) && m.horas > 0) {
+        // Usar el userId específico de la máquina si existe, sino el userId general
+        const mWithUser = m as { id?: string; nombre?: string; horas: number; userId?: string };
+        const machineUserId = mWithUser.userId || userId;
         hourEntries.push({
           otId,
           horas: m.horas,
           maquina: m.nombre || undefined,
           nota,
-          userId,
+          userId: machineUserId,
         });
       }
     }

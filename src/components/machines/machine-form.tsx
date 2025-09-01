@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { X, Save, PlusCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type MachineData = {
   id?: string;
@@ -74,7 +74,11 @@ export function MachineForm({ machine, onSave, onCancel, isOpen }: MachineFormPr
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onCancel(); }}>
       <DialogContent className="p-0">
-        <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Hidden dialog title for Radix accessibility (keeps existing CardTitle visual) */}
+          <DialogHeader className="sr-only">
+            <DialogTitle>{formData?.id ? "Editar máquina" : "Nueva máquina"}</DialogTitle>
+          </DialogHeader>
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <CardTitle>{formData?.id ? "Editar máquina" : "Nueva máquina"}</CardTitle>
             <div className="flex items-center gap-2">

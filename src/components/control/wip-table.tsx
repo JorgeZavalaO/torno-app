@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// import { ProgressBar } from "@/components/ui/progress-bar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PriorityBadge } from "@/components/ot/priority-badge";
 import { StatusBadge } from "@/components/ot/status-badge";
+import { RegistrationDialogContent } from "./registration-dialog-content";
 import {
   Select,
   SelectContent,
@@ -29,16 +30,16 @@ import {
   Clock,
   Target,
   X,
-  TrendingUp,
-  Package,
-  AlertTriangle,
-  CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Edit
 } from "lucide-react";
-import type { WIPRow } from "./types";
+import type { WIPRow, QuickLog, Actions } from "./types";
 
 interface WIPTableProps {
   wip: WIPRow[];
+  quicklog?: QuickLog;
+  actions?: Actions;
+  canWrite?: boolean;
   onView?: (item: WIPRow) => void;
   onEdit?: (item: WIPRow) => void;
   onDelete?: (item: WIPRow) => void;
@@ -53,6 +54,9 @@ const ITEMS_PER_PAGE = 25;
 
 export function WIPTable({ 
   wip,
+  quicklog,
+  actions,
+  canWrite = false,
   onRefresh,
   loading = false 
 }: WIPTableProps) {
@@ -62,6 +66,7 @@ export function WIPTable({
   const [sortField, setSortField] = useState<SortField>("avance");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isRegistrationDialogOpen, setIsRegistrationDialogOpen] = useState(false);
 
   const filteredAndSortedWIP = useMemo(() => {
     let filtered = wip;
@@ -212,49 +217,6 @@ export function WIPTable({
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        {/* Header con estadísticas */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Órdenes</p>
-                <p className="text-2xl font-bold">{filteredAndSortedWIP.length}</p>
-              </div>
-              <Package className="h-8 w-8 text-blue-500" />
-            </div>
-          </Card>
-          
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Completadas</p>
-                <p className="text-2xl font-bold text-green-600">{stats.completadas}</p>
-              </div>
-              <CheckCircle2 className="h-8 w-8 text-green-500" />
-            </div>
-          </Card>
-          
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">En Riesgo</p>
-                <p className="text-2xl font-bold text-red-600">{stats.enRiesgo}</p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-red-500" />
-            </div>
-          </Card>
-          
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Eficiencia</p>
-                <p className="text-2xl font-bold">{stats.eficiencia.toFixed(1)}%</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-blue-500" />
-            </div>
-          </Card>
-        </div>
-
         {/* Controles de filtrado */}
         <Card>
           <CardHeader className="pb-4">
@@ -330,7 +292,7 @@ export function WIPTable({
                 </div>
               </div>
 
-              {/* Botón de refresh */}
+              {/* Botón de refresh y registro */}
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="flex items-center gap-1">
                   <Target className="h-3 w-3" />
@@ -340,6 +302,40 @@ export function WIPTable({
                   <Clock className="h-3 w-3" />
                   {stats.promedioAvance.toFixed(1)}%
                 </Badge>
+                
+                {/* Botón de registro en dialog */}
+                {canWrite && quicklog && actions && (
+                  <Dialog open={isRegistrationDialogOpen} onOpenChange={setIsRegistrationDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Registrar Producción
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[95vw] w-[95vw] min-w-[45vw] max-h-[95vh] overflow-hidden p-0">
+                      <div className="flex flex-col h-full max-h-[95vh]">
+                        <DialogHeader className="px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-purple-50">
+                          <DialogTitle className="text-2xl font-bold text-gray-800">Registro de Producción</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-y-auto px-6 py-4">
+                        <RegistrationDialogContent 
+                          quicklog={quicklog}
+                          actions={actions}
+                          canWrite={canWrite}
+                          onSuccess={() => {
+                            setIsRegistrationDialogOpen(false);
+                            onRefresh?.();
+                          }}
+                        />
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+                
                 {onRefresh && (
                   <Button
                     variant="outline"

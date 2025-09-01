@@ -13,7 +13,6 @@ const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 function bumpAll(id?: string) {
   revalidatePath("/maquinas", "page");
   if (id) revalidatePath(`/maquinas/${id}`, "page");
-  // si tienes un dashboard de control que consume estos datos, lo refrescamos
   revalidatePath("/control", "page");
 }
 

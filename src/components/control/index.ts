@@ -2,11 +2,9 @@
 export { ControlDashboard } from "./control-dashboard";
 
 // Individual components
-export { KPIDashboard } from "./kpi-dashboard";
-export { ProductionCharts } from "./production-charts";
+export { ProductionStats } from "./production-stats";
 export { WIPTable } from "./wip-table";
-export { UnifiedRegistration } from "./unified-registration";
-export { RankingTabs } from "./ranking-tabs";
+export { RegistrationDialogContent } from "./registration-dialog-content";
 
 // Hooks
 export { useAutoRefresh, useTimeAgo } from "./hooks";

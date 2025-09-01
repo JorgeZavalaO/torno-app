@@ -189,9 +189,8 @@ export function NewQuoteDialog({
   }, [materialesLines]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-  {/* Ancho duplicado aprox (antes 1200px) */}
-  <DialogContent className="max-w-[2400px] max-h-[95vh] w-[98vw] min-w-[55vw] sm:w-[1800px] xl:w-[2000px]">
+  <Dialog open={open} onOpenChange={handleOpenChange}>
+  <DialogContent className="max-w-[2400px] max-h-[95vh] w-[98vw] min-w-[75vw] sm:w-[1800px] xl:w-[2000px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="h-5 w-5" />
