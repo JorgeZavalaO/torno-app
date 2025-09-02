@@ -13,6 +13,7 @@ export type OTListRow = {
   clienteNombre: string | null;
   creadaEn: Date;
   notas?: string;
+  acabado?: string;
   materiales: {
     id: string;
     productoId: string;
@@ -79,7 +80,8 @@ export const getOTListCached = cache(
         clienteId: o.cliente?.id ?? null,
         clienteNombre: o.cliente?.nombre ?? null,
         creadaEn: o.creadaEn,
-  notas: ((o as { notas?: string | null }).notas ?? undefined) || undefined,
+        notas: ((o as { notas?: string | null }).notas ?? undefined) || undefined,
+        acabado: ((o as { acabado?: string | null }).acabado ?? undefined) || undefined,
         materiales: mats,
         hasShortage,
         progresoMateriales: Number(progMat),

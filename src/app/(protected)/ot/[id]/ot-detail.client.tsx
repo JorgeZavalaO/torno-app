@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Hammer, Wrench, Play, FilePlus2, Edit3 } from "lucide-react";
 import { StatusBadge, EstadoOT } from "@/components/ot/status-badge";
 import { PriorityBadge, Prioridad } from "@/components/ot/priority-badge";
+import { AcabadoDisplay } from "@/components/ot/acabado-badge";
 import EditHeaderDialog from "@/components/ot/edit-header-dialog";
 import EmitMaterialsDialog from "@/components/ot/emit-materials-dialog";
 import RequestSCDialog from "@/components/ot/request-sc-dialog";
@@ -66,6 +67,7 @@ export default function OTDetailClient({
   const piezasPct = Math.round(kpis.progresoPiezas * 100);
 
   const canStart = canWrite && (coveragePct >= 20) && (ot.estado === "OPEN" || ot.estado === "DRAFT");
+  const showStartButton = ot.estado !== "IN_PROGRESS" && ot.estado !== "DONE" && ot.estado !== "CANCELLED";
 
   const matsPlan = useMemo(()=> ot.materiales.map(m=>({
     sku: m.productoId,
@@ -92,13 +94,17 @@ export default function OTDetailClient({
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Hammer className="h-5 w-5" /> {ot.codigo}
           </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
             <StatusBadge estado={ot.estado as EstadoOT} />
             <PriorityBadge prioridad={ot.prioridad as Prioridad} />
-            {ot.cliente && <Badge variant="outline">{ot.cliente.nombre}</Badge>}
+            {ot.cliente && (
+              <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                {ot.cliente.nombre}
+              </Badge>
+            )}
           </div>
           {ot.notas && <div className="text-sm text-muted-foreground mt-1">{ot.notas}</div>}
-          {ot.acabado && <div className="text-xs text-muted-foreground">Acabado: {ot.acabado}</div>}
+          {ot.acabado && <AcabadoDisplay acabado={ot.acabado} />}
         </div>
         {canWrite && (
           <div className="flex gap-2">
@@ -111,14 +117,16 @@ export default function OTDetailClient({
             <Button variant="outline" onClick={()=>setOpenSC(true)}>
               <FilePlus2 className="h-4 w-4 mr-1" /> Solicitar faltante
             </Button>
-            <Button onClick={async ()=>{
-              const p = actions.startOTManually({ otId: ot.id });
-              await toast.promise(p, { loading: "Validando…", success: (r)=> r.message || "OT iniciada", error: (e)=> e?.message || "No se pudo iniciar" });
-              await actions.recompute(ot.id);
-              await refreshAndEnsure();
-            }} disabled={!canStart}>
-              <Play className="h-4 w-4 mr-1" /> Iniciar OT
-            </Button>
+            {showStartButton && (
+              <Button onClick={async ()=>{
+                const p = actions.startOTManually({ otId: ot.id });
+                await toast.promise(p, { loading: "Validando…", success: (r)=> r.message || "OT iniciada", error: (e)=> e?.message || "No se pudo iniciar" });
+                await actions.recompute(ot.id);
+                await refreshAndEnsure();
+              }} disabled={!canStart}>
+                <Play className="h-4 w-4 mr-1" /> Iniciar OT
+              </Button>
+            )}
           </div>
         )}
       </div>

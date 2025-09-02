@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Hammer, Layers } from "lucide-react";
 import { ClientSelect, ClientOption } from "@/components/ot/client-select";
 import { PrioritySelect } from "@/components/ot/priority-select";
+import { ACABADO_OPTIONS } from "./acabado-constants";
 import { toast } from "sonner";
 
 export type NewOTDialogPayload = {
@@ -164,10 +165,11 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
             <div>
               <label className="text-sm font-semibold">Acabado</label>
               <select className="w-full h-9 border rounded-md px-2" value={acabado} onChange={e=>setAcabado(e.target.value)}>
-                <option value="NONE">Ninguno</option>
-                <option value="TROPICALIZADO">Tropicalizado</option>
-                <option value="PINTADO">Pintado</option>
-                <option value="ZINCADO">Zincado</option>
+                {ACABADO_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { ACABADO_OPTIONS } from "./acabado-constants";
 import type { Prioridad } from "./priority-badge";
 
 type OT = NonNullable<Awaited<ReturnType<typeof import("@/app/server/queries/ot").getOTDetail>>>["ot"];
@@ -99,10 +100,11 @@ export default function EditHeaderDialog({
             <Select value={acabado || "NONE"} onValueChange={(v)=> setAcabado(v === "NONE" ? "" : v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="NONE">Ninguno</SelectItem>
-                <SelectItem value="TROPICALIZADO">Tropicalizado</SelectItem>
-                <SelectItem value="PINTADO">Pintado</SelectItem>
-                <SelectItem value="ZINCADO">Zincado</SelectItem>
+                {ACABADO_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

@@ -17,6 +17,7 @@ import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart, ArrowUpDown } from "lucide-react";
 import { PriorityBadge } from "@/components/ot/priority-badge";
+import { AcabadoBadge } from "@/components/ot/acabado-badge";
 import { NewOTDialog } from "@/components/ot/new-ot-dialog";
 import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
 import { StatusBadge } from "@/components/ot/status-badge";
@@ -346,6 +347,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                   <TableHead>Código</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead className="text-center">Prioridad</TableHead>
+                  <TableHead className="text-center">Acabado</TableHead>
                   <TableHead>Materiales</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
@@ -369,6 +371,13 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                     </TableCell>
                     <TableCell className="text-center">
                       <PriorityBadge prioridad={o.prioridad} />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {o.acabado ? (
+                        <AcabadoBadge acabado={o.acabado} showIcon={false} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Sin acabado</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="space-y-2">
