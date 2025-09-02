@@ -4,7 +4,6 @@
 import { useMemo, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -15,7 +14,7 @@ import { toast } from "sonner";
 import { NotificationBubble } from "@/components/ui/notification-bubble";
 import { Alert } from "@/components/ui/enhanced-alert";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart, ArrowUpDown } from "lucide-react";
+import { Search, Package, AlertTriangle, TrendingUp, ShoppingCart, ArrowUpDown, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { PriorityBadge } from "@/components/ot/priority-badge";
 import { AcabadoBadge } from "@/components/ot/acabado-badge";
 import { NewOTDialog } from "@/components/ot/new-ot-dialog";
@@ -57,6 +56,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
   const [quickState, setQuickState] = useState<"ALL"|"SHORTAGE"|"OPEN"|"IN_PROGRESS">("ALL");
   const [sortBy, setSortBy] = useState<"fecha"|"prioridad">("fecha");
   const [sortDir, setSortDir] = useState<"desc"|"asc">("desc");
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
 
   const router = useRouter();
   const refresh = () => startTransition(() => router.refresh());
@@ -221,121 +221,141 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
         </Alert>
       )}
 
-      <Tabs defaultValue="lista">
-        <TabsList>
-          <TabsTrigger value="lista">Listado</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="lista" className="space-y-4">
-          {/* === FILTER BAR (mejorado con aire) === */}
-          <Card
-            className="p-6 rounded-xl sticky top-2 z-10 border-slate-200 bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/50 shadow-sm"
-          >
-            <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr] items-start">
-              {/* Columna izquierda: búsqueda + estados + ordenar */}
-              <div className="space-y-5">
-                <div>
-                  <label className="text-sm font-medium block mb-2">Buscar</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Código, cliente o material…"
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      className="pl-10 h-10"
-                    />
-                  </div>
+      <div className="space-y-4">
+          {/* === FILTER BAR (colapsible) === */}
+          <Card className="rounded-xl sticky top-2 z-10 border-slate-200 bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/50 shadow-sm">
+            {/* Header siempre visible */}
+            <div className="p-4 pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Filtros</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({filtered.length} de {items.length} órdenes)
+                  </span>
                 </div>
-
-                <div>
-                  <label className="text-sm font-medium block mb-2">Estados</label>
-                  <div className="flex flex-wrap gap-2">
-                    {([
-                      {key:"ALL", label:"Total", count: items.length, cls:""},
-                      {key:"SHORTAGE", label:"Faltantes", count: shortageCountAll, cls:"bg-red-100 text-red-800"},
-                      {key:"OPEN", label:"Abiertas", count: openCountAll, cls:"bg-blue-100 text-blue-800"},
-                      {key:"IN_PROGRESS", label:"En proceso", count: inProgressCountAll, cls:"bg-indigo-100 text-indigo-800"},
-                    ] as const).map(chip => (
-                      <button
-                        key={chip.key}
-                        onClick={()=> setQuickState(chip.key as typeof quickState)}
-                        className={`px-3 h-8 rounded-full text-xs font-medium border transition
-                          ${quickState === chip.key ? "border-foreground/30" : "border-transparent hover:border-foreground/20"} ${chip.cls}`}
-                      >
-                        {chip.label}
-                        <span className="ml-1 opacity-80">{chip.count}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium block mb-2">Ordenar por</label>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <select
-                      className="w-full h-10 border rounded-md px-2"
-                      value={sortBy}
-                      onChange={e=>setSortBy(e.target.value as "fecha"|"prioridad")}
-                    >
-                      <option value="fecha">Fecha (recientes primero)</option>
-                      <option value="prioridad">Prioridad</option>
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-10 sm:w-28"
-                      onClick={()=> setSortDir(d => d==="desc" ? "asc" : "desc")}
-                      title={`Dirección: ${sortDir === "desc" ? "Descendente" : "Ascendente"}`}
-                    >
-                      <ArrowUpDown className="h-4 w-4 mr-2" />
-                      {sortDir === "desc" ? "Desc" : "Asc"}
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFiltersExpanded(!filtersExpanded)}
+                  className="h-8 w-8 p-0"
+                >
+                  {filtersExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
-
-              {/* Columna derecha: prioridad + cliente + limpiar */}
-              <div className="space-y-6">
-                <div>
-                  <label className="text-sm font-medium block mb-2">Prioridad</label>
-                  <div className="flex flex-wrap gap-2">
-                    {(["ALL","URGENT","HIGH","MEDIUM","LOW"] as const).map(p => (
-                      <button
-                        key={p}
-                        onClick={()=>setFilterPrioridad(p)}
-                        className={`h-9 px-3 rounded-md border text-sm transition-colors
-                          ${filterPrioridad===p ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
-                      >
-                        {p==="ALL"?"Todas":p==="URGENT"?"Urgente":p==="HIGH"?"Alta":p==="MEDIUM"?"Media":"Baja"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <ClientSelect clients={clients} value={filterClienteId} onChange={setFilterClienteId} />
-                </div>
-
-                <Separator />
-
-                <div className="flex justify-end">
-                  <Button
-                    variant="outline"
-                    className="h-10"
-                    onClick={()=>{
-                      setQ("");
-                      setFilterPrioridad("ALL");
-                      setFilterClienteId(undefined);
-                      setQuickState("ALL");
-                      setSortBy("fecha");
-                      setSortDir("desc");
-                    }}
+              
+              {/* Filtros rápidos siempre visibles */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {([
+                  {key:"ALL", label:"Total", count: items.length, cls:""},
+                  {key:"SHORTAGE", label:"Faltantes", count: shortageCountAll, cls:"bg-red-100 text-red-800"},
+                  {key:"OPEN", label:"Abiertas", count: openCountAll, cls:"bg-blue-100 text-blue-800"},
+                  {key:"IN_PROGRESS", label:"En proceso", count: inProgressCountAll, cls:"bg-indigo-100 text-indigo-800"},
+                ] as const).map(chip => (
+                  <button
+                    key={chip.key}
+                    onClick={()=> setQuickState(chip.key as typeof quickState)}
+                    className={`px-3 h-7 rounded-full text-xs font-medium border transition
+                      ${quickState === chip.key ? "border-foreground/30" : "border-transparent hover:border-foreground/20"} ${chip.cls}`}
                   >
-                    Limpiar
-                  </Button>
-                </div>
+                    {chip.label}
+                    <span className="ml-1 opacity-80">{chip.count}</span>
+                  </button>
+                ))}
               </div>
             </div>
+
+            {/* Contenido expandible */}
+            {filtersExpanded && (
+              <div className="px-4 pb-4">
+                <Separator className="mb-4" />
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr] items-start">
+                  {/* Columna izquierda: búsqueda + ordenar */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Buscar</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Código, cliente o material…"
+                          value={q}
+                          onChange={(e) => setQ(e.target.value)}
+                          className="pl-10 h-10"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Ordenar por</label>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <select
+                          className="w-full h-10 border rounded-md px-2"
+                          value={sortBy}
+                          onChange={e=>setSortBy(e.target.value as "fecha"|"prioridad")}
+                        >
+                          <option value="fecha">Fecha (recientes primero)</option>
+                          <option value="prioridad">Prioridad</option>
+                        </select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 sm:w-28"
+                          onClick={()=> setSortDir(d => d==="desc" ? "asc" : "desc")}
+                          title={`Dirección: ${sortDir === "desc" ? "Descendente" : "Ascendente"}`}
+                        >
+                          <ArrowUpDown className="h-4 w-4 mr-2" />
+                          {sortDir === "desc" ? "Desc" : "Asc"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Columna derecha: prioridad + cliente + limpiar */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Prioridad</label>
+                      <div className="flex flex-wrap gap-2">
+                        {(["ALL","URGENT","HIGH","MEDIUM","LOW"] as const).map(p => (
+                          <button
+                            key={p}
+                            onClick={()=>setFilterPrioridad(p)}
+                            className={`h-8 px-3 rounded-md border text-sm transition-colors
+                              ${filterPrioridad===p ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
+                          >
+                            {p==="ALL"?"Todas":p==="URGENT"?"Urgente":p==="HIGH"?"Alta":p==="MEDIUM"?"Media":"Baja"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <ClientSelect clients={clients} value={filterClienteId} onChange={setFilterClienteId} />
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
+                        className="h-10"
+                        onClick={()=>{
+                          setQ("");
+                          setFilterPrioridad("ALL");
+                          setFilterClienteId(undefined);
+                          setQuickState("ALL");
+                          setSortBy("fecha");
+                          setSortDir("desc");
+                        }}
+                      >
+                        Limpiar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </Card>
           {/* === /FILTER BAR === */}
 
@@ -462,8 +482,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
               </TableBody>
             </Table>
           </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 }

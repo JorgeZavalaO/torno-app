@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Plus, User, AlertTriangle, Package } from "lucide-react";
 import { ACABADO_OPTIONS } from "./acabado-constants";
 import type { Prioridad } from "./priority-badge";
 
@@ -33,6 +37,7 @@ export default function EditHeaderDialog({
     materialesPlan?: { sku: string; qtyPlan: number }[];
   })=>Promise<void>;
 }) {
+  const router = useRouter();
   const [clienteId, setClienteId] = useState<string|undefined>(ot.clienteId ?? undefined);
   const [prioridad, setPrioridad] = useState<Prioridad>(ot.prioridad as Prioridad);
   const [notas, setNotas] = useState(ot.notas ?? "");
@@ -61,96 +66,176 @@ export default function EditHeaderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar cabecera / plan</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <Package className="h-5 w-5" />
+            Editar cabecera / plan
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Cliente</Label>
-              <Select
-                value={clienteId ?? NONE}
-                onValueChange={(v)=> setClienteId(v === NONE ? undefined : v)}
-              >
-                <SelectTrigger><SelectValue placeholder="Sin cliente" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>Sin cliente</SelectItem>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Prioridad</Label>
-              <Select value={prioridad} onValueChange={(v)=> setPrioridad(v as Prioridad)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LOW">Baja</SelectItem>
-                  <SelectItem value="MEDIUM">Media</SelectItem>
-                  <SelectItem value="HIGH">Alta</SelectItem>
-                  <SelectItem value="URGENT">Urgente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Acabado</Label>
-            <Select value={acabado || "NONE"} onValueChange={(v)=> setAcabado(v === "NONE" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {ACABADO_OPTIONS.map(option => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Notas</Label>
-            <Input value={notas} onChange={e=>setNotas(e.target.value)} />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Plan de materiales</Label>
-              <Button variant="outline" size="sm" onClick={addRow}>Agregar</Button>
-            </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {matPlan.map((r,i)=>(
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-7">
-                    <Select value={r.sku} onValueChange={(v)=> setRow(i, { sku: v })}>
-                      <SelectTrigger><SelectValue placeholder="Producto" /></SelectTrigger>
-                      <SelectContent>
-                        {products.filter(p=> (p.categoria ? String(p.categoria).toUpperCase() !== 'FABRICACION' : true)).map(p=> (
-                          <SelectItem key={p.sku} value={p.sku}>{p.nombre} ({p.sku})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-3">
-                    <Input type="number" min={0} value={r.qtyPlan} onChange={e=> setRow(i, { qtyPlan: Number(e.target.value) })} />
-                  </div>
-                  <div className="col-span-2 flex justify-end">
-                    <Button variant="ghost" size="sm" onClick={()=>delRow(i)}>Eliminar</Button>
-                  </div>
+        <div className="space-y-6">
+          {/* Información General */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <User className="h-4 w-4" />
+                Información General
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Cliente</Label>
+                  <Select
+                    value={clienteId ?? NONE}
+                    onValueChange={(v)=> setClienteId(v === NONE ? undefined : v)}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Sin cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>Sin cliente</SelectItem>
+                      {clients.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              ))}
-              {matPlan.length===0 && <div className="text-xs text-muted-foreground">Sin materiales planificados.</div>}
-            </div>
-          </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Prioridad</Label>
+                  <Select value={prioridad} onValueChange={(v)=> setPrioridad(v as Prioridad)}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LOW">🔵 Baja</SelectItem>
+                      <SelectItem value="MEDIUM">🟡 Media</SelectItem>
+                      <SelectItem value="HIGH">🟠 Alta</SelectItem>
+                      <SelectItem value="URGENT">🔴 Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Acabado</Label>
+                  <Select value={acabado || "NONE"} onValueChange={(v)=> setAcabado(v === "NONE" ? "" : v)}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Seleccionar acabado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACABADO_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Notas</Label>
+                  <Input 
+                    value={notas} 
+                    onChange={e=>setNotas(e.target.value)} 
+                    placeholder="Observaciones adicionales..."
+                    className="h-10"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Plan de Materiales */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-lg">
+                  <Package className="h-4 w-4" />
+                  Plan de materiales
+                  <Badge variant="secondary" className="ml-2">
+                    {validRows.length} material{validRows.length !== 1 ? 'es' : ''}
+                  </Badge>
+                </div>
+                <Button variant="outline" size="sm" onClick={addRow} className="flex items-center gap-1">
+                  <Plus className="h-4 w-4" />
+                  Agregar
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {matPlan.length > 0 ? (
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                  {matPlan.map((r,i)=>(
+                    <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border">
+                      <div className="flex-1 min-w-0">
+                        <Label className="text-xs text-muted-foreground">Producto</Label>
+                        <Select value={r.sku} onValueChange={(v)=> setRow(i, { sku: v })}>
+                          <SelectTrigger className="h-9 mt-1">
+                            <SelectValue placeholder="Seleccionar producto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.filter(p=> (p.categoria ? String(p.categoria).toUpperCase() !== 'FABRICACION' : true)).map(p=> (
+                              <SelectItem key={p.sku} value={p.sku}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{p.nombre}</span>
+                                  <span className="text-xs text-muted-foreground">SKU: {p.sku}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-24">
+                        <Label className="text-xs text-muted-foreground">Cantidad</Label>
+                        <Input 
+                          type="number" 
+                          min={0} 
+                          value={r.qtyPlan} 
+                          onChange={e=> setRow(i, { qtyPlan: Number(e.target.value) })}
+                          className="h-9 mt-1 text-center"
+                          placeholder="0"
+                        />
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={()=>delRow(i)}
+                        className="h-9 w-9 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">Sin materiales planificados</p>
+                  <p className="text-xs">Haz clic en &ldquo;Agregar&rdquo; para añadir materiales</p>
+                </div>
+              )}
+              
+              {validRows.length !== matPlan.length && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm text-yellow-800">
+                    {matPlan.length - validRows.length} material(es) no válido(s) serán omitidos
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        <DialogFooter className="mt-3">
-          <Button variant="outline" onClick={()=> onOpenChange(false)}>Cancelar</Button>
+        <DialogFooter className="mt-6 gap-2">
+          <Button variant="outline" onClick={()=> onOpenChange(false)}>
+            Cancelar
+          </Button>
           <Button onClick={async ()=>{
             await onSave({
               id: ot.id,
-              // si no hay cliente seleccionado -> null
               clienteId: clienteId ?? null,
               prioridad,
               notas,
@@ -158,7 +243,13 @@ export default function EditHeaderDialog({
               materialesPlan: validRows,
             });
             onOpenChange(false);
-          }}>Guardar</Button>
+            // Forzar refresh para reflejar los cambios en el detalle y listas
+            startTransition(() => router.refresh());
+            await new Promise((res)=> setTimeout(res, 350));
+            startTransition(() => router.refresh());
+          }}>
+            Guardar cambios
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
