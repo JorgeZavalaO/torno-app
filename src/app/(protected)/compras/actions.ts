@@ -545,5 +545,7 @@ export async function receiveOC(fd: FormData): Promise<Result> {
   });
 
   bump();
+  revalidateTag(cacheTags.inventoryProducts);
+  revalidateTag(cacheTags.inventoryMovs);
   return { ok: true, message: "Mercadería recepcionada", newEstado: finalEstado } as unknown as Result & { newEstado?: string };
 }

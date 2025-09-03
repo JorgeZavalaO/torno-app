@@ -6,6 +6,7 @@ import { getUserPermissionSet } from "@/app/lib/rbac";
 const allNavItems: (NavItem & { requiredPerm?: string; group?: string })[] = [
   { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", group: "dashboard", description: "Panel principal de control" },
   { href: "/ot", label: "Órdenes de Trabajo", icon: "ClipboardList", requiredPerm: "workorders.read", group: "production", description: "Gestión de órdenes de trabajo" },
+  { href: "/programacion", label: "Programación", icon: "CalendarDays", requiredPerm: "workorders.read", group: "production", description: "Calendario de OTs" },
   { href: "/control", label: "Control de Producción", icon: "Activity", requiredPerm: "production.read", group: "production", description: "Monitoreo en tiempo real" },
   { href: "/maquinas", label: "Máquinas", icon: "Cog", requiredPerm: "machines.read", group: "production", description: "Estado y configuración de máquinas" },
   { href: "/cotizador", label: "Cotizador", icon: "Calculator", requiredPerm: "quotes.read", group: "sales", description: "Herramienta de cotización", isNew: true },

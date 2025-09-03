@@ -12,6 +12,7 @@ export type OTListRow = {
   clienteId: string | null;
   clienteNombre: string | null;
   creadaEn: Date;
+  fechaLimite?: Date | null;
   notas?: string;
   acabado?: string;
   materiales: {
@@ -28,11 +29,12 @@ export type OTListRow = {
   hasShortage: boolean;
   progresoMateriales: number; // 0..1
   progresoPiezas: number;     // 0..1
+  piezasPend?: number;
 };
 
 export const getOTListCached = cache(
   async (): Promise<OTListRow[]> => {
-    const ots = await prisma.ordenTrabajo.findMany({
+  const ots = await prisma.ordenTrabajo.findMany({
       orderBy: { creadaEn: "desc" },
       include: {
         cliente: { select: { id: true, nombre: true } },
@@ -70,7 +72,7 @@ export const getOTListCached = cache(
       const hechaP = piezasList.reduce((s, p) => s + Math.min(Number(p.qtyHecha || 0), Number(p.qtyPlan || 0)), 0);
       const progPz = planP > 0 ? hechaP / planP : 0;
 
-      const hasShortage = mats.some(m => m.faltante > 0);
+  const hasShortage = mats.some(m => m.faltante > 0);
 
       return {
         id: o.id,
@@ -79,13 +81,15 @@ export const getOTListCached = cache(
         prioridad: o.prioridad as OTListRow["prioridad"],
         clienteId: o.cliente?.id ?? null,
         clienteNombre: o.cliente?.nombre ?? null,
-        creadaEn: o.creadaEn,
+  creadaEn: o.creadaEn,
+  fechaLimite: (o as { fechaLimite?: Date | null }).fechaLimite ?? null,
         notas: ((o as { notas?: string | null }).notas ?? undefined) || undefined,
         acabado: ((o as { acabado?: string | null }).acabado ?? undefined) || undefined,
         materiales: mats,
         hasShortage,
         progresoMateriales: Number(progMat),
-        progresoPiezas: Number(progPz),
+  progresoPiezas: Number(progPz),
+  piezasPend: Math.max(0, planP - hechaP),
       };
     });
   },
@@ -95,7 +99,7 @@ export const getOTListCached = cache(
 
 export const getOTDetail = cache(
   async (id: string) => {
-    const raw = await prisma.ordenTrabajo.findUnique({
+  const raw = await prisma.ordenTrabajo.findUnique({
       where: { id },
       include: {
         cliente: { select: { id: true, nombre: true } },
@@ -171,6 +175,7 @@ export const getOTDetail = cache(
       prioridad: raw.prioridad as "LOW"|"MEDIUM"|"HIGH"|"URGENT",
       clienteId: raw.cliente?.id ?? null,
       cliente: raw.cliente ? { id: raw.cliente.id, nombre: raw.cliente.nombre } : null,
+  fechaLimite: (raw as { fechaLimite?: Date | null }).fechaLimite ?? null,
       notas: raw.notas ?? null,
       acabado: raw.acabado ?? null,
       materiales,

@@ -2,7 +2,8 @@
 
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { cacheTags } from "@/app/lib/cache-tags";
 import { prisma } from "@/app/lib/prisma";
 import { getCurrentUser } from "@/app/lib/auth";
 import { assertCanWriteWorkorders } from "@/app/lib/guards";
@@ -74,6 +75,7 @@ const UpdateHeaderSchema = z.object({
   prioridad: z.enum(["LOW","MEDIUM","HIGH","URGENT"]).optional(),
   notas: z.string().max(500).optional(),
   acabado: z.string().max(200).optional(),
+  fechaLimite: z.string().datetime().nullable().optional(),
   materialesPlan: z.array(
     z.object({
       sku: z.string(),
@@ -131,6 +133,7 @@ export async function createOT(fd: FormData): Promise<R> {
     prioridad: (fd.get("prioridad")?.toString() as "LOW"|"MEDIUM"|"HIGH"|"URGENT") || "MEDIUM",
     acabado: fd.get("acabado")?.toString() || undefined,
     notas: fd.get("notas")?.toString() || undefined,
+  fechaLimite: fd.get("fechaLimite")?.toString() || undefined,
   };
 
   if (payload.piezas.length === 0) return { ok: false, message: "Agrega al menos una pieza válida" };
@@ -186,6 +189,7 @@ export async function createOT(fd: FormData): Promise<R> {
         prioridad: payload.prioridad,
         notas: payload.notas?.trim() || null,
         acabado: payload.acabado?.trim() || null,
+  fechaLimite: payload.fechaLimite ? new Date(payload.fechaLimite) : null,
         estado: "OPEN",
         codigo,
       },
@@ -230,7 +234,7 @@ export async function updateOTHeader(payload: z.infer<typeof UpdateHeaderSchema>
   const parsed = UpdateHeaderSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, message: "Datos inválidos" };
 
-  const { id, clienteId, prioridad, notas, acabado, materialesPlan } = parsed.data;
+  const { id, clienteId, prioridad, notas, acabado, fechaLimite, materialesPlan } = parsed.data;
 
   // Validación: materiales no pueden ser de categoría FABRICACION; y los SKUs deben existir
   if (Array.isArray(materialesPlan) && materialesPlan.length > 0) {
@@ -257,6 +261,7 @@ export async function updateOTHeader(payload: z.infer<typeof UpdateHeaderSchema>
         prioridad: prioridad ?? undefined,
         notas: notas?.trim() ?? undefined,
   acabado: acabado?.trim() ?? undefined,
+        fechaLimite: typeof fechaLimite !== "undefined" ? (fechaLimite ? new Date(fechaLimite) : null) : undefined,
       },
     });
 
@@ -281,6 +286,19 @@ export async function updateOTHeader(payload: z.infer<typeof UpdateHeaderSchema>
   await recomputeOTState(id);
   bumpAll(id);
   return { ok: true, message: "OT actualizada" };
+}
+
+/** Reprogramar: actualizar solo la fecha límite de una OT */
+export async function rescheduleOT(payload: { otId: string; fechaLimite: string }): Promise<R> {
+  await assertCanWriteWorkorders();
+  const otId = payload.otId;
+  if (!otId) return { ok: false, message: "otId requerido" };
+  const when = new Date(payload.fechaLimite);
+  if (Number.isNaN(when.getTime())) return { ok: false, message: "fecha inválida" };
+  await prisma.ordenTrabajo.update({ where: { id: otId }, data: { fechaLimite: when } });
+  bumpAll(otId);
+  revalidatePath("/programacion", "page");
+  return { ok: true, message: "Reprogramado" };
 }
 
 /** Emisión de materiales (movimientos SALIDA_OT) vía diálogo */
@@ -339,6 +357,8 @@ export async function emitOTMaterials(payload: z.infer<typeof EmitMaterialsSchem
 
   await recomputeOTState(otId);
   bumpAll(otId);
+  revalidateTag(cacheTags.inventoryProducts);
+  revalidateTag(cacheTags.inventoryMovs);
   return { ok: true, message: "Material(es) emitido(s)" };
 }
 

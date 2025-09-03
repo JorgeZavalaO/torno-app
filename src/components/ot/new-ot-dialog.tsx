@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { Plus, Hammer, Layers } from "lucide-react";
 import { ClientSelect, ClientOption } from "@/components/ot/client-select";
 import { PrioritySelect } from "@/components/ot/priority-select";
@@ -18,6 +19,7 @@ export type NewOTDialogPayload = {
   notas?: string;
   prioridad?: "LOW"|"MEDIUM"|"HIGH"|"URGENT";
   acabado?: string; // valores permitidos: NONE | TROPICALIZADO | PINTADO | ZINCADO (frontend guarda string legible)
+  fechaLimite?: string; // ISO date string (YYYY-MM-DD) o Date ISO
 };
 
 interface Product { sku: string; nombre: string; uom: string; categoria?: string }
@@ -36,6 +38,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
   const [prioridad, setPrioridad] = useState<"LOW"|"MEDIUM"|"HIGH"|"URGENT">("MEDIUM");
   const [acabado, setAcabado] = useState("NONE");
   const [notas, setNotas] = useState("");
+  const [fechaLimite, setFechaLimite] = useState<string>("");
 
   const reset = () => {
     setStep(1);
@@ -45,6 +48,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
     setPrioridad("MEDIUM");
   setAcabado("NONE");
     setNotas("");
+  setFechaLimite("");
   };
 
   const handleCreate = async () => {
@@ -61,8 +65,9 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
       materiales: materiales.filter(m => m.sku && m.qty>0),
       clienteId,
       prioridad,
-    acabado: acabado === "NONE" ? undefined : acabado,
+  acabado: acabado === "NONE" ? undefined : acabado,
       notas: notas.trim() || undefined,
+  fechaLimite: fechaLimite ? new Date(fechaLimite).toISOString() : undefined,
     });
     reset();
     setOpen(false);
@@ -89,111 +94,361 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
           <Plus className="h-4 w-4 mr-2" /> Nueva OT
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Hammer className="h-5 w-5" /> Nueva Orden de Trabajo
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="pb-4 border-b">
+          <DialogTitle className="flex items-center gap-3 text-xl">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Hammer className="h-6 w-6 text-primary" />
+            </div>
+            Nueva Orden de Trabajo
           </DialogTitle>
         </DialogHeader>
-        <div className="flex items-center justify-center gap-2 text-xs font-medium mb-2">
-          {[1,2,3].map(s => (
-            <div key={s} className={`px-3 py-1 rounded-full border ${step===s? 'bg-primary text-primary-foreground border-primary':'bg-muted'}`}>Paso {s}</div>
-          ))}
-        </div>
-        {step===1 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ClientSelect clients={clients} value={clienteId} onChange={setClienteId} />
-              <PrioritySelect value={prioridad} onChange={setPrioridad} />
-            </div>
-            <div>
-              <label className="text-sm font-semibold">Piezas a fabricar (solo productos categoría FABRICACION)</label>
-              <p className="text-xs text-muted-foreground mb-2">Ingresa manualmente piezas; no se descuenta inventario ahora, solo planifica la producción.</p>
-              <div className="space-y-3">
-                {piezas.map((p,i)=>{
-                  const piezasFabricacion = products.filter(pr => (pr.categoria||"").toUpperCase()==="FABRICACION");
-                  return (
-                  <div key={i} className="grid grid-cols-12 gap-2">
-                    <div className="col-span-3">
-                      <select className="w-full h-9 border rounded-md px-2" value={p.sku||""} onChange={e=>updatePieza(i,'sku',e.target.value)}>
-                        <option value="">SKU (opcional)</option>
-                        {piezasFabricacion.map(pr => <option key={pr.sku} value={pr.sku}>{pr.nombre} ({pr.sku})</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-7">
-                      <Input placeholder="Descripción" value={p.descripcion||""} onChange={e=>updatePieza(i,'descripcion',e.target.value)} />
-                    </div>
-                    <div className="col-span-2">
-                      <Input type="number" min={1} value={p.qty} onChange={e=>updatePieza(i,'qty',Number(e.target.value))} />
-                    </div>
-                    <div className="col-span-12 flex justify-end -mt-1">
-                      <Button size="sm" variant="ghost" onClick={()=>removePieza(i)}>Eliminar</Button>
-                    </div>
+        
+        {/* Step Navigator */}
+        <div className="flex items-center justify-center py-6">
+          <div className="flex items-center space-x-4">
+            {[
+              { num: 1, title: "General", icon: "📋" },
+              { num: 2, title: "Materiales", icon: "📦" },
+              { num: 3, title: "Finalizar", icon: "✅" }
+            ].map((s, idx) => (
+              <div key={s.num} className="flex items-center">
+                <div className={`
+                  flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-200
+                  ${step === s.num 
+                    ? 'bg-primary text-primary-foreground border-primary shadow-lg scale-105' 
+                    : step > s.num 
+                      ? 'bg-green-50 text-green-700 border-green-200' 
+                      : 'bg-gray-50 text-gray-500 border-gray-200'
+                  }
+                `}>
+                  <span className="text-lg">{s.icon}</span>
+                  <div className="text-left">
+                    <div className="text-xs font-medium opacity-75">Paso {s.num}</div>
+                    <div className="text-sm font-semibold">{s.title}</div>
                   </div>
-                )})}
-                <Button size="sm" variant="outline" onClick={addPieza}><Plus className="h-3 w-3 mr-1"/> Añadir pieza</Button>
+                </div>
+                {idx < 2 && (
+                  <div className={`w-8 h-0.5 mx-2 ${step > s.num ? 'bg-green-300' : 'bg-gray-200'}`} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto px-1">
+          {step===1 && (
+            <div className="space-y-6 py-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    👤 Cliente
+                  </label>
+                  <ClientSelect clients={clients} value={clienteId} onChange={setClienteId} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    🎯 Prioridad
+                  </label>
+                  <PrioritySelect value={prioridad} onChange={setPrioridad} />
+                </div>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Hammer className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-blue-900">Piezas a fabricar</h3>
+                    <p className="text-sm text-blue-700">Solo productos categoría FABRICACIÓN</p>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-600 mb-4 bg-blue-100 p-3 rounded-lg">
+                  💡 Ingresa manualmente las piezas. No se descuenta inventario ahora, solo planifica la producción.
+                </p>
+                <div className="space-y-4">
+                  {piezas.map((p,i)=>{
+                    const piezasFabricacion = products.filter(pr => (pr.categoria||"").toUpperCase()==="FABRICACION");
+                    return (
+                    <div key={i} className="bg-white border border-blue-200 rounded-lg p-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                        <div className="lg:col-span-3">
+                          <label className="text-xs font-medium text-gray-600 mb-1 block">SKU (opcional)</label>
+                          <select className="w-full h-10 border border-gray-300 rounded-lg px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value={p.sku||""} onChange={e=>updatePieza(i,'sku',e.target.value)}>
+                            <option value="">Seleccionar SKU...</option>
+                            {piezasFabricacion.map(pr => <option key={pr.sku} value={pr.sku}>{pr.nombre} ({pr.sku})</option>)}
+                          </select>
+                        </div>
+                        <div className="lg:col-span-7">
+                          <label className="text-xs font-medium text-gray-600 mb-1 block">Descripción</label>
+                          <Input 
+                            placeholder="Describe la pieza a fabricar..." 
+                            value={p.descripcion||""} 
+                            onChange={e=>updatePieza(i,'descripcion',e.target.value)}
+                            className="h-10"
+                          />
+                        </div>
+                        <div className="lg:col-span-2">
+                          <label className="text-xs font-medium text-gray-600 mb-1 block">Cantidad</label>
+                          <Input 
+                            type="number" 
+                            min={1} 
+                            value={p.qty} 
+                            onChange={e=>updatePieza(i,'qty',Number(e.target.value))}
+                            className="h-10 text-center"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end mt-3">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={()=>removePieza(i)}
+                          className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                        >
+                          🗑️ Eliminar
+                        </Button>
+                      </div>
+                    </div>
+                  )})}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={addPieza}
+                    className="w-full border-dashed border-2 h-12 hover:bg-blue-50"
+                  >
+                    <Plus className="h-4 w-4 mr-2" /> Añadir pieza
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        {step===2 && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <label className="text-sm font-semibold flex items-center gap-2"><Layers className="h-4 w-4" /> Materiales Planificados (todas las categorías excepto FABRICACION)</label>
-              <Button size="sm" variant="outline" onClick={addMaterial}><Plus className="h-3 w-3 mr-1"/>Agregar</Button>
-            </div>
-            <p className="text-xs text-muted-foreground">Estos materiales se usarán para verificar cobertura y faltantes (la SC es manual desde el detalle).</p>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {materiales.map((m,i)=>{
-                const materialesOpts = products.filter(pr => (pr.categoria||"").toUpperCase() !== "FABRICACION");
-                return (
-                <div key={i} className="flex gap-2 items-center">
-                  <select value={m.sku} onChange={e=>updateMaterial(i,'sku',e.target.value)} className="flex-1 h-9 border rounded-md px-2">
-                    <option value="">Producto...</option>
-                    {materialesOpts.map(p=> <option key={p.sku} value={p.sku}>{p.nombre} ({p.sku})</option> )}
-                  </select>
-                  <Input type="number" min={1} value={m.qty} onChange={e=>updateMaterial(i,'qty',Number(e.target.value))} className="w-24" />
-                  <Button size="sm" variant="ghost" onClick={()=>removeMaterial(i)}>×</Button>
-                </div>
-              )})}
-              {materiales.length===0 && <div className="text-xs text-muted-foreground">Sin materiales aún.</div>}
-            </div>
-          </div>
-        )}
-        {step===3 && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-semibold">Acabado</label>
-              <select className="w-full h-9 border rounded-md px-2" value={acabado} onChange={e=>setAcabado(e.target.value)}>
-                {ACABADO_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-semibold">Notas</label>
-              <Input value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Observaciones de la OT" />
-            </div>
-            <div className="text-xs text-muted-foreground border rounded-md p-3 space-y-1">
-              <div><strong>{piezas.filter(p=> (p.sku||p.descripcion)&&p.qty>0).length}</strong> pieza(s) válidas</div>
-              <div><strong>{materiales.filter(m=>m.sku&&m.qty>0).length}</strong> material(es) planificados</div>
-              <div>Prioridad: <strong>{prioridad}</strong>{acabado&&acabado!=="NONE"?` · Acabado: ${acabado}`:""}</div>
-            </div>
-          </div>
-        )}
-        <DialogFooter className="mt-4">
-          <div className="flex-1 flex justify-start gap-2">
-            {step>1 && <Button variant="outline" size="sm" onClick={()=>setStep((s:1|2|3)=> (s-1) as 1|2|3)}>Atrás</Button>}
-            {step<3 && <Button variant="secondary" size="sm" onClick={()=>setStep((s:1|2|3)=> (s+1) as 1|2|3)} disabled={step===1 && piezas.length===0}>Siguiente</Button>}
-          </div>
-          <DialogClose asChild>
-            <Button variant="outline" size="sm">Cancelar</Button>
-          </DialogClose>
-          {step===3 && (
-            <Button onClick={handleCreate} disabled={isCreating}>{isCreating?"Creando...":"Crear OT"}</Button>
           )}
+          {step===2 && (
+            <div className="space-y-6 py-2">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Layers className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-green-900">Materiales Planificados</h3>
+                      <p className="text-sm text-green-700">Todas las categorías excepto FABRICACIÓN</p>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={addMaterial}
+                    className="bg-white hover:bg-green-50 border-green-300"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />Agregar
+                  </Button>
+                </div>
+                <p className="text-xs text-green-600 mb-4 bg-green-100 p-3 rounded-lg">
+                  📋 Estos materiales se usarán para verificar cobertura y faltantes (la SC es manual desde el detalle).
+                </p>
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                  {materiales.map((m,i)=>{
+                    const materialesOpts = products.filter(pr => (pr.categoria||"").toUpperCase() !== "FABRICACION");
+                    return (
+                    <div key={i} className="bg-white border border-green-200 rounded-lg p-4">
+                      <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs font-medium text-gray-600 mb-1 block">Producto</label>
+                          <select 
+                            value={m.sku} 
+                            onChange={e=>updateMaterial(i,'sku',e.target.value)} 
+                            className="w-full h-10 border border-gray-300 rounded-lg px-3 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                          >
+                            <option value="">Seleccionar producto...</option>
+                            {materialesOpts.map(p=> (
+                              <option key={p.sku} value={p.sku}>
+                                {p.nombre} ({p.sku})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-32">
+                          <label className="text-xs font-medium text-gray-600 mb-1 block">Cantidad</label>
+                          <Input 
+                            type="number" 
+                            min={1} 
+                            value={m.qty} 
+                            onChange={e=>updateMaterial(i,'qty',Number(e.target.value))} 
+                            className="h-10 text-center"
+                            placeholder="0"
+                          />
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={()=>removeMaterial(i)}
+                          className="h-10 w-10 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                        >
+                          🗑️
+                        </Button>
+                      </div>
+                    </div>
+                  )})}
+                  {materiales.length===0 && (
+                    <div className="text-center py-8 text-green-600">
+                      <Layers className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">Sin materiales planificados aún</p>
+                      <p className="text-xs opacity-75">Haz clic en &ldquo;Agregar&rdquo; para añadir materiales</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {step===3 && (
+            <div className="space-y-6 py-2">
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Hammer className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-purple-900">Detalles finales</h3>
+                    <p className="text-sm text-purple-700">Configura los parámetros adicionales</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      📅 Fecha límite de entrega
+                    </label>
+                    <DateTimePicker
+                      value={fechaLimite || undefined}
+                      onChange={(iso)=> setFechaLimite(iso || "")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      ✨ Acabado
+                    </label>
+                    <select 
+                      className="w-full h-10 border border-gray-300 rounded-lg px-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+                      value={acabado} 
+                      onChange={e=>setAcabado(e.target.value)}
+                    >
+                      {ACABADO_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="lg:col-span-2 space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      📝 Notas
+                    </label>
+                    <Input 
+                      value={notas} 
+                      onChange={e=>setNotas(e.target.value)} 
+                      placeholder="Observaciones adicionales sobre la orden..."
+                      className="h-12"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Summary Card */}
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Hammer className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-blue-900">Resumen de la orden</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white/70 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {piezas.filter(p=> (p.sku||p.descripcion)&&p.qty>0).length}
+                    </div>
+                    <div className="text-sm text-blue-700 font-medium">Pieza(s) válidas</div>
+                  </div>
+                  <div className="bg-white/70 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {materiales.filter(m=>m.sku&&m.qty>0).length}
+                    </div>
+                    <div className="text-sm text-green-700 font-medium">Material(es) planificados</div>
+                  </div>
+                  <div className="bg-white/70 rounded-lg p-4 text-center">
+                    <div className="text-lg font-bold text-purple-600">
+                      {prioridad === 'LOW' ? '🔵 Baja' : 
+                       prioridad === 'MEDIUM' ? '🟡 Media' : 
+                       prioridad === 'HIGH' ? '🟠 Alta' : '🔴 Urgente'}
+                    </div>
+                    <div className="text-sm text-purple-700 font-medium">Prioridad</div>
+                  </div>
+                </div>
+                {(acabado && acabado !== "NONE") && (
+                  <div className="mt-4 bg-white/70 rounded-lg p-3 text-center">
+                    <span className="text-sm text-gray-700">
+                      <strong>Acabado:</strong> {ACABADO_OPTIONS.find(a => a.value === acabado)?.label}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="mt-6 border-t pt-4">
+          <div className="flex flex-col sm:flex-row justify-between w-full gap-3">
+            <div className="flex gap-2">
+              {step > 1 && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={()=>setStep((s:1|2|3)=> (s-1) as 1|2|3)}
+                  className="flex items-center gap-2"
+                >
+                  ← Atrás
+                </Button>
+              )}
+              {step < 3 && (
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  onClick={()=>setStep((s:1|2|3)=> (s+1) as 1|2|3)} 
+                  disabled={step===1 && piezas.filter(p=> (p.sku||p.descripcion)&&p.qty>0).length === 0}
+                  className="flex items-center gap-2"
+                >
+                  Siguiente →
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <DialogClose asChild>
+                <Button variant="outline" size="sm">
+                  Cancelar
+                </Button>
+              </DialogClose>
+              {step === 3 && (
+                <Button 
+                  onClick={handleCreate} 
+                  disabled={isCreating}
+                  className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                >
+                  {isCreating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creando...
+                    </>
+                  ) : (
+                    <>
+                      ✅ Crear OT
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

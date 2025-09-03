@@ -339,6 +339,7 @@ model OrdenTrabajo {
   cotizacionId  String?
   notas         String?
   acabado       String?
+  fechaLimite   DateTime?   // Fecha límite de entrega/programación
   creadaEn      DateTime   @default(now())
   actualizadaEn DateTime   @updatedAt
   cliente          Cliente?         @relation(fields: [clienteId], references: [id])

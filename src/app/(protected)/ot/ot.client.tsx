@@ -1,4 +1,3 @@
-// src/app/(protected)/ot/ot.client.tsx
 "use client";
 
 import { useMemo, useState, startTransition } from "react";
@@ -34,6 +33,7 @@ type CreateOTPayload = {
   prioridad?: "LOW"|"MEDIUM"|"HIGH"|"URGENT";
   acabado?: string;
   autoSC?: boolean;
+  fechaLimite?: string;
 };
 
 type Actions = {
@@ -117,6 +117,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
       if (payload.notas) fd.set("notas", payload.notas);
       if (payload.prioridad) fd.set("prioridad", payload.prioridad);
       if (payload.acabado) fd.set("acabado", payload.acabado);
+  if (payload.fechaLimite) fd.set("fechaLimite", payload.fechaLimite);
       fd.set("autoSC", String(payload.autoSC ?? true));
 
       const r = await actions.createOT(fd);
@@ -136,6 +137,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
           clienteNombre: payload.clienteId ? (clients.find(c=>c.id===payload.clienteId)?.nombre || null) : null,
           notas: payload.notas, materiales: matOptimistic,
           hasShortage: false, progresoMateriales: 0, progresoPiezas: 0,
+          fechaLimite: payload.fechaLimite ? new Date(payload.fechaLimite as string) : null,
         };
         setItems(prev => [newOt, ...prev]);
         toast.success(`OT ${r.codigo} creada exitosamente`);
@@ -366,6 +368,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                 <TableRow className="bg-muted/40">
                   <TableHead>Código</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Fecha Límite</TableHead>
                   <TableHead className="text-center">Prioridad</TableHead>
                   <TableHead className="text-center">Acabado</TableHead>
                   <TableHead>Materiales</TableHead>
@@ -388,6 +391,15 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                       <div className="font-medium">
                         {o.clienteNombre ?? <span className="text-muted-foreground">Sin cliente</span>}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {o.fechaLimite ? (
+                        <span className="text-sm">
+                          {new Date(o.fechaLimite).toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">
                       <PriorityBadge prioridad={o.prioridad} />

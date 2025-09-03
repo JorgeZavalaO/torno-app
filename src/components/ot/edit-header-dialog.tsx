@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,7 @@ export default function EditHeaderDialog({
     prioridad?: Prioridad;
     notas?: string;
     acabado?: string;
+  fechaLimite?: string | null;
     materialesPlan?: { sku: string; qtyPlan: number }[];
   })=>Promise<void>;
 }) {
@@ -42,6 +44,7 @@ export default function EditHeaderDialog({
   const [prioridad, setPrioridad] = useState<Prioridad>(ot.prioridad as Prioridad);
   const [notas, setNotas] = useState(ot.notas ?? "");
   const [acabado, setAcabado] = useState(ot.acabado ?? "");
+  const [fechaLimite, setFechaLimite] = useState<string>("fechaLimite" in ot && (ot as unknown as { fechaLimite?: string | Date | null }).fechaLimite ? new Date((ot as unknown as { fechaLimite?: string | Date | null }).fechaLimite!).toISOString().slice(0,16) : "");
   const [matPlan, setMatPlan] = useState<{ sku: string; qtyPlan: number }[]>(
     ot.materiales.map(m => ({ sku: m.productoId, qtyPlan: Number(m.qtyPlan || 0) }))
   );
@@ -52,6 +55,12 @@ export default function EditHeaderDialog({
     setPrioridad(ot.prioridad as Prioridad);
     setNotas(ot.notas ?? "");
     setAcabado(ot.acabado ?? "");
+    if ("fechaLimite" in ot) {
+      const f = (ot as unknown as { fechaLimite?: string | Date | null }).fechaLimite;
+      setFechaLimite(f ? new Date(f).toISOString().slice(0,16) : "");
+    } else {
+      setFechaLimite("");
+    }
     setMatPlan(ot.materiales.map(m => ({ sku: m.productoId, qtyPlan: Number(m.qtyPlan || 0) })));
   }, [open, ot]);
 
@@ -119,6 +128,10 @@ export default function EditHeaderDialog({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Fecha límite</Label>
+                  <DateTimePicker value={fechaLimite || undefined} onChange={(iso)=> setFechaLimite(iso || "")} />
+                </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Acabado</Label>
                   <Select value={acabado || "NONE"} onValueChange={(v)=> setAcabado(v === "NONE" ? "" : v)}>
@@ -240,6 +253,7 @@ export default function EditHeaderDialog({
               prioridad,
               notas,
               acabado,
+              fechaLimite: fechaLimite ? new Date(fechaLimite).toISOString() : null,
               materialesPlan: validRows,
             });
             onOpenChange(false);
