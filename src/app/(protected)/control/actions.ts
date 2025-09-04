@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
-import { assertCanWriteWorkorders } from "@/app/lib/guards";
+import { assertCanWriteProduction } from "@/app/lib/guards";
 import { logHoursBulk, logPieces } from "@/app/server/services/production";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -49,7 +49,7 @@ const SimpleSchema = z.object({
 });
 
 export async function logWorkAndPieces(fd: FormData): Promise<R> {
-  await assertCanWriteWorkorders();
+  await assertCanWriteProduction();
 
   // Debug: log what we're receiving
   const rawData = {

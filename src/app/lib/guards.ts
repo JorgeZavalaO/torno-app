@@ -101,3 +101,27 @@ export async function assertCanWriteProduction() {
   if (!await userHasPermission(u.email, "production.write")) throw new Error("No autorizado");
   return u;
 }
+
+// Perfil de usuario (lectura/escritura propia)
+export async function assertCanReadProfile() {
+  const u = await assertAuthenticated();
+  // Asumimos que todos los usuarios autenticados pueden leer su perfil
+  return u;
+}
+export async function assertCanWriteProfile() {
+  const u = await assertAuthenticated();
+  // Asumimos que todos los usuarios autenticados pueden editar su perfil
+  return u;
+}
+
+// Programación (lectura/escritura de scheduling)
+export async function assertCanReadScheduling() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "workorders.read")) throw new Error("No autorizado");
+  return u;
+}
+export async function assertCanWriteScheduling() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "workorders.write")) throw new Error("No autorizado");
+  return u;
+}

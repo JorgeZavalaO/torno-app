@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/app/lib/prisma";
-import { assertCanWriteWorkorders } from "@/app/lib/guards";
+import { assertCanReadMachines, assertCanWriteMachines } from "@/app/lib/guards";
 
 
 type R = { ok: true; message?: string; id?: string } | { ok: false; message: string };
@@ -32,7 +32,7 @@ const UpsertSchema = z.object({
 });
 
 export async function upsertMachine(fd: FormData): Promise<R> {
-  await assertCanWriteWorkorders();
+  await assertCanWriteMachines();
   const parsed = UpsertSchema.safeParse({
     id: fd.get("id") || undefined,
     codigo: fd.get("codigo"),
@@ -58,7 +58,7 @@ export async function upsertMachine(fd: FormData): Promise<R> {
 }
 
 export async function deleteMachine(id: string): Promise<R> {
-  await assertCanWriteWorkorders();
+  await assertCanWriteMachines();
   try {
     await prisma.maquina.delete({ where: { id } });
     bumpAll();
@@ -80,7 +80,7 @@ const PlanSchema = z.object({
 });
 
 export async function scheduleMaintenance(fd: FormData): Promise<R> {
-  await assertCanWriteWorkorders();
+  await assertCanWriteMachines();
   const parsed = PlanSchema.safeParse({
     maquinaId: fd.get("maquinaId"),
     tipo: fd.get("tipo"),
@@ -110,7 +110,7 @@ const CloseSchema = z.object({
 });
 
 export async function closeMaintenance(fd: FormData): Promise<R> {
-  await assertCanWriteWorkorders();
+  await assertCanWriteMachines();
   const parsed = CloseSchema.safeParse({
     id: fd.get("id"),
     fechaReal: fd.get("fechaReal") || new Date(),
