@@ -62,7 +62,7 @@ export function QuoteActions({ quote, canWrite }: QuoteActionsProps) {
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem onClick={copyQuoteId}>
               <Copy className="h-4 w-4 mr-2" />
               Copiar ID

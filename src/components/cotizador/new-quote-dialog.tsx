@@ -37,7 +37,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Package
+  Package,
+  DollarSign
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QuoteLinesEditor, PiezaLine, MaterialLine } from "./quote-lines-editor";
@@ -118,8 +119,8 @@ export function NewQuoteDialog({
     setKwh(0);
     setNotes("");
     setPedidoReferencia("");
-  setPiezasLines([]);
-  setMaterialesLines([]);
+    setPiezasLines([]);
+    setMaterialesLines([]);
     // Mantener la fecha de vigencia
   };
 
@@ -571,6 +572,30 @@ export function NewQuoteDialog({
                         <div className="flex justify-between text-sm text-green-600">
                           <span>Precio unitario</span>
                           <span className="font-medium">{formatCurrency(calculation.unitPrice)}</span>
+                        </div>
+                        
+                        {/* Indicador de moneda y conversión */}
+                        <div className="mt-3 pt-3 border-t border-green-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-muted-foreground">Moneda del sistema:</span>
+                            <Badge variant="outline" className="text-green-700 border-green-300">
+                              <DollarSign className="h-3 w-3 mr-1" />
+                              {currency}
+                            </Badge>
+                          </div>
+                          
+                          {/* Información adicional de conversión */}
+                          {currency === "USD" && (
+                            <div className="text-xs text-center text-muted-foreground">
+                              Tasa de cambio: 1 USD = {Number(params.usdRate || 3.5).toFixed(2)} PEN
+                            </div>
+                          )}
+                          
+                          {currency === "PEN" && (
+                            <div className="text-xs text-center text-muted-foreground">
+                              Tasa de cambio: 1 USD = {Number(params.usdRate || 3.5).toFixed(2)} PEN
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

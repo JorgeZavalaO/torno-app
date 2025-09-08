@@ -29,6 +29,8 @@ export default function QuotesClient({
   params, 
   action 
 }: QuotesClientProps) {
+  const systemCurrency = String(params.currency || "PEN");
+
   return (
     <div className="p-6 space-y-6">
       <QuoteHeader
@@ -42,6 +44,7 @@ export default function QuotesClient({
       <QuoteList
         quotes={initialItems}
         canWrite={canWrite}
+        systemCurrency={systemCurrency}
       />
     </div>
   );

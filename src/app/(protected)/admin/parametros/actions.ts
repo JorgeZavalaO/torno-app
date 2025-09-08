@@ -22,6 +22,7 @@ const BulkSchema = z.object({
 function bump() {
   revalidateTag(cacheTags.costing);
   revalidatePath("/admin/parametros", "page");
+  revalidatePath("/cotizador", "page");
 }
 
 export async function pingCosting(): Promise<void> {
@@ -42,7 +43,7 @@ export async function updateOne(fd: FormData): Promise<Result> {
       return { ok: false, message: "Los datos proporcionados no son válidos" };
     }
 
-  const { key, type, value } = parsed.data;
+    const { key, type, value } = parsed.data;
 
     // Validaciones específicas por tipo
     if (type === "PERCENT" && (Number(value ?? 0) < 0 || Number(value ?? 0) > 100)) {
@@ -83,12 +84,31 @@ export async function updateOne(fd: FormData): Promise<Result> {
             const newVal = toUSD ? (val / usdRate) : (val * usdRate);
             return prisma.costingParam.update({ where: { key: p.key }, data: { valueNumber: new Prisma.Decimal(newVal) } });
           });
+          
           // Ejecutar la conversión en transacción junto con la actualización del parámetro currency
-          await prisma.$transaction([ prisma.costingParam.update({ where: { key }, data }), ...txOps ]);
+          await prisma.$transaction([ 
+            prisma.costingParam.update({ where: { key }, data }),
+            ...txOps 
+          ]);
+          
           bump();
-          return { ok: true, message: `Moneda cambiada a ${newCurrency}` };
+          return { 
+            ok: true, 
+            message: `Moneda cambiada a ${newCurrency} y parámetros convertidos.` 
+          };
         }
       }
+    }
+
+    // Si actualizamos el tipo de cambio USD, notificar
+    if (key === "usdRate") {
+      const newRate = Number(value ?? 3.5);
+      await prisma.costingParam.update({ where: { key }, data });
+      bump();
+      return { 
+        ok: true, 
+        message: `Tipo de cambio actualizado a ${newRate.toFixed(2)}. Las nuevas cotizaciones usarán esta tasa.` 
+      };
     }
 
     await prisma.costingParam.update({ where: { key }, data });
@@ -129,6 +149,23 @@ export async function bulkUpdate(fd: FormData): Promise<Result> {
       }
     }
 
+    // Verificar si hay cambio de moneda en el lote
+    const currencyUpdate = parsed.data.items.find(item => item.key === "currency");
+    
+    if (currencyUpdate) {
+      // Notificar sobre cambio de moneda
+      const newCurrency = String(currencyUpdate.value ?? "PEN").toUpperCase();
+      const currentCurrencyParam = await prisma.costingParam.findUnique({ 
+        where: { key: "currency" }, 
+        select: { valueText: true } 
+      });
+      const currentCurrency = (currentCurrencyParam?.valueText ?? "PEN").toUpperCase();
+      
+      if (currentCurrency !== newCurrency) {
+        // Solo notificar que las nuevas cotizaciones usarán la nueva moneda
+      }
+    }
+
     const tx = parsed.data.items.map(({ key, type, value }) => {
       const data =
         type === "TEXT"
@@ -141,7 +178,10 @@ export async function bulkUpdate(fd: FormData): Promise<Result> {
 
     await prisma.$transaction(tx);
     bump();
-    return { ok: true, message: `${parsed.data.items.length} parámetros guardados correctamente` };
+    return { 
+      ok: true, 
+      message: `${parsed.data.items.length} parámetros guardados correctamente.` 
+    };
   } catch (error) {
     console.error("Error in bulk update:", error);
     return { ok: false, message: "Error al guardar los parámetros. Inténtalo de nuevo." };
@@ -154,7 +194,7 @@ export async function resetDefaults(): Promise<Result> {
     
     const defaults: Record<string, { type: "TEXT"|"PERCENT"|"CURRENCY"|"NUMBER"; v: number | string }> = {
       currency:        { type: "TEXT",     v: "PEN" },
-  usdRate:         { type: "NUMBER",   v: 3.5 },
+      usdRate:         { type: "NUMBER",   v: 3.5 },
       gi:              { type: "PERCENT",  v: 15 },
       margin:          { type: "PERCENT",  v: 20 },
       hourlyRate:      { type: "CURRENCY", v: 75 },
@@ -172,8 +212,12 @@ export async function resetDefaults(): Promise<Result> {
     });
 
     await prisma.$transaction(tx);
+    
     bump();
-    return { ok: true, message: "Valores restablecidos a los predeterminados" };
+    return { 
+      ok: true, 
+      message: "Valores restablecidos a los predeterminados." 
+    };
   } catch (error) {
     console.error("Error resetting defaults:", error);
     return { ok: false, message: "Error al restablecer los valores predeterminados" };
