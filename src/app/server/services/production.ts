@@ -10,13 +10,23 @@ const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 
 function bump(otIds: string[]){
   if(!otIds.length) return;
+  
+  // Invalidación granular por OT
   for(const id of otIds){
     revalidateTag(cacheTags.workorder(id));
     revalidateTag(cacheTags.worklogs(id));
   }
+  
+  // Invalidaciones globales
   revalidateTag(cacheTags.workorders);
+  revalidateTag('production:overview');
+  revalidateTag('production:summary');
+  revalidateTag('realtime'); // Para dashboard
+  
+  // Paths que necesitan refrescarse
   revalidatePath("/ot","page");
   revalidatePath("/control","page");
+  revalidatePath("/dashboard","page");
 }
 
 /* --------------------- Schemas --------------------- */
@@ -152,6 +162,9 @@ export async function logPieces(payload: z.infer<typeof PiecesSchema>){
 
     if (movs.length) {
       await tx.movimiento.createMany({ data: movs });
+      // Invalidar caché de inventario cuando se registra producción
+      revalidateTag('inventory:stock');
+      revalidateTag('inventory:products');
     }
 
     // Si la OT está en proceso y todas las piezas alcanzan el plan, marcar como DONE

@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import { getOTListPaged } from '@/app/server/queries/ot';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const page = Number(url.searchParams.get('page') ?? '1') || 1;
+  const pageSize = Number(url.searchParams.get('pageSize') ?? '10') || 10;
+  const q = url.searchParams.get('q') ?? undefined;
+  const prioridad = url.searchParams.get('prioridad') ?? undefined;
+  const clienteId = url.searchParams.get('clienteId') ?? undefined;
+  const sortBy = (url.searchParams.get('sortBy') as 'fecha'|'prioridad' | null) ?? undefined;
+  const sortDir = (url.searchParams.get('sortDir') as 'asc'|'desc' | null) ?? undefined;
+
   try {
-    const ots = await prisma.ordenTrabajo.findMany({ select: { id: true, codigo: true }, orderBy: { creadaEn: 'desc' } });
-    return NextResponse.json(ots);
-  } catch {
-    return NextResponse.json({ error: 'No se pudo obtener OTs' }, { status: 500 });
+    const data = await getOTListPaged({ page, pageSize, q, prioridad, clienteId, sortBy, sortDir });
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
+

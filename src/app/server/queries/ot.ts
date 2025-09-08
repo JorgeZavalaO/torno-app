@@ -214,3 +214,112 @@ export const getClientsMini = cache(
   ["ot:clients:mini"],
   { revalidate: 60 }
 );
+
+// Paginación server-side mínima con filtros básicos
+export async function getOTListPaged(opts: {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  prioridad?: string | null;
+  clienteId?: string | null;
+  sortBy?: 'fecha' | 'prioridad';
+  sortDir?: 'asc' | 'desc';
+}) {
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.max(1, Math.min(200, opts.pageSize ?? 10));
+  const skip = (page - 1) * pageSize;
+  const q = (opts.q || '').trim();
+
+  // Construir where básico
+  const where: Record<string, unknown> = {};
+  const and: Record<string, unknown>[] = [];
+  if (q) {
+    and.push({
+      OR: [
+        { codigo: { contains: q, mode: 'insensitive' } },
+        { cliente: { nombre: { contains: q, mode: 'insensitive' } } },
+        { materiales: { some: { productoId: { contains: q, mode: 'insensitive' } } } },
+      ],
+    });
+  }
+  if (opts.prioridad && opts.prioridad !== 'ALL') {
+    and.push({ prioridad: opts.prioridad });
+  }
+  if (opts.clienteId) {
+    and.push({ clienteId: opts.clienteId });
+  }
+  if (and.length) where.AND = and;
+
+  const orderBy: Record<string, unknown> = {};
+  if (opts.sortBy === 'prioridad') {
+    // order by prioridad then creadaEn
+    orderBy.prioridad = opts.sortDir ?? 'asc';
+  } else {
+    orderBy.creadaEn = opts.sortDir ?? 'desc';
+  }
+
+  const [ots, total] = await Promise.all([
+    prisma.ordenTrabajo.findMany({
+      where,
+      include: {
+        cliente: { select: { id: true, nombre: true } },
+        materiales: { include: { producto: { select: { nombre: true, uom: true } } } },
+        piezas: true,
+      },
+      orderBy,
+      skip,
+      take: pageSize,
+    }),
+    prisma.ordenTrabajo.count({ where }),
+  ]);
+
+  const rows: OTListRow[] = ots.map(o => {
+    const mats = (o.materiales || []).map(m => {
+      const qtyPlan = Number(m.qtyPlan || 0);
+      const qtyEmit = Number(m.qtyEmit || 0);
+      const faltante = Math.max(0, qtyPlan - qtyEmit);
+      return {
+        id: m.id,
+        productoId: m.productoId,
+        nombre: m.producto?.nombre || m.productoId,
+        uom: m.producto?.uom || 'u',
+        qtyPlan,
+        qtyEmit,
+        qtyPend: Math.max(0, qtyPlan - qtyEmit),
+        stock: 0,
+        faltante,
+      };
+    });
+
+    const piezasList = o.piezas || [];
+    const planP = piezasList.reduce((s, p) => s + Number(p.qtyPlan || 0), 0);
+    const hechaP = piezasList.reduce((s, p) => s + Math.min(Number(p.qtyHecha || 0), Number(p.qtyPlan || 0)), 0);
+    const progPz = planP > 0 ? hechaP / planP : 0;
+
+    const planM = mats.reduce((s, m) => s + (m.qtyPlan || 0), 0);
+    const emitM = mats.reduce((s, m) => s + (m.qtyEmit || 0), 0);
+    const progMat = planM > 0 ? emitM / planM : 0;
+
+    const hasShortage = mats.some(m => m.faltante > 0);
+
+    return {
+      id: o.id,
+      codigo: o.codigo,
+      estado: o.estado as OTListRow['estado'],
+      prioridad: o.prioridad as OTListRow['prioridad'],
+      clienteId: o.cliente?.id ?? null,
+      clienteNombre: o.cliente?.nombre ?? null,
+      creadaEn: o.creadaEn,
+      fechaLimite: (o as { fechaLimite?: Date | null }).fechaLimite ?? null,
+      notas: ((o as { notas?: string | null }).notas ?? undefined) || undefined,
+      acabado: ((o as { acabado?: string | null }).acabado ?? undefined) || undefined,
+      materiales: mats,
+      hasShortage,
+      progresoMateriales: Number(progMat),
+      progresoPiezas: Number(progPz),
+      piezasPend: Math.max(0, planP - hechaP),
+    };
+  });
+
+  return { rows, total };
+}

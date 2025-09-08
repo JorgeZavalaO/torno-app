@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, startTransition } from "react";
+import { useMemo, useState, useEffect, useCallback, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -20,6 +20,14 @@ import { NewOTDialog } from "@/components/ot/new-ot-dialog";
 import { ClientSelect, type ClientOption } from "@/components/ot/client-select";
 import { StatusBadge } from "@/components/ot/status-badge";
 import type { OTListRow } from "@/app/server/queries/ot";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+} from "@/components/ui/pagination";
 
 type Product = { sku: string; nombre: string; uom: string; categoria?: string };
 type OT = OTListRow;
@@ -48,7 +56,10 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
   canWrite: boolean; rows: OT[]; products: Product[]; actions: Actions; clients: ClientOption[];
 }) {
   const [q, setQ] = useState("");
-  const [items, setItems] = useState<OT[]>(rows as OT[]);
+  // items: current page rows from server
+  const [items, setItems] = useState<OT[]>([]);
+  const [total, setTotal] = useState<number>(rows.length);
+  // loading state removed (not currently used)
   const [isCreating, setIsCreating] = useState(false);
 
   const [filterPrioridad, setFilterPrioridad] = useState<"ALL"|"LOW"|"MEDIUM"|"HIGH"|"URGENT">("ALL");
@@ -56,53 +67,40 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
   const [quickState, setQuickState] = useState<"ALL"|"SHORTAGE"|"OPEN"|"IN_PROGRESS">("ALL");
   const [sortBy, setSortBy] = useState<"fecha"|"prioridad">("fecha");
   const [sortDir, setSortDir] = useState<"desc"|"asc">("desc");
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  // Por defecto minimizamos el panel de filtros para reducir clutter en la UI
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  // Paginación cliente
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const router = useRouter();
   const refresh = () => startTransition(() => router.refresh());
 
+  // counts over all rows (server provided via initial prop `rows`)
+  const shortageCountAll = useMemo(()=> rows.filter(r => r.hasShortage).length, [rows]);
+  const inProgressCountAll = useMemo(()=> rows.filter(r => r.estado === "IN_PROGRESS").length, [rows]);
+  const openCountAll = useMemo(()=> rows.filter(r => r.estado === "OPEN").length, [rows]);
+  // counts on current page
   const shortageCount = useMemo(()=> items.filter(r => r.hasShortage).length, [items]);
-  const inProgressCount = useMemo(()=> items.filter(r => r.estado === "IN_PROGRESS").length, [items]);
-  const openCount = useMemo(()=> items.filter(r => r.estado === "OPEN").length, [items]);
+  // page-level counts (kept for possible future use)
+  // const inProgressCount = useMemo(()=> items.filter(r => r.estado === "IN_PROGRESS").length, [items]);
+  // const openCount = useMemo(()=> items.filter(r => r.estado === "OPEN").length, [items]);
 
+  // filtered = current page items filtered by quickState only (other filters are applied server-side)
   const filtered = useMemo(()=>{
-    const s = q.trim().toLowerCase();
-    let out = items.filter(o =>
-      (!s || o.codigo.toLowerCase().includes(s) || (o.clienteNombre ?? "").toLowerCase().includes(s)
-        || o.materiales.some(m => m.nombre.toLowerCase().includes(s) || m.productoId.toLowerCase().includes(s))) &&
-      (filterPrioridad === "ALL" || o.prioridad === filterPrioridad) &&
-      (!filterClienteId || o.clienteId === filterClienteId) &&
-      (
-        quickState === "ALL" ||
-        (quickState === "SHORTAGE" && o.hasShortage) ||
-        (quickState === "OPEN" && o.estado === "OPEN") ||
-        (quickState === "IN_PROGRESS" && o.estado === "IN_PROGRESS")
-      )
+    return items.filter(o =>
+      quickState === "ALL" ||
+      (quickState === "SHORTAGE" && o.hasShortage) ||
+      (quickState === "OPEN" && o.estado === "OPEN") ||
+      (quickState === "IN_PROGRESS" && o.estado === "IN_PROGRESS")
     );
+  }, [items, quickState]);
 
-    // orden
-    if (sortBy === "prioridad") {
-      const rank = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
-      out = [...out].sort((a,b)=> {
-        const pr = rank[a.prioridad] - rank[b.prioridad];
-        if (pr !== 0) return pr;
-        const da = new Date(a.creadaEn).getTime();
-        const db = new Date(b.creadaEn).getTime();
-        return sortDir === "desc" ? db - da : da - db;
-      });
-    } else {
-      out = [...out].sort((a,b)=> {
-        const da = new Date(a.creadaEn).getTime();
-        const db = new Date(b.creadaEn).getTime();
-        return sortDir === "desc" ? db - da : da - db;
-      });
-    }
-    return out;
-  }, [q, items, filterPrioridad, filterClienteId, quickState, sortBy, sortDir]);
+  // Paginación server-side: total provisto por la API
+  const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
+  const pageItems = filtered; // already page rows from server
 
-  const shortageCountAll = shortageCount;
-  const inProgressCountAll = inProgressCount;
-  const openCountAll = openCount;
+  // keep previous names for compatibility
 
   const handleCreateOT = async (payload: CreateOTPayload) => {
     setIsCreating(true);
@@ -142,6 +140,8 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
         setItems(prev => [newOt, ...prev]);
         toast.success(`OT ${r.codigo} creada exitosamente`);
         refresh();
+  // reload first page after creating
+  fetchPage(1);
       } else if (!r.ok) {
         toast.error(r.message || "Error al crear la OT");
       } else {
@@ -151,6 +151,39 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
       setIsCreating(false);
     }
   };
+
+  // Fetch paginated data from API
+  const fetchPage = useCallback(async (p = page) => {
+    const controller = new AbortController();
+    try {
+      const params = new URLSearchParams();
+      params.set('page', String(p));
+      params.set('pageSize', String(pageSize));
+      if (q) params.set('q', q);
+      if (filterPrioridad && filterPrioridad !== 'ALL') params.set('prioridad', filterPrioridad);
+      if (filterClienteId) params.set('clienteId', filterClienteId);
+      if (sortBy) params.set('sortBy', sortBy);
+      if (sortDir) params.set('sortDir', sortDir);
+
+      const res = await fetch(`/api/ots?${params.toString()}`, { signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setItems(json.rows || []);
+      setTotal(typeof json.total === 'number' ? json.total : (rows.length ?? 0));
+      setPage(p);
+    } catch {
+      // ignore abort / errors for now
+    }
+  }, [pageSize, q, filterPrioridad, filterClienteId, sortBy, sortDir, rows.length, page]);
+
+  // initial load
+  useEffect(() => { fetchPage(1); }, [fetchPage]);
+
+  // refetch when relevant filters change
+  useEffect(() => {
+    setPage(1);
+    fetchPage(1);
+  }, [q, pageSize, filterPrioridad, filterClienteId, sortBy, sortDir, fetchPage]);
 
   return (
     <div className="p-6 space-y-6">
@@ -377,7 +410,7 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(o=>(
+                {pageItems.map(o=>(
                   <TableRow key={o.id} className={o.hasShortage ? "bg-red-50/50" : ""}>
                     <TableCell className="font-mono">
                       <div className="flex items-center gap-2">
@@ -494,6 +527,30 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
               </TableBody>
             </Table>
           </Card>
+          {/* Paginación */}
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Mostrar</span>
+              <select value={pageSize} onChange={(e)=>{ setPageSize(Number(e.target.value)); setPage(1); }} className="h-8 border rounded px-2 text-sm">
+                {[10,20,50].map(n=>(<option key={n} value={n}>{n}</option>))}
+              </select>
+              <span className="text-sm text-muted-foreground">entradas</span>
+            </div>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious onClick={()=> fetchPage(Math.max(1, page-1))} />
+                </PaginationItem>
+                {/* Pages simple: mostrar prev/current/next */}
+                <PaginationItem>
+                  <PaginationLink>{page} / {totalPages}</PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext onClick={()=> fetchPage(Math.min(totalPages, page+1))} />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
       </div>
     </div>
   );

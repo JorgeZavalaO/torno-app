@@ -121,17 +121,16 @@ export const getDashboardKPIs = cache(
       // Estadísticas de inventario
       prisma.producto.count(),
       
-      // Productos con stock bajo
+      // Productos con stock bajo - Optimizada con JOIN lateral
       prisma.$queryRaw`
         SELECT COUNT(*) as count
         FROM "Producto" p
-        LEFT JOIN (
-          SELECT "productoId", SUM("cantidad") as stock
-          FROM "Movimiento"
-          GROUP BY "productoId"
-        ) m ON p.sku = m."productoId"
         WHERE p."stockMinimo" IS NOT NULL 
-        AND COALESCE(m.stock, 0) < p."stockMinimo"
+        AND p."stockMinimo" > (
+          SELECT COALESCE(SUM("cantidad"), 0)
+          FROM "Movimiento" m
+          WHERE m."productoId" = p.sku
+        )
       ` as Promise<[{ count: bigint }]>,
       
       // Movimientos recientes
@@ -177,15 +176,16 @@ export const getDashboardKPIs = cache(
     const approvedQuotes = quotesStats.find(s => s.status === 'APPROVED')?._count.id ?? 0;
     const rejectedQuotes = quotesStats.find(s => s.status === 'REJECTED')?._count.id ?? 0;
     
-    // Calcular valor de inventario (aproximado)
+    // Calcular valor de inventario (optimizado con índices)
     const inventoryValue = await prisma.$queryRaw`
-      SELECT SUM(COALESCE(m.stock, 0) * p.costo) as value
+      SELECT SUM(
+        (SELECT COALESCE(SUM("cantidad"), 0) FROM "Movimiento" WHERE "productoId" = p.sku) 
+        * p.costo
+      ) as value
       FROM "Producto" p
-      LEFT JOIN (
-        SELECT "productoId", SUM("cantidad") as stock
-        FROM "Movimiento"
-        GROUP BY "productoId"
-      ) m ON p.sku = m."productoId"
+      WHERE EXISTS (
+        SELECT 1 FROM "Movimiento" WHERE "productoId" = p.sku AND "cantidad" > 0
+      )
     ` as [{ value: number | null }];
     
     // Horas de producción hoy
