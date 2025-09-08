@@ -20,11 +20,13 @@ export const getProductsWithStock = cache(
         by: ["productoId"],
         _sum: { cantidad: true },
       }),
-      prisma.movimiento.findMany({
-        where: { tipo: { in: ["INGRESO_COMPRA", "INGRESO_AJUSTE"] } },
-        orderBy: { fecha: "desc" },
-        select: { productoId: true, costoUnitario: true },
-      }),
+      // Obtener el último costo de ingreso por producto con DISTINCT ON, evitando leer toda la tabla
+      prisma.$queryRaw<{ productoId: string; costoUnitario: number }[]>`
+        SELECT DISTINCT ON ("productoId") "productoId", "costoUnitario"
+        FROM "Movimiento"
+        WHERE "tipo" IN ('INGRESO_COMPRA','INGRESO_AJUSTE')
+        ORDER BY "productoId", "fecha" DESC
+      `,
     ]);
 
     const stockMap = new Map(sums.map(s => [s.productoId, toNum(s._sum.cantidad)]));
@@ -33,18 +35,18 @@ export const getProductsWithStock = cache(
       if (!lastCostMap.has(mov.productoId)) lastCostMap.set(mov.productoId, toNum(mov.costoUnitario));
     }
 
-  return products.map(p => {
+    return products.map(p => {
       const stock = stockMap.get(p.sku) ?? 0;
       const lastCost = lastCostMap.get(p.sku) ?? toNum(p.costo);
       return {
-    sku: p.sku,
-    nombre: p.nombre,
-    categoria: p.categoria,
-    uom: p.uom,
-    costo: toNum(p.costo),
-    stockMinimo: p.stockMinimo != null ? toNum(p.stockMinimo) : null,
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
+        sku: p.sku,
+        nombre: p.nombre,
+        categoria: p.categoria,
+        uom: p.uom,
+        costo: toNum(p.costo),
+        stockMinimo: p.stockMinimo != null ? toNum(p.stockMinimo) : null,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
         stock,
         lastCost,
         stockValue: Number((stock * lastCost).toFixed(2)),

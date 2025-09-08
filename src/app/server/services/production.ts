@@ -93,16 +93,10 @@ export async function logPieces(payload: z.infer<typeof PiecesSchema>){
   const ot = await prisma.ordenTrabajo.findUnique({ where:{ id: otId }, select:{ codigo:true } });
   if(!ot) return { ok:false as const, message:"OT no encontrada" };
 
-  // El cliente Prisma genera modelos con nombres originales; accedemos vía (prisma as any) para evitar romper hasta regenerar tipos.
-  type RawPieza = { id:string; productoId:string|null; qtyPlan:Prisma.Decimal; qtyHecha:Prisma.Decimal };
-  // Prisma genera el cliente según nombres originales (OTPieza). Usamos cast controlado.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pzClient: { findMany: (args: unknown)=>Promise<RawPieza[]> } = (prisma as unknown as { oTPieza: any }).oTPieza;
-  const piezasInfo = await pzClient.findMany({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  where:{ id:{ in: items.map(i=>i.piezaId) }, otId } as any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  select:{ id:true, productoId:true, qtyPlan:true, qtyHecha:true } as any
+  // Leer piezas afectadas y sus cantidades actuales
+  const piezasInfo = await prisma.oTPieza.findMany({
+    where: { id: { in: items.map(i => i.piezaId) }, otId },
+    select: { id: true, productoId: true, qtyPlan: true, qtyHecha: true },
   });
   interface PzData { productoId:string|null; qtyPlan:number; qtyHecha:number }
   const piezaMap = new Map<string, PzData>(
@@ -121,31 +115,52 @@ export async function logPieces(payload: z.infer<typeof PiecesSchema>){
   }
   if(errs.length) return { ok:false as const, message: errs.join(" • ") };
 
-  await prisma.$transaction(async (tx)=>{
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const txPz: { update: (args: unknown)=>Promise<unknown> } = (tx as unknown as { oTPieza:any }).oTPieza;
-    for(const it of items){
-      const pz = piezaMap.get(it.piezaId); if(!pz) continue;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await txPz.update({ where:{ id: it.piezaId }, data:{ qtyHecha:{ increment: D(it.cantidad) } } } as any);
-      if(pz.productoId){
-        const prod = await tx.producto.findUnique({ where:{ sku: pz.productoId }, select:{ costo:true } });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await tx.movimiento.create({ data:{ productoId: pz.productoId, tipo: "INGRESO_OT" as any, cantidad: D(it.cantidad), costoUnitario: D(Number(prod?.costo ?? 0)), refTabla:"OT", refId: ot.codigo, nota:"Producción terminada" } as any });
+  await prisma.$transaction(async (tx) => {
+    // Precalcular costos por SKU para movimientos (una sola consulta)
+    const neededSkus = Array.from(new Set(
+      items
+        .map(i => piezaMap.get(i.piezaId)?.productoId)
+        .filter((s): s is string => !!s)
+    ));
+    const products = neededSkus.length
+      ? await tx.producto.findMany({ where: { sku: { in: neededSkus } }, select: { sku: true, costo: true } })
+      : [];
+    const costBySku = new Map(products.map(p => [p.sku, Number(p.costo ?? 0)]));
+
+    // Acumular movimientos para crear en batch
+    const movs: Array<{ productoId: string; cantidad: Prisma.Decimal; costoUnitario: Prisma.Decimal; refTabla: string; refId: string; nota: string; tipo: 'INGRESO_OT' }>
+      = [];
+
+    for (const it of items) {
+      const pz = piezaMap.get(it.piezaId);
+      if (!pz) continue;
+
+      await tx.oTPieza.update({ where: { id: it.piezaId }, data: { qtyHecha: { increment: D(it.cantidad) } } });
+      if (pz.productoId) {
+        const cu = costBySku.get(pz.productoId) ?? 0;
+        movs.push({
+          productoId: pz.productoId,
+          tipo: 'INGRESO_OT',
+          cantidad: D(it.cantidad),
+          costoUnitario: D(cu),
+          refTabla: 'OT',
+          refId: ot.codigo,
+          nota: 'Producción terminada',
+        });
       }
+    }
+
+    if (movs.length) {
+      await tx.movimiento.createMany({ data: movs });
     }
 
     // Si la OT está en proceso y todas las piezas alcanzan el plan, marcar como DONE
     const curr = await tx.ordenTrabajo.findUnique({ where: { id: otId }, select: { estado: true } });
     if (curr?.estado === "IN_PROGRESS") {
       // Recalcular piezas tras la actualización
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const txPzRead: { findMany: (args: unknown)=>Promise<Array<{ qtyPlan: Prisma.Decimal; qtyHecha: Prisma.Decimal }>> } = (tx as unknown as { oTPieza:any }).oTPieza;
-      const piezasPost = await txPzRead.findMany({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        where: { otId } as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        select: { qtyPlan: true, qtyHecha: true } as any,
+      const piezasPost = await tx.oTPieza.findMany({
+        where: { otId },
+        select: { qtyPlan: true, qtyHecha: true },
       });
       const allComplete = piezasPost.length > 0 && piezasPost.every(p => Number(p.qtyHecha) >= Number(p.qtyPlan));
       if (allComplete) {

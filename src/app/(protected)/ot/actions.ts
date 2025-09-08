@@ -347,10 +347,11 @@ export async function emitOTMaterials(payload: z.infer<typeof EmitMaterialsSchem
       });
 
       // Upsert en OTMaterial (permite emitir incluso si no estaba planificado)
+      // Usa incremento atómico para evitar leer-antes-de-escribir y reducir contención
       await tx.oTMaterial.upsert({
         where: { otId_productoId: { otId, productoId: it.sku } },
         create: { otId, productoId: it.sku, qtyPlan: D(0), qtyEmit: D(it.qty) },
-        update: { qtyEmit: new Prisma.Decimal((await getCurrentQtyEmit(tx, otId, it.sku)) + it.qty) },
+        update: { qtyEmit: { increment: D(it.qty) } },
       });
     }
   });
@@ -550,10 +551,7 @@ async function nextOTCode(tx: Prisma.TransactionClient | typeof prisma = prisma)
   return `${prefix}${String(n).padStart(4, "0")}`;
 }
 
-async function getCurrentQtyEmit(tx: Prisma.TransactionClient | typeof prisma, otId: string, sku: string) {
-  const m = await tx.oTMaterial.findUnique({ where: { otId_productoId: { otId, productoId: sku } }, select: { qtyEmit: true } });
-  return Number(m?.qtyEmit || 0);
-}
+// Removed getCurrentQtyEmit helper (unused) after switching to atomic increment updates.
 
 async function ensureAdminUserId(tx: Prisma.TransactionClient | typeof prisma) {
   const u = await tx.userProfile.findFirst({ select: { id: true } });

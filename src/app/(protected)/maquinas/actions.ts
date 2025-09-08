@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/app/lib/prisma";
-import { assertCanReadMachines, assertCanWriteMachines } from "@/app/lib/guards";
+import { assertCanWriteMachines } from "@/app/lib/guards";
 
 
 type R = { ok: true; message?: string; id?: string } | { ok: false; message: string };
