@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "grant:admin": "tsx prisma/grant-admin.ts",
+    "grant:permissions": "tsx prisma/add-all-permissions.ts",
+    "verify:permissions": "tsx prisma/verify-permissions.ts",
     "db:optimize": "tsx prisma/apply-performance-indexes.ts",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
@@ -51,6 +53,7 @@
     "recharts": "^3.1.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
+    "use-debounce": "^10.0.6",
     "xlsx": "^0.18.5",
     "zod": "^4.0.15"
   },

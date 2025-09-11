@@ -1,9 +1,11 @@
 import { getCurrentUser } from "@/app/lib/auth";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export default async function Landing() {
   const user = await getCurrentUser();
+  if (user) redirect("/dashboard");
 
   return (
     <main className="min-h-dvh flex flex-col items-center justify-center gap-8 p-6 text-center">
@@ -21,7 +23,7 @@ export default async function Landing() {
             <Button asChild variant="secondary"><Link href="/sign-up">Crear cuenta</Link></Button>
           </>
         ) : (
-          <Button asChild><Link href="/admin/roles">Ir al dashboard</Link></Button>
+          <Button asChild><Link href="/dashboard">Ir al dashboard</Link></Button>
         )}
       </div>
 

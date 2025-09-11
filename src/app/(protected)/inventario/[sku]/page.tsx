@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getProductKardex } from "@/app/server/queries/inventory";
 import { Button } from "@/components/ui/button";
+import { EquivalentCodes } from "@/components/inventario/equivalent-codes";
+import { addEquivalentCode, removeEquivalentCode } from "../actions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -18,7 +20,7 @@ export default async function ProductKardexPage({ params }: { params: Promise<{ 
   const data = await getProductKardex(sku);
   if (!data) redirect("/inventario");
 
-  const { producto, stock, movs } = data;
+  const { producto, stock, movs, equivalentes } = data as typeof data & { equivalentes: { id: string; sistema: string; codigo: string; descripcion?: string | null }[] };
   const low =
     producto.stockMinimo != null &&
     Number(stock) < Number(producto.stockMinimo);
@@ -36,9 +38,11 @@ export default async function ProductKardexPage({ params }: { params: Promise<{ 
             {producto.sku} • {producto.uom} • {producto.categoria.replace("_", " ")}
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/inventario">Volver</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/inventario">Volver</Link>
+          </Button>
+        </div>
       </div>
 
       {/* KPIs + alerta visual (burbuja) */}
@@ -75,6 +79,9 @@ export default async function ProductKardexPage({ params }: { params: Promise<{ 
       )}
 
       {/* Tabla Kardex */}
+  <EquivalentCodes sku={producto.sku} codes={equivalentes} actions={{ addEquivalentCode, removeEquivalentCode }} />
+
+  {/* Tabla Kardex */}
       <Card className="overflow-hidden">
         <div className="p-4 font-semibold">Kardex de movimientos</div>
         <div className="px-4 pb-4 overflow-x-auto">

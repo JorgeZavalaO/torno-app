@@ -36,4 +36,8 @@ export type Actions = {
   deleteProduct: (sku: string) => Promise<{ ok: boolean; message?: string }>;
   createMovement: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   importProducts: (file: File) => Promise<{ ok: boolean; message?: string; imported?: number }>;
+  addEquivalentCode: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+  removeEquivalentCode: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+  getProductEquivalentCodes: (sku: string) => Promise<Array<{ id: string; sistema: string; codigo: string; descripcion?: string | null }>>;
+  searchProducts: (searchTerm?: string) => Promise<ProductRow[]>;
 };

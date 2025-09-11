@@ -9,6 +9,7 @@ import { SCList } from "@/components/compras/sc-list";
 import { OCList } from "@/components/compras/oc-list";
 import { ProvidersList } from "@/components/compras/providers-list";
 import { CreateProviderDialog } from "@/components/compras/create-provider-dialog";
+import { RecalculateCostsButton } from "@/components/compras/recalculate-costs-button";
 
 export default function ComprasClient({ currency, canWrite, providers, scs, ocs, products, actions }: {
   currency: string;
@@ -29,26 +30,29 @@ export default function ComprasClient({ currency, canWrite, providers, scs, ocs,
           <h1 className="text-3xl font-bold tracking-tight">Compras</h1>
           <p className="text-muted-foreground">Solicitudes, Órdenes de Compra y Proveedores</p>
         </div>
-        {canWrite && tab === "sc" && (
-          <NewSCDialog
-            products={products}
-            onCreate={async (payload) => {
-              const fd = new FormData();
-              fd.set("items", JSON.stringify(payload.items));
-              if (payload.otId) fd.set("otId", payload.otId);
-              if (payload.notas) fd.set("notas", payload.notas);
-              const r = await actions.createSC(fd);
-              // Control de feedback y recarga se maneja dentro de SCList tras setSCState/OC
-              if (!r.ok) {
-                // fallback de error si algo falla
-                console.error(r.message);
-              } else {
-                // reload para refrescar datos
-                router.refresh();
-              }
-            }}
-          />
-        )}
+        <div className="flex items-center gap-3">
+          {canWrite && <RecalculateCostsButton />}
+          {canWrite && tab === "sc" && (
+            <NewSCDialog
+              products={products}
+              onCreate={async (payload) => {
+                const fd = new FormData();
+                fd.set("items", JSON.stringify(payload.items));
+                if (payload.otId) fd.set("otId", payload.otId);
+                if (payload.notas) fd.set("notas", payload.notas);
+                const r = await actions.createSC(fd);
+                // Control de feedback y recarga se maneja dentro de SCList tras setSCState/OC
+                if (!r.ok) {
+                  // fallback de error si algo falla
+                  console.error(r.message);
+                } else {
+                  // reload para refrescar datos
+                  router.refresh();
+                }
+              }}
+            />
+          )}
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v)=>setTab(v as "sc" | "oc" | "prov")}>

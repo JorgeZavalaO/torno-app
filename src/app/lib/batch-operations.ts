@@ -1,5 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
-import { Prisma, TipoMovimiento, EstadoOT } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 /**
  * Utilidades para actualizaciones optimizadas en lote

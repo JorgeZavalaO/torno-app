@@ -9,6 +9,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanReadInventory, assertCanWriteInventory } from "@/app/lib/guards";
 import { generateSKU } from "./sku";
+import { randomUUID } from "crypto";
+import { getProductsWithStock } from "@/app/server/queries/inventory";
 
 type Result = { ok: true; message?: string; sku?: string; imported?: number } | { ok: false; message: string };
 type r = Result;
@@ -39,6 +41,98 @@ const MovementSchema = z.object({
   nota: z.string().max(300).optional(),
 });
 
+/* ---------------- Códigos equivalentes (ERP) ---------------- */
+const EqCodeCreateSchema = z.object({
+  productoId: z.string().min(1),
+  sistema: z.string().min(2).max(50),
+  codigo: z.string().min(1).max(100),
+  descripcion: z.string().max(200).optional(),
+});
+
+const EqCodeDeleteSchema = z.object({ id: z.string().uuid() });
+
+export async function addEquivalentCode(fd: FormData): Promise<Result> {
+  await assertCanWriteInventory();
+  const parsed = EqCodeCreateSchema.safeParse({
+    productoId: fd.get("productoId"),
+    sistema: fd.get("sistema"),
+    codigo: fd.get("codigo"),
+    descripcion: (fd.get("descripcion") || undefined) as string | undefined,
+  });
+  if (!parsed.success) return { ok: false, message: "Datos inválidos del código" };
+  const { productoId, sistema, codigo, descripcion } = parsed.data;
+  try {
+    // Insert con SQL crudo (id se autogenera)
+    const id = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO "ProductoCodigoEquivalente" ("id", "productoId", "sistema", "codigo", "descripcion")
+      VALUES (${id}::uuid, ${productoId}, ${sistema}, ${codigo}, ${descripcion ?? null})
+    `;
+    revalidateTag(cacheTags.inventoryProducts);
+    revalidateTag(cacheTags.inventoryKardex(productoId));
+    revalidatePath(`/inventario/${encodeURIComponent(productoId)}`, "page");
+    return { ok: true, message: "Código agregado" };
+  } catch (e: unknown) {
+    // Posible violación de unicidad (sistema+codigo)
+    const err = e as { code?: string } | undefined;
+    if (err && err.code === 'P2002') {
+      return { ok: false, message: "El código ya existe en ese sistema" };
+    }
+    console.error(e);
+    return { ok: false, message: "No se pudo agregar el código" };
+  }
+}
+
+export async function removeEquivalentCode(fd: FormData): Promise<Result> {
+  await assertCanWriteInventory();
+  const parsed = EqCodeDeleteSchema.safeParse({ id: fd.get("id") });
+  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
+  const { id } = parsed.data;
+  try {
+    // obtener productoId para invalidación
+    const rows = await prisma.$queryRaw<{ productoId: string }[]>`
+      SELECT "productoId" FROM "ProductoCodigoEquivalente" WHERE id = ${id} LIMIT 1
+    `;
+    const productoId = rows?.[0]?.productoId;
+    if (!productoId) return { ok: false, message: "Código no encontrado" };
+    await prisma.$executeRaw`
+      DELETE FROM "ProductoCodigoEquivalente" WHERE id = ${id}
+    `;
+    revalidateTag(cacheTags.inventoryProducts);
+    revalidateTag(cacheTags.inventoryKardex(productoId));
+    revalidatePath(`/inventario/${encodeURIComponent(productoId)}`, "page");
+    return { ok: true, message: "Código eliminado" };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: "No se pudo eliminar el código" };
+  }
+}
+
+export async function getProductEquivalentCodes(sku: string): Promise<Array<{ id: string; sistema: string; codigo: string; descripcion?: string | null }>> {
+  await assertCanReadInventory();
+  try {
+    const codes = await prisma.$queryRaw<Array<{
+      id: string;
+      sistema: string;
+      codigo: string;
+      descripcion: string | null;
+    }>>`
+      SELECT id, sistema, codigo, descripcion
+      FROM "ProductoCodigoEquivalente"
+      WHERE "productoId" = ${sku}
+      ORDER BY sistema ASC, codigo ASC
+    `;
+    return codes;
+  } catch (e) {
+    // Si la tabla no existe aún (42P01), retornar vacío
+    const msg = e instanceof Error ? e.message : '';
+    if (msg.includes('42P01')) {
+      return [];
+    }
+    throw e;
+  }
+}
+
 function bumpAll() {
   revalidateTag(cacheTags.inventoryProducts);
   revalidateTag(cacheTags.inventoryMovs);
@@ -62,6 +156,24 @@ export async function createProduct(fd: FormData): Promise<r> {
   
   if (!parsed.success) return { ok: false, message: "Datos inválidos del producto" };
   const { nombre, categoria, uom, costo, stockMinimo } = parsed.data;
+  // Leer equivalentes opcionales en formato JSON (array de objetos)
+  let equivalentes: Array<{ sistema: string; codigo: string; descripcion?: string } > = [];
+  const rawEq = fd.get('equivalentes');
+  
+  if (rawEq && typeof rawEq === 'string') {
+    try {
+      const arr = JSON.parse(rawEq);
+      if (Array.isArray(arr)) {
+        equivalentes = arr
+          .filter(x => x && typeof x.sistema === 'string' && typeof x.codigo === 'string')
+          .map(x => ({ sistema: x.sistema, codigo: x.codigo, descripcion: x.descripcion }))
+          .slice(0, 20); // límite de seguridad
+      }
+    } catch (parseError) {
+      console.warn('Error parseando equivalentes JSON:', parseError);
+      // ignorar json inválido
+    }
+  }
 
   try {
 
@@ -76,6 +188,29 @@ export async function createProduct(fd: FormData): Promise<r> {
         stockMinimo: stockMinimo != null ? D(stockMinimo) : null,
       },
     });
+
+    // Intentar insertar códigos equivalentes si se enviaron
+    if (equivalentes.length > 0) {
+      try {
+        for (const eq of equivalentes) {
+          const id = randomUUID();
+          await prisma.$executeRaw`
+            INSERT INTO "ProductoCodigoEquivalente" ("id", "productoId", "sistema", "codigo", "descripcion")
+            VALUES (${id}::uuid, ${sku}, ${eq.sistema}, ${eq.codigo}, ${eq.descripcion ?? null})
+            ON CONFLICT ("sistema", "codigo") DO NOTHING
+          `;
+        }
+        // invalidaciones relacionadas
+        revalidateTag(cacheTags.inventoryKardex(sku));
+      } catch (e) {
+        console.warn('Error insertando códigos equivalentes:', e);
+        const msg = e instanceof Error ? e.message : '';
+        // Si la tabla no existe (42P01), no fallar la creación del producto
+        if (!msg.includes('42P01')) {
+          console.warn('No se pudieron insertar códigos equivalentes:', e);
+        }
+      }
+    }
     bumpAll();
     return { ok: true, message: "Producto creado", sku };
   } catch (e: unknown) {
@@ -254,4 +389,17 @@ export async function importProducts(file: File): Promise<r> {
     console.error("Error al importar productos:", e);
     return { ok: false, message: "Error al procesar el archivo CSV" };
   }
+}
+
+/**
+ * Buscar productos con término de búsqueda (incluye códigos equivalentes)
+ */
+export async function searchProducts(searchTerm?: string) {
+  await assertCanReadInventory();
+  
+  if (!searchTerm?.trim()) {
+    return getProductsWithStock();
+  }
+  
+  return getProductsWithStock(searchTerm);
 }

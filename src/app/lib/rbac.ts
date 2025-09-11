@@ -27,12 +27,16 @@ const _getUserPermissionCodes = async (email: string): Promise<string[]> => {
   return rows.map(r => r.permission.code);
 };
 
-// ✅ cache cross-request con tags (se invalida cuando tus server actions llaman revalidateTag)
-const getUserPermissionCodes = ucache(
-  _getUserPermissionCodes,
-  ["rbac:permcodes"],
-  { tags: [cacheTags.users, cacheTags.roles, cacheTags.permissions] }
-);
+// ✅ Cache cross-request con tags por USUARIO (la clave incluye el email)
+export const getUserPermissionCodes = async (email: string): Promise<string[]> => {
+  const emailKey = (email || "").toLowerCase();
+  const cachedFn = ucache(
+    () => _getUserPermissionCodes(emailKey),
+    ["rbac:permcodes", emailKey],
+    { tags: [cacheTags.users, cacheTags.roles, cacheTags.permissions] }
+  );
+  return cachedFn();
+};
 
 export async function userHasPermission(userEmail: string, permissionCode: string) {
   const codes = new Set(await getUserPermissionCodes(userEmail));

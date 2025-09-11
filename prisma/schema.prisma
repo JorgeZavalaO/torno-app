@@ -198,8 +198,25 @@ model Producto {
   ocItems      OCItem[]
   otMateriales OTMaterial[]
   otPiezas     OTPieza[]
+  codigosEquivalentes ProductoCodigoEquivalente[]
 
   @@index([nombre])
+}
+
+/// Códigos equivalentes de productos para integrar con ERP/sistemas externos
+model ProductoCodigoEquivalente {
+  id          String   @id @default(uuid())
+  productoId  String
+  sistema     String
+  codigo      String
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  producto    Producto @relation(fields: [productoId], references: [sku], onDelete: Cascade)
+
+  @@index([productoId])
+  @@unique([sistema, codigo])
 }
 
 model Movimiento {

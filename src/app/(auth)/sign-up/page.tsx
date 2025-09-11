@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 
 export default async function SignUpPage() {
   const session = await auth();
-  if (session?.user) redirect("/admin/roles");
+  if (session?.user) redirect("/dashboard");
 
   async function doRegister(formData: FormData) {
     "use server";
@@ -41,7 +41,7 @@ export default async function SignUpPage() {
       await signIn("credentials", {
         email,
         password,
-        redirectTo: "/admin/roles",
+        redirectTo: "/dashboard",
       });
     } catch (e) {
       if (e instanceof AuthError) {

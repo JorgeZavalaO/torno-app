@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,14 +9,13 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Package, Sparkles, AlertCircle, Info } from "lucide-react";
+import { Edit, AlertCircle, Info, Trash2 } from "lucide-react";
 import { unidadesMedida } from "../../app/(protected)/inventario/uoms";
 import { CATEGORIES } from "@/lib/product-categories";
+import type { ProductRow } from "./types";
 
 interface FormErrors {
-  sku?: string;
   nombre?: string;
   categoria?: string;
   uom?: string;
@@ -25,51 +24,96 @@ interface FormErrors {
   equivalentes?: string;
 }
 
-export function NewProductDialog({
-  open, onOpenChange, onSuccess, actions, currency = "PEN",
+interface EquivalentCode {
+  id?: string;
+  sistema: string;
+  codigo: string;
+  descripcion?: string;
+  isNew?: boolean;
+  toDelete?: boolean;
+}
+
+export function EditProductDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  product,
+  actions,
+  currency = "PEN",
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSuccess: (msg: string) => void;
-  actions: { createProduct: (fd: FormData) => Promise<{ok: boolean; message?: string; sku?: string}> };
+  product: ProductRow | null;
+  equivalentCodes?: Array<{ id: string; sistema: string; codigo: string; descripcion?: string | null }>; // Deprecated: se cargará automáticamente
+  actions: {
+    updateProduct: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+    addEquivalentCode: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+    removeEquivalentCode: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+    getProductEquivalentCodes: (sku: string) => Promise<Array<{ id: string; sistema: string; codigo: string; descripcion?: string | null }>>;
+  };
   currency?: string;
 }) {
   const router = useRouter();
-  const [sku, setSku] = useState("");
   const [nombre, setNombre] = useState("");
   const [categoria, setCategoria] = useState<(typeof CATEGORIES)[number]>(CATEGORIES[0]);
   const [uom, setUom] = useState("pz");
   const [costo, setCosto] = useState<number | "">(0);
   const [stockMinimo, setStockMinimo] = useState<number | "">("");
-  const [autoGenerateSku, setAutoGenerateSku] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
   const [pending, start] = useTransition();
-  // Códigos equivalentes opcionales (máx 3 filas simples)
-  const [eqCodes, setEqCodes] = useState<Array<{ sistema: string; codigo: string; descripcion?: string }>>([
-    { sistema: "", codigo: "", descripcion: "" },
-  ]);
+  const [loadingCodes, setLoadingCodes] = useState(false);
+  
+  // Códigos equivalentes - manejo más sofisticado para edición
+  const [eqCodes, setEqCodes] = useState<EquivalentCode[]>([]);
 
-  // Generate SKU preview based on category and name
-  const generateSkuPreview = () => {
-    if (!nombre || !autoGenerateSku) return "";
-    
-    const categoryPrefix = categoria.split('_')[0].substring(0, 2).toUpperCase();
-    const namePrefix = nombre.split(' ')[0].substring(0, 3).toUpperCase();
-    return `${categoryPrefix}${namePrefix}-XXX`;
-  };
+  // Inicializar formulario cuando cambia el producto
+  useEffect(() => {
+    if (product && open) {
+      setNombre(product.nombre);
+      setCategoria(product.categoria);
+      setUom(product.uom);
+      setCosto(product.costo);
+      setStockMinimo(product.stockMinimo ?? "");
+      setErrors({});
 
-  const skuPreview = generateSkuPreview();
+      // Cargar códigos equivalentes automáticamente
+      const loadEquivalentCodes = async () => {
+        setLoadingCodes(true);
+        try {
+          const codes = await actions.getProductEquivalentCodes(product.sku);
+          const existingCodes: EquivalentCode[] = codes.map(eq => ({
+            id: eq.id,
+            sistema: eq.sistema,
+            codigo: eq.codigo,
+            descripcion: eq.descripcion || "",
+            isNew: false,
+            toDelete: false,
+          }));
+          
+          // Agregar una fila vacía para nuevos códigos
+          setEqCodes([...existingCodes, { sistema: "", codigo: "", descripcion: "", isNew: true }]);
+        } catch (error) {
+          console.warn('Error cargando códigos equivalentes:', error);
+          // En caso de error, inicializar con fila vacía
+          setEqCodes([{ sistema: "", codigo: "", descripcion: "", isNew: true }]);
+        } finally {
+          setLoadingCodes(false);
+        }
+      };
+
+      loadEquivalentCodes();
+    }
+  }, [product, open, actions]);
 
   const reset = () => {
-    setSku("");
     setNombre("");
     setCategoria(CATEGORIES[0]);
     setUom("pz");
     setCosto(0);
     setStockMinimo("");
-    setAutoGenerateSku(true);
+    setEqCodes([]);
     setErrors({});
-    setEqCodes([{ sistema: "", codigo: "", descripcion: "" }]);
   };
 
   const validateForm = (): boolean => {
@@ -81,13 +125,6 @@ export function NewProductDialog({
       newErrors.nombre = "El nombre debe tener al menos 3 caracteres";
     }
 
-    if (!autoGenerateSku && sku.trim()) {
-      const skuPattern = /^[A-Z0-9-_]{3,20}$/;
-      if (!skuPattern.test(sku.trim())) {
-        newErrors.sku = "SKU debe contener solo letras, números, guiones y ser entre 3-20 caracteres";
-      }
-    }
-
     if (costo !== "" && Number(costo) < 0) {
       newErrors.costo = "El costo no puede ser negativo";
     }
@@ -97,7 +134,7 @@ export function NewProductDialog({
     }
 
     // Validar códigos equivalentes
-    const validEqCodes = eqCodes.filter(e => e.sistema.trim() || e.codigo.trim());
+    const validEqCodes = eqCodes.filter(e => !e.toDelete && (e.sistema.trim() || e.codigo.trim()));
     for (const eq of validEqCodes) {
       if (eq.sistema.trim() && !eq.codigo.trim()) {
         newErrors.equivalentes = "Si especificas un sistema, el código es obligatorio";
@@ -113,51 +150,103 @@ export function NewProductDialog({
     return Object.keys(newErrors).length === 0;
   };
 
+  const updateEquivalentCode = (idx: number, field: keyof EquivalentCode, value: string | boolean) => {
+    setEqCodes(prev => prev.map((eq, i) => 
+      i === idx ? { ...eq, [field]: value } : eq
+    ));
+  };
+
+  const addNewEquivalentRow = () => {
+    setEqCodes(prev => [...prev, { sistema: "", codigo: "", descripcion: "", isNew: true }]);
+  };
+
+  const removeEquivalentRow = (idx: number) => {
+    const eq = eqCodes[idx];
+    if (eq.id && !eq.isNew) {
+      // Marcar para eliminar en lugar de remover inmediatamente
+      updateEquivalentCode(idx, 'toDelete', true);
+    } else {
+      // Remover fila nueva inmediatamente
+      setEqCodes(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
+
   const submit = () => {
+    if (!product) return;
+    
     if (!validateForm()) {
       toast.error("Corrige los errores en el formulario");
       return;
     }
 
-    const fd = new FormData();
-    
-    if (!autoGenerateSku && sku.trim()) {
-      fd.set("sku", sku.trim().toUpperCase());
-    }
-
-    fd.set("nombre", nombre.trim());
-    fd.set("categoria", categoria);
-    fd.set("uom", uom);
-    fd.set("costo", String(costo || 0));
-    if (stockMinimo !== "") fd.set("stockMinimo", String(stockMinimo));
-    // Adjuntar códigos equivalentes válidos
-    const cleanEq = eqCodes
-      .filter(e => e.sistema.trim() && e.codigo.trim())
-      .map(e => ({ sistema: e.sistema.trim(), codigo: e.codigo.trim(), descripcion: e.descripcion?.trim() || undefined }));
-    
-    if (cleanEq.length > 0) {
-      fd.set('equivalentes', JSON.stringify(cleanEq.slice(0, 3)));
-    }
-
     start(async () => {
-      const r = await actions.createProduct(fd);
-      if (r.ok) {
-        onSuccess(`${r.message ?? "Producto creado exitosamente"} ${r.sku ? `(SKU: ${r.sku})` : ''}`);
+      try {
+        // 1. Actualizar producto básico
+        const fd = new FormData();
+        fd.set("sku", product.sku);
+        fd.set("nombre", nombre.trim());
+        fd.set("categoria", categoria);
+        fd.set("uom", uom);
+        fd.set("costo", String(costo || 0));
+        if (stockMinimo !== "") fd.set("stockMinimo", String(stockMinimo));
+
+        const updateResult = await actions.updateProduct(fd);
+        if (!updateResult.ok) {
+          toast.error(updateResult.message ?? "Error al actualizar el producto");
+          return;
+        }
+
+        // 2. Procesar cambios en códigos equivalentes
+        let eqErrors = 0;
+        
+        // Eliminar códigos marcados para eliminación
+        for (const eq of eqCodes.filter(e => e.toDelete && e.id)) {
+          const deleteFd = new FormData();
+          deleteFd.set("id", eq.id!);
+          const deleteResult = await actions.removeEquivalentCode(deleteFd);
+          if (!deleteResult.ok) {
+            console.warn("Error eliminando código equivalente:", deleteResult.message);
+            eqErrors++;
+          }
+        }
+
+        // Agregar nuevos códigos equivalentes
+        for (const eq of eqCodes.filter(e => e.isNew && e.sistema.trim() && e.codigo.trim())) {
+          const addFd = new FormData();
+          addFd.set("productoId", product.sku);
+          addFd.set("sistema", eq.sistema.trim());
+          addFd.set("codigo", eq.codigo.trim());
+          if (eq.descripcion?.trim()) addFd.set("descripcion", eq.descripcion.trim());
+          
+          const addResult = await actions.addEquivalentCode(addFd);
+          if (!addResult.ok) {
+            console.warn("Error agregando código equivalente:", addResult.message);
+            eqErrors++;
+          }
+        }
+
+        const successMsg = eqErrors > 0 
+          ? `Producto actualizado con ${eqErrors} errores en códigos equivalentes`
+          : updateResult.message ?? "Producto actualizado exitosamente";
+          
+        onSuccess(successMsg);
         onOpenChange(false);
-        reset();
         router.refresh();
-      } else {
-        toast.error(r.message ?? "Error al crear el producto");
+      } catch (error) {
+        console.error("Error actualizando producto:", error);
+        toast.error("Error inesperado al actualizar el producto");
       }
     });
   };
 
   const handleOpenChange = (o: boolean) => {
     if (!pending) {
-      if (!o) reset(); // Reset form when closing
+      if (!o) reset();
       onOpenChange(o);
     }
   };
+
+  if (!product) return null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -165,71 +254,23 @@ export function NewProductDialog({
         <DialogHeader className="space-y-3">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-lg bg-primary/10">
-              <Package className="h-5 w-5 text-primary" />
+              <Edit className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-xl">Nuevo producto</DialogTitle>
+              <DialogTitle className="text-xl">Editar producto</DialogTitle>
               <DialogDescription>
-                Crea un nuevo SKU en el inventario con toda la información necesaria
+                Modifica la información del producto: {product.sku}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* SKU Configuration */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Configuración de SKU</Label>
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="auto-sku" className="text-sm">Generar automáticamente</Label>
-                <Switch
-                  id="auto-sku"
-                  checked={autoGenerateSku}
-                  onCheckedChange={setAutoGenerateSku}
-                />
-              </div>
-            </div>
-
-            {!autoGenerateSku && (
-              <div className="space-y-2">
-                <Label htmlFor="sku" className="text-sm">
-                  SKU personalizado *
-                </Label>
-                <Input
-                  id="sku"
-                  value={sku}
-                  onChange={e => setSku(e.target.value.toUpperCase())}
-                  placeholder="MP-001, PROD-ABC, etc."
-                  className={`uppercase font-mono ${errors.sku ? "border-red-500" : ""}`}
-                />
-                {errors.sku && (
-                  <div className="flex items-center gap-1 text-sm text-red-600">
-                    <AlertCircle className="h-4 w-4" />
-                    {errors.sku}
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Solo letras mayúsculas, números y guiones. Entre 3 y 20 caracteres.
-                </p>
-              </div>
-            )}
-
-            {autoGenerateSku && skuPreview && (
-              <div className="p-3 bg-muted/50 rounded-lg border-2 border-dashed">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Vista previa del SKU:</span>
-                  <Badge variant="outline" className="font-mono">{skuPreview}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Se generará automáticamente basado en categoría y nombre
-                </p>
-              </div>
-            )}
+          {/* SKU - Solo mostrar, no editable */}
+          <div className="p-3 bg-muted/30 rounded-lg">
+            <Label className="text-sm font-medium text-muted-foreground">SKU (no editable)</Label>
+            <div className="font-mono text-lg font-bold">{product.sku}</div>
           </div>
-
-          <Separator />
 
           {/* Basic Information */}
           <div className="space-y-4">
@@ -381,113 +422,119 @@ export function NewProductDialog({
 
           <Separator />
 
-          {/* Códigos equivalentes opcionales */}
+          {/* Códigos equivalentes */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Códigos equivalentes (opcional)</Label>
+              <Label className="text-sm font-medium">Códigos equivalentes</Label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setEqCodes(prev => prev.length < 3 ? [...prev, { sistema: "", codigo: "", descripcion: "" }] : prev)}
+                onClick={addNewEquivalentRow}
+                disabled={eqCodes.length >= 10}
               >
-                Agregar fila
+                Agregar código
               </Button>
             </div>
-            <div className="grid gap-2">
-              {eqCodes.map((row, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            
+            <div className="grid gap-3">
+              {loadingCodes ? (
+                <div className="flex items-center justify-center p-4 text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                  Cargando códigos equivalentes...
+                </div>
+              ) : (
+                eqCodes.map((eq, idx) => (
+                <div 
+                  key={idx} 
+                  className={`grid grid-cols-1 md:grid-cols-3 gap-2 p-3 rounded-lg border ${
+                    eq.toDelete ? 'bg-red-50 border-red-200 opacity-50' : 
+                    eq.isNew ? 'bg-green-50 border-green-200' : 
+                    'bg-background'
+                  }`}
+                >
                   <Input
                     placeholder="Sistema (SAP, Odoo, etc.)"
-                    value={row.sistema}
-                    onChange={e => {
-                      const v = e.target.value;
-                      setEqCodes(arr => arr.map((r,i)=> i===idx? { ...r, sistema: v }: r));
-                    }}
+                    value={eq.sistema}
+                    disabled={eq.toDelete}
+                    onChange={e => updateEquivalentCode(idx, 'sistema', e.target.value)}
                     className={errors.equivalentes ? "border-red-500" : ""}
                   />
                   <Input
                     placeholder="Código en el sistema"
-                    value={row.codigo}
-                    onChange={e => {
-                      const v = e.target.value;
-                      setEqCodes(arr => arr.map((r,i)=> i===idx? { ...r, codigo: v }: r));
-                    }}
+                    value={eq.codigo}
+                    disabled={eq.toDelete}
+                    onChange={e => updateEquivalentCode(idx, 'codigo', e.target.value)}
                     className={errors.equivalentes ? "border-red-500" : ""}
                   />
                   <div className="flex gap-2">
                     <Input
                       placeholder="Descripción (opcional)"
-                      value={row.descripcion || ""}
-                      onChange={e => {
-                        const v = e.target.value;
-                        setEqCodes(arr => arr.map((r,i)=> i===idx? { ...r, descripcion: v }: r));
-                      }}
+                      value={eq.descripcion || ""}
+                      disabled={eq.toDelete}
+                      onChange={e => updateEquivalentCode(idx, 'descripcion', e.target.value)}
                     />
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant={eq.toDelete ? "default" : "ghost"}
                       size="sm"
-                      onClick={() => setEqCodes(arr => arr.length > 1 ? arr.filter((_,i)=>i!==idx) : [{ sistema: "", codigo: "", descripcion: "" }])}
+                      onClick={() => 
+                        eq.toDelete 
+                          ? updateEquivalentCode(idx, 'toDelete', false) // Restaurar
+                          : removeEquivalentRow(idx) // Eliminar/marcar
+                      }
+                      title={eq.toDelete ? "Restaurar" : "Eliminar"}
                     >
-                      ✕
+                      {eq.toDelete ? "↶" : <Trash2 className="h-4 w-4" />}
                     </Button>
                   </div>
+                  
+                  {/* Indicador de estado */}
+                  <div className="md:col-span-3">
+                    {eq.toDelete && (
+                      <p className="text-xs text-red-600">Este código será eliminado</p>
+                    )}
+                    {eq.isNew && eq.sistema && eq.codigo && (
+                      <p className="text-xs text-green-600">Este código será agregado</p>
+                    )}
+                  </div>
                 </div>
-              ))}
+              ))
+              )}
+              
               {errors.equivalentes && (
                 <div className="flex items-center gap-1 text-sm text-red-600">
                   <AlertCircle className="h-4 w-4" />
                   {errors.equivalentes}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">Estos códigos permiten mapear el SKU con sistemas externos (ERP). Puedes dejarlos en blanco.</p>
+              
+              <p className="text-xs text-muted-foreground">
+                Estos códigos permiten mapear el SKU con sistemas externos (ERP).
+                Los cambios se aplicarán al guardar.
+              </p>
             </div>
           </div>
 
-          {/* Summary */}
-          {nombre && (
-            <div className="p-4 bg-muted/30 rounded-lg border">
-              <div className="flex items-center gap-2 mb-3">
-                <Package className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">Resumen del producto</span>
+          {/* Current Stock Info */}
+          <div className="p-4 bg-muted/30 rounded-lg border">
+            <div className="flex items-center gap-2 mb-2">
+              <Info className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Información actual</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Stock actual:</span>
+                <span className="ml-2 font-medium">{product.stock} {product.uom}</span>
               </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Nombre:</span>
-                  <span className="font-medium">{nombre}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">SKU:</span>
-                  <span className="font-mono">
-                    {autoGenerateSku ? (skuPreview || "Se generará automáticamente") : (sku || "Personalizado")}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Categoría:</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {categoria.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
-                  </Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Unidad:</span>
-                  <span>{unidadesMedida.find(u => u.value === uom)?.label} ({uom})</span>
-                </div>
-        {costo !== "" && Number(costo) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Costo:</span>
-          <span className="font-mono">{currency === "USD" ? "$" : "S/"}{Number(costo).toFixed(2)}</span>
-                  </div>
-                )}
-                {stockMinimo !== "" && Number(stockMinimo) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Stock mínimo:</span>
-                    <span>{stockMinimo} {uom}</span>
-                  </div>
-                )}
+              <div>
+                <span className="text-muted-foreground">Valor en inventario:</span>
+                <span className="ml-2 font-medium">
+                  {currency === "USD" ? "$" : "S/"}{product.stockValue.toFixed(2)}
+                </span>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-6 border-t">
@@ -507,10 +554,10 @@ export function NewProductDialog({
             {pending ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                Creando producto...
+                Actualizando...
               </>
             ) : (
-              "Crear producto"
+              "Actualizar producto"
             )}
           </Button>
         </div>

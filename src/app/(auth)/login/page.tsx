@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 export default async function LoginPage() {
   const session = await auth();
-  if (session?.user) redirect("/admin/roles");
+  if (session?.user) redirect("/dashboard");
 
   async function doLogin(formData: FormData) {
     "use server";
@@ -13,7 +13,7 @@ export default async function LoginPage() {
       await signIn("credentials", {
         email: String(formData.get("email") || "").toLowerCase(),
         password: String(formData.get("password") || ""),
-        redirectTo: "/admin/roles",
+        redirectTo: "/dashboard",
       });
     } catch (e) {
       if (e instanceof AuthError) {

@@ -3,17 +3,26 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Edit } from "lucide-react";
 import type { ProductRow } from "./types";
 import Link from "next/link";
 
 export interface ProductTableProps {
   products: ProductRow[]; // ya filtrados
   fmtCurrency?: (n: number) => string;
+  onEdit?: (product: ProductRow) => void;
+  canWrite?: boolean;
 }
 
 const defaultFmt = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: "PEN" }).format(n);
 
-export const ProductTable: React.FC<ProductTableProps> = ({ products, fmtCurrency = defaultFmt }) => {
+export const ProductTable: React.FC<ProductTableProps> = ({ 
+  products, 
+  fmtCurrency = defaultFmt, 
+  onEdit,
+  canWrite = false 
+}) => {
   return (
     <Card className="overflow-hidden">
       <Table>
@@ -25,6 +34,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({ products, fmtCurrenc
             <TableHead className="text-center">Stock</TableHead>
             <TableHead className="text-right">Costo ref.</TableHead>
             <TableHead className="text-right">Valor</TableHead>
+            {canWrite && <TableHead className="text-center">Acciones</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -54,11 +64,23 @@ export const ProductTable: React.FC<ProductTableProps> = ({ products, fmtCurrenc
                 </TableCell>
                 <TableCell className="text-right">{fmtCurrency(Number(p.lastCost))}</TableCell>
                 <TableCell className="text-right font-medium">{fmtCurrency(Number(p.stockValue))}</TableCell>
+                {canWrite && (
+                  <TableCell className="text-center">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onEdit?.(p)}
+                      title="Editar producto"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}
           {products.length === 0 && (
-            <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Sin productos</TableCell></TableRow>
+            <TableRow><TableCell colSpan={canWrite ? 7 : 6} className="py-10 text-center text-muted-foreground">Sin productos</TableCell></TableRow>
           )}
         </TableBody>
       </Table>

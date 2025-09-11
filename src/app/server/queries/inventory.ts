@@ -8,11 +8,46 @@ const toNum = (v: unknown) => (v == null ? 0 : Number((v as { toString?(): strin
 /**
  * Lista de productos con stock calculado y último costo de ingreso.
  * Optimiza: 2 queries y composición en memoria.
+ * Incluye búsqueda por códigos equivalentes.
  */
 export const getProductsWithStock = cache(
-  async () => {
+  async (searchTerm?: string) => {
+    let equivalentProductIds: string[] = [];
+
+    // Si hay término de búsqueda, buscar en códigos equivalentes también
+    if (searchTerm?.trim()) {
+      try {
+        const searchLower = searchTerm.toLowerCase().trim();
+        const equivalentMatches = await prisma.$queryRaw<{ productoId: string }[]>`
+          SELECT DISTINCT "productoId" 
+          FROM "ProductoCodigoEquivalente"
+          WHERE LOWER("sistema") LIKE ${`%${searchLower}%`} 
+             OR LOWER("codigo") LIKE ${`%${searchLower}%`}
+             OR LOWER("descripcion") LIKE ${`%${searchLower}%`}
+        `;
+        equivalentProductIds = equivalentMatches.map(m => m.productoId);
+      } catch (e) {
+        // Si la tabla no existe, ignorar
+        console.warn('Error buscando en códigos equivalentes:', e);
+      }
+    }
+
+    // Construir filtros para la búsqueda
+    let productWhere = undefined;
+    if (searchTerm?.trim()) {
+      productWhere = {
+        OR: [
+          { nombre: { contains: searchTerm, mode: 'insensitive' as const } },
+          { sku: { contains: searchTerm, mode: 'insensitive' as const } },
+          // Incluir productos encontrados por códigos equivalentes
+          ...(equivalentProductIds.length > 0 ? [{ sku: { in: equivalentProductIds } }] : [])
+        ]
+      };
+    }
+    
     const [products, sums, lastInCost] = await Promise.all([
       prisma.producto.findMany({
+        where: productWhere,
         orderBy: { nombre: "asc" },
         select: { sku: true, nombre: true, categoria: true, uom: true, costo: true, stockMinimo: true, createdAt: true, updatedAt: true },
       }),
@@ -93,15 +128,33 @@ export async function getProductKardex(sku: string) {
       orderBy: { fecha: "desc" },
     }),
   ]);
+  let eqCodes: { id: string; sistema: string; codigo: string; descripcion: string | null }[] = [];
+  try {
+    eqCodes = await prisma.$queryRaw<{ id: string; sistema: string; codigo: string; descripcion: string | null }[]>`
+      SELECT id, sistema, codigo, descripcion
+      FROM "ProductoCodigoEquivalente"
+      WHERE "productoId" = ${sku}
+      ORDER BY sistema ASC, codigo ASC
+    `;
+  } catch (e) {
+    // Si la tabla no existe aún (42P01), retornar vacío sin romper la página
+    const msg = e instanceof Error ? e.message : '';
+    if (msg.includes('42P01')) {
+      eqCodes = [];
+    } else {
+      throw e;
+    }
+  }
   if (!p) return null;
   const toNum = (v: unknown) => Number((v as { toString?(): string })?.toString?.() ?? v ?? 0);
-  const stock = toNum(movs.reduce((acc, m) => acc + toNum(m.cantidad), 0));
+  const stock = movs.reduce<number>((acc, m) => acc + toNum(m.cantidad), 0);
   return {
     producto: {
       sku: p.sku, nombre: p.nombre, categoria: p.categoria, uom: p.uom,
       costo: toNum(p.costo), stockMinimo: p.stockMinimo ? toNum(p.stockMinimo) : null,
       createdAt: p.createdAt, updatedAt: p.updatedAt,
     },
+    equivalentes: eqCodes,
     stock,
     movs: movs.map(m => ({
       id: m.id, fecha: m.fecha, tipo: m.tipo, cantidad: toNum(m.cantidad), costoUnitario: toNum(m.costoUnitario),
