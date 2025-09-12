@@ -52,8 +52,10 @@ type Actions = {
   createSCFromShortages: (otId: string) => Promise<{ok:boolean; message?:string; id?:string}>;
 };
 
-export default function OTClient({ canWrite, rows, products, actions, clients }:{
+export default function OTClient({ canWrite, rows, products, actions, clients, prioridadOptions, acabadoOptions }:{
   canWrite: boolean; rows: OT[]; products: Product[]; actions: Actions; clients: ClientOption[];
+  prioridadOptions?: { value: string; label: string }[];
+  acabadoOptions?: { value: string; label: string }[];
 }) {
   const [q, setQ] = useState("");
   // items: current page rows from server
@@ -198,6 +200,8 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
             clients={clients}
             onCreate={handleCreateOT}
             isCreating={isCreating}
+            prioridadOptions={prioridadOptions}
+            acabadoOptions={acabadoOptions}
           />
         )}
       </div>
@@ -435,11 +439,11 @@ export default function OTClient({ canWrite, rows, products, actions, clients }:
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      <PriorityBadge prioridad={o.prioridad} />
+                      <PriorityBadge prioridad={o.prioridad} options={prioridadOptions} />
                     </TableCell>
                     <TableCell className="text-center">
                       {o.acabado ? (
-                        <AcabadoBadge acabado={o.acabado} showIcon={false} />
+                        <AcabadoBadge acabado={o.acabado} showIcon={false} options={acabadoOptions} />
                       ) : (
                         <span className="text-xs text-muted-foreground">Sin acabado</span>
                       )}

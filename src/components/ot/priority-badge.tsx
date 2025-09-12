@@ -36,19 +36,23 @@ const config: Record<Prioridad, {
   },
 };
 
-export function PriorityBadge({ prioridad, className, showIcon = true }: { 
+type CatalogOption = { value: string; label: string; color?: string | null; icono?: string | null };
+
+export function PriorityBadge({ prioridad, className, showIcon = true, options }: { 
   prioridad: Prioridad; 
   className?: string;
   showIcon?: boolean;
+  options?: CatalogOption[];
 }) {
   const { label, className: configClassName, icon: Icon, variant } = config[prioridad];
+  const labelFromCatalog = options?.find(o => o.value === prioridad)?.label;
   return (
     <Badge 
       variant={variant || "default"} 
       className={cn(configClassName, className)}
     >
       {showIcon && <Icon className="h-3 w-3 mr-1" />}
-      {label}
+      {labelFromCatalog || label}
     </Badge>
   );
 }

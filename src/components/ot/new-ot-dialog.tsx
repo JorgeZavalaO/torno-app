@@ -8,7 +8,6 @@ import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { Plus, Hammer, Layers } from "lucide-react";
 import { ClientSelect, ClientOption } from "@/components/ot/client-select";
 import { PrioritySelect } from "@/components/ot/priority-select";
-import { ACABADO_OPTIONS } from "./acabado-constants";
 import { toast } from "sonner";
 
 export type NewOTDialogPayload = {
@@ -23,12 +22,15 @@ export type NewOTDialogPayload = {
 };
 
 interface Product { sku: string; nombre: string; uom: string; categoria?: string }
+type CatalogOption = { value: string; label: string };
 
-export function NewOTDialog({ products, clients, onCreate, isCreating }:{
+export function NewOTDialog({ products, clients, onCreate, isCreating, prioridadOptions, acabadoOptions }:{
   products: Product[];
   clients: ClientOption[];
   onCreate: (payload: NewOTDialogPayload) => Promise<void>;
   isCreating?: boolean;
+  prioridadOptions?: CatalogOption[];
+  acabadoOptions?: CatalogOption[];
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1|2|3>(1);
@@ -151,7 +153,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
                   <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                     🎯 Prioridad
                   </label>
-                  <PrioritySelect value={prioridad} onChange={setPrioridad} />
+                  <PrioritySelect value={prioridad} onChange={setPrioridad} options={prioridadOptions} />
                 </div>
               </div>
               
@@ -336,7 +338,12 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
                       value={acabado} 
                       onChange={e=>setAcabado(e.target.value)}
                     >
-                      {ACABADO_OPTIONS.map(option => (
+                      {(acabadoOptions || [
+                        { value: "NONE", label: "Ninguno" },
+                        { value: "ZINCADO", label: "Zincado" },
+                        { value: "TROPICALIZADO", label: "Tropicalizado" },
+                        { value: "PINTADO", label: "Pintado" },
+                      ]).map(option => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
@@ -390,7 +397,7 @@ export function NewOTDialog({ products, clients, onCreate, isCreating }:{
                 {(acabado && acabado !== "NONE") && (
                   <div className="mt-4 bg-white/70 rounded-lg p-3 text-center">
                     <span className="text-sm text-gray-700">
-                      <strong>Acabado:</strong> {ACABADO_OPTIONS.find(a => a.value === acabado)?.label}
+                      <strong>Acabado:</strong> {(acabadoOptions || []).find(a => a.value === acabado)?.label || acabado}
                     </span>
                   </div>
                 )}

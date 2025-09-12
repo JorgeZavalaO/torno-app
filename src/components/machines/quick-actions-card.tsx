@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,9 +20,11 @@ interface QuickActionsCardProps {
   ots: OT[];
   onLogHours: (data: FormData) => Promise<void>;
   onScheduleMaintenance: (data: FormData) => Promise<void>;
+  maintenanceOptions?: { value: string; label: string }[];
 }
 
-export function QuickActionsCard({ machineId, ots, onLogHours, onScheduleMaintenance }: QuickActionsCardProps) {
+export function QuickActionsCard({ machineId, ots, onLogHours, onScheduleMaintenance, maintenanceOptions }: QuickActionsCardProps) {
+  const router = useRouter();
   // Estados para registro de horas
   const [selectedOT, setSelectedOT] = useState(ots[0]?.id || "");
   const [hours, setHours] = useState(1);
@@ -46,8 +49,9 @@ export function QuickActionsCard({ machineId, ots, onLogHours, onScheduleMainten
       if (hoursNote.trim()) fd.set("nota", hoursNote.trim());
       
       await onLogHours(fd);
-      setHours(1);
-      setHoursNote("");
+  setHours(1);
+  setHoursNote("");
+  startTransition(() => router.refresh());
     } finally {
       setIsLoggingHours(false);
     }
@@ -61,7 +65,8 @@ export function QuickActionsCard({ machineId, ots, onLogHours, onScheduleMainten
       fd.set("tipo", maintenanceType);
       fd.set("fechaProg", new Date(maintenanceDate).toISOString());
       
-      await onScheduleMaintenance(fd);
+  await onScheduleMaintenance(fd);
+  startTransition(() => router.refresh());
     } finally {
       setIsSchedulingMaintenance(false);
     }
@@ -154,10 +159,18 @@ export function QuickActionsCard({ machineId, ots, onLogHours, onScheduleMainten
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PREVENTIVO">Preventivo</SelectItem>
-                  <SelectItem value="CORRECTIVO">Correctivo</SelectItem>
-                  <SelectItem value="PREDICTIVO">Predictivo</SelectItem>
-                  <SelectItem value="EMERGENCIA">Emergencia</SelectItem>
+                  {maintenanceOptions && maintenanceOptions.length > 0 ? (
+                    maintenanceOptions.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="PREVENTIVO">Preventivo</SelectItem>
+                      <SelectItem value="CORRECTIVO">Correctivo</SelectItem>
+                      <SelectItem value="PREDICTIVO">Predictivo</SelectItem>
+                      <SelectItem value="EMERGENCIA">Emergencia</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>

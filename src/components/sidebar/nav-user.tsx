@@ -75,9 +75,9 @@ export function NavUser({ user }: { user: SidebarUser }) {
                   <span className="truncate font-medium text-foreground">
                     {user?.name || "Usuario"}
                   </span>
-                  {user?.notificationCount && user.notificationCount > 0 && (
+                  {(user?.notificationCount ?? 0) > 0 && (
                     <Badge variant="secondary" className="h-4 min-w-4 text-[10px] px-1">
-                      {user.notificationCount > 99 ? '99+' : user.notificationCount}
+                      {(user.notificationCount ?? 0) > 99 ? '99+' : (user.notificationCount ?? 0)}
                     </Badge>
                   )}
                 </div>
@@ -151,20 +151,20 @@ export function NavUser({ user }: { user: SidebarUser }) {
                 </Link>
               </DropdownMenuItem>
 
-              {user?.notificationCount && user.notificationCount > 0 && (
-                <DropdownMenuItem asChild>
-                  <Link href="/notifications" className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded-md mx-2 hover:bg-accent/50">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-md bg-orange-500/10 relative">
-                      <Bell className="h-4 w-4 text-orange-600" />
-                      <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></div>
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-sm font-medium">Notificaciones</span>
-                      <p className="text-xs text-muted-foreground">{user.notificationCount} nuevas</p>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
-              )}
+                {(user?.notificationCount ?? 0) > 0 && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/notifications" className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded-md mx-2 hover:bg-accent/50">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-md bg-orange-500/10 relative">
+                        <Bell className="h-4 w-4 text-orange-600" />
+                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></div>
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">Notificaciones</span>
+                        <p className="text-xs text-muted-foreground">{(user.notificationCount ?? 0)} nuevas</p>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
 
               <DropdownMenuItem asChild>
                 <Link href="/help" className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded-md mx-2 hover:bg-accent/50">

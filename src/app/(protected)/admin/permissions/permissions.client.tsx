@@ -3,17 +3,17 @@
 import "./permissions.css";
 import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+// import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Key, Plus, Search, Edit3, Trash2, Save, X, FileText } from "lucide-react";
+import { Key, Plus, Search, Edit3, Trash2, Save, X } from "lucide-react";
 import { PermissionStatusBadge, PermissionIcon, PermissionStats, EmptyState } from "../../../../components/permissions/components";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
+import CreateEditDialog from "@/components/ui/create-edit-dialog";
 
 type Perm = { id: string; code: string; description: string | null };
 type Actions = {
@@ -176,21 +176,8 @@ function PermissionRow({
     });
   };
 
-  const handleDelete = () => {
-    if (!confirm(`¿Estás seguro de eliminar el permiso "${item.code}"?\n\nEsta acción no se puede deshacer.`)) return;
-    const fd = new FormData();
-    fd.set("id", item.id);
-
-    startTransition(async () => {
-      const res = await actions.deletePermission(fd);
-      if (res.ok) {
-        toast.success(res.message ?? "Permiso eliminado");
-        onDeleted(item.id);
-      } else {
-        toast.error(res.message ?? "Error al eliminar");
-      }
-    });
-  };
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const handleDelete = () => setConfirmOpen(true);
 
   const handleCancel = (field: "code" | "description") => {
     if (field === "code") setCode(item.code);
@@ -286,6 +273,29 @@ function PermissionRow({
               className="text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-200">
               <Trash2 className="h-4 w-4" />
             </Button>
+            <ConfirmDialog
+              open={confirmOpen}
+              onOpenChange={setConfirmOpen}
+              title="Eliminar permiso"
+              description={`¿Estás seguro de eliminar el permiso "${item.code}"? Esta acción no se puede deshacer.`}
+              confirmText="Eliminar"
+              destructive
+              loading={isPending}
+              onConfirm={() => {
+                const fd = new FormData();
+                fd.set("id", item.id);
+                startTransition(async () => {
+                  const res = await actions.deletePermission(fd);
+                  if (res.ok) {
+                    toast.success(res.message ?? "Permiso eliminado");
+                    onDeleted(item.id);
+                    setConfirmOpen(false);
+                  } else {
+                    toast.error(res.message ?? "Error al eliminar");
+                  }
+                });
+              }}
+            />
           </div>
         </TableCell>
       )}
@@ -302,32 +312,6 @@ function CreateDialog({
   onOpenChange: (open: boolean) => void;
   onCreated: (perm: Perm) => void;
 }) {
-  const [isPending, startTransition] = useTransition();
-  const [code, setCode] = useState("");
-  const [description, setDescription] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!code.trim()) return;
-
-    const fd = new FormData();
-    fd.set("code", code.trim());
-    fd.set("description", description.trim());
-
-    startTransition(async () => {
-      const res = await onAction(fd);
-      if (res.ok && res.item) {
-        toast.success(res.message ?? "Permiso creado exitosamente");
-        onCreated(res.item);
-        setCode("");
-        setDescription("");
-        onOpenChange(false);
-      } else {
-        toast.error(res.message ?? "Error al crear el permiso");
-      }
-    });
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
@@ -336,71 +320,27 @@ function CreateDialog({
           Nuevo Permiso
         </Button>
       </DialogTrigger>
-
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Key className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <DialogTitle className="text-xl">Crear Nuevo Permiso</DialogTitle>
-              <p className="text-sm text-muted-foreground">Define un nuevo permiso para controlar el acceso</p>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="permission-code" className="flex items-center gap-2">
-                <Key className="h-4 w-4" />
-                Código del permiso *
-              </Label>
-              <Input
-                id="permission-code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Ej: users.read, orders.write, reports.admin..."
-                required
-                maxLength={100}
-                disabled={isPending}
-                className="font-mono"
-              />
-              <div className="text-xs text-muted-foreground">Usa notación de puntos. Ej: modulo.accion ({code.length}/100)</div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="permission-description" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Descripción (opcional)
-              </Label>
-              <Textarea
-                id="permission-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe qué permite hacer este permiso..."
-                rows={3}
-                maxLength={300}
-                disabled={isPending}
-              />
-              <div className="text-xs text-muted-foreground">{description.length}/300 caracteres</div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancelar</Button>
-            <Button type="submit" disabled={isPending || !code.trim()} className="min-w-24">
-              {isPending ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Creando...
-                </div>
-              ) : "Crear Permiso"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+      <CreateEditDialog
+        open={isOpen}
+        onOpenChange={onOpenChange}
+        title="Crear Nuevo Permiso"
+        description="Define un nuevo permiso para controlar el acceso"
+        submitLabel="Crear Permiso"
+        fields={[
+          { name: "code", label: "Código del permiso", required: true, maxLength: 100, placeholder: "users.read, orders.write..." },
+          { name: "description", label: "Descripción (opcional)", textarea: true, maxLength: 300, placeholder: "Describe el permiso..." },
+        ]}
+        onSubmit={async (fd) => {
+          const res = await onAction(fd);
+          if (res.ok && res.item) {
+            toast.success(res.message ?? "Permiso creado exitosamente");
+            onCreated(res.item);
+            onOpenChange(false);
+          } else {
+            toast.error(res.message ?? "Error al crear el permiso");
+          }
+        }}
+      />
     </Dialog>
   );
 }

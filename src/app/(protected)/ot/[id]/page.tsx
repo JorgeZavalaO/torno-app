@@ -10,6 +10,8 @@ import {
   createManualSCForOT,
   recomputeOTState
 } from "../actions";
+import { getCatalogoOptions } from "@/app/server/services/catalogos";
+import type { TipoCatalogo } from "@prisma/client";
 
 export default async function OTDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,10 +24,12 @@ export default async function OTDetailPage({ params }: { params: Promise<{ id: s
   ]);
   if (!canRead) redirect("/ots");
 
-  const [detail, products, clients] = await Promise.all([
+  const [detail, products, clients, prioridadOptions, acabadoOptions] = await Promise.all([
     getOTDetail(id),
     getProductsMini(),
     getClientsMini(),
+    getCatalogoOptions("PRIORIDAD_OT" as TipoCatalogo),
+    getCatalogoOptions("TIPO_ACABADO" as TipoCatalogo),
   ]);
   if (!detail) redirect("/ots");
 
@@ -42,6 +46,8 @@ export default async function OTDetailPage({ params }: { params: Promise<{ id: s
         createManualSCForOT,
         recompute: recomputeOTState,
       }}
+      prioridadOptions={prioridadOptions}
+      acabadoOptions={acabadoOptions}
     />
   );
 }

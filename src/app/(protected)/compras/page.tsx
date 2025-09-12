@@ -7,6 +7,8 @@ import { prisma } from "@/app/lib/prisma";
 import { createProvider, createSC, setSCState, createOC, receiveOC, updateProvider, deleteProvider, updateSCCosts } from "./actions";
 import ComprasClient from "./purchases.client";
 import { getCostingParamByKey } from "@/app/server/queries/costing-params";
+import { getCatalogoOptions } from "@/app/server/services/catalogos";
+import type { TipoCatalogo } from "@prisma/client";
 
 export default async function PurchasesPage() {
   const me = await getCurrentUser();
@@ -19,11 +21,13 @@ export default async function PurchasesPage() {
   if (!canRead) redirect("/");
 
   // datos
-  const [providers, scs, ocs, products] = await Promise.all([
+  const [providers, scs, ocs, products, estadoSCOptions, estadoOCOptions] = await Promise.all([
     getProvidersCached(),
     getSCsCached(),
     getOCsCached(),
     prisma.producto.findMany({ orderBy: { nombre: "asc" }, select: { sku: true, nombre: true, uom: true } }),
+    getCatalogoOptions("ESTADO_SC" as TipoCatalogo),
+    getCatalogoOptions("ESTADO_OC" as TipoCatalogo),
   ]);
 
   const currencyParam = await getCostingParamByKey("currency");
@@ -42,6 +46,8 @@ export default async function PurchasesPage() {
       scs={scs}
       ocs={ocs}
       products={products}
+      estadoSCOptions={estadoSCOptions}
+      estadoOCOptions={estadoOCOptions}
       actions={{ createProvider, createSC, setSCState, createOC, receiveOC, updateProvider, deleteProvider, updateSCCosts }}
     />
   );

@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, User, AlertTriangle, Package } from "lucide-react";
-import { ACABADO_OPTIONS } from "./acabado-constants";
 import type { Prioridad } from "./priority-badge";
 
 type OT = NonNullable<Awaited<ReturnType<typeof import("@/app/server/queries/ot").getOTDetail>>>["ot"];
@@ -23,6 +22,8 @@ const NONE = "__none__"; // centinela para "Sin cliente"
 export default function EditHeaderDialog({
   open, onOpenChange, ot, products, clients,
   onSave,
+  prioridadOptions,
+  acabadoOptions,
 }:{
   open: boolean;
   onOpenChange: (v:boolean)=>void;
@@ -38,6 +39,8 @@ export default function EditHeaderDialog({
   fechaLimite?: string | null;
     materialesPlan?: { sku: string; qtyPlan: number }[];
   })=>Promise<void>;
+  prioridadOptions?: { value: string; label: string }[];
+  acabadoOptions?: { value: string; label: string }[];
 }) {
   const router = useRouter();
   const [clienteId, setClienteId] = useState<string|undefined>(ot.clienteId ?? undefined);
@@ -118,10 +121,14 @@ export default function EditHeaderDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="LOW">🔵 Baja</SelectItem>
-                      <SelectItem value="MEDIUM">🟡 Media</SelectItem>
-                      <SelectItem value="HIGH">🟠 Alta</SelectItem>
-                      <SelectItem value="URGENT">🔴 Urgente</SelectItem>
+                      {(prioridadOptions || [
+                        { value: "LOW", label: "Baja" },
+                        { value: "MEDIUM", label: "Media" },
+                        { value: "HIGH", label: "Alta" },
+                        { value: "URGENT", label: "Urgente" },
+                      ]).map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -139,7 +146,12 @@ export default function EditHeaderDialog({
                       <SelectValue placeholder="Seleccionar acabado" />
                     </SelectTrigger>
                     <SelectContent>
-                      {ACABADO_OPTIONS.map(option => (
+                      {(acabadoOptions || [
+                        { value: "NONE", label: "Ninguno" },
+                        { value: "ZINCADO", label: "Zincado" },
+                        { value: "TROPICALIZADO", label: "Tropicalizado" },
+                        { value: "PINTADO", label: "Pintado" },
+                      ]).map(option => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>

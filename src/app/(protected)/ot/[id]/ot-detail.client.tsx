@@ -39,13 +39,17 @@ export default function OTDetailClient({
   detail,
   products,
   clients,
-  actions
+  actions,
+  prioridadOptions,
+  acabadoOptions,
 }:{
   canWrite: boolean;
   detail: NonNullable<Detail>;
   products: ProductsMini;
   clients: ClientsMini;
   actions: Actions;
+  prioridadOptions?: { value: string; label: string }[];
+  acabadoOptions?: { value: string; label: string }[];
 }) {
   const { ot, kpis } = detail;
   const router = useRouter();
@@ -96,7 +100,7 @@ export default function OTDetailClient({
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
             <StatusBadge estado={ot.estado as EstadoOT} />
-            <PriorityBadge prioridad={ot.prioridad as Prioridad} />
+            <PriorityBadge prioridad={ot.prioridad as Prioridad} options={prioridadOptions} />
             {ot.cliente && (
               <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
                 {ot.cliente.nombre}
@@ -104,7 +108,7 @@ export default function OTDetailClient({
             )}
           </div>
           {ot.notas && <div className="text-sm text-muted-foreground mt-1">{ot.notas}</div>}
-          {ot.acabado && <AcabadoDisplay acabado={ot.acabado} />}
+          {ot.acabado && <AcabadoDisplay acabado={ot.acabado} options={acabadoOptions} />}
         </div>
         {canWrite && (
           <div className="flex gap-2">
@@ -255,6 +259,8 @@ export default function OTDetailClient({
             ot={ot}
             products={products}
             clients={clients}
+            prioridadOptions={prioridadOptions}
+            acabadoOptions={acabadoOptions}
             onSave={async (payload: Parameters<Actions["updateOTHeader"]>[0])=>{
               const p = actions.updateOTHeader(payload);
               await toast.promise(p, { loading: "Guardando…", success: (r)=> r.message || "Actualizado", error: "Error" });

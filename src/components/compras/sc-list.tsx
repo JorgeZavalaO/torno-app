@@ -31,11 +31,13 @@ export function SCList({
   providers,
   canWrite,
   actions,
+  estadoOptions,
 }: {
   rows: SCRow[];
   providers: Provider[];
   canWrite: boolean;
   actions: Actions;
+  estadoOptions?: { value: string; label: string; color?: string | null }[];
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -167,7 +169,7 @@ export function SCList({
                   <TableCell className="text-right">{fmtCurrency(r.totalEstimado)}</TableCell>
 
                   <TableCell className="text-center">
-                    <SCBadge estado={r.estado} />
+                    <SCBadge estado={r.estado} options={estadoOptions} />
                   </TableCell>
 
                   <TableCell className="text-center">
@@ -244,7 +246,7 @@ export function SCList({
                       {new Date(selected.createdAt).toLocaleString()}
                     </div>
                   </div>
-                  <SCBadge estado={selected.estado} />
+                  <SCBadge estado={selected.estado} options={estadoOptions} />
                 </div>
 
                 {selected.ot && (

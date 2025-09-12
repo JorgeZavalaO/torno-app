@@ -11,11 +11,16 @@ type MachineRow = {
   ultimoEvento?: { tipo: string; inicio: Date; fin?: Date | null } | null;
   horasUlt30d: number;
   pendMant: number;
+  // Nuevas métricas solicitadas
+  paradasPorFallas30d: number;
+  averias30d: number;
+  horasParaSigMant: number | null;
+  costoMant30d: number;
 };
 
 export const getMachinesCached = cache(
   async (): Promise<MachineRow[]> => {
-    const [maquinas, eventos30d, pendientes] = await Promise.all([
+    const [maquinas, eventos30d, pendientes, fallas30d, averias30d, costos30d, proximosMantenimientos] = await Promise.all([
       prisma.maquina.findMany({ orderBy: { nombre: "asc" } }),
       prisma.maquinaEvento.groupBy({
         by: ["maquinaId"],
@@ -26,6 +31,41 @@ export const getMachinesCached = cache(
         by: ["maquinaId"],
         where: { estado: "PENDIENTE" },
         _count: { _all: true },
+      }),
+      // Paradas por fallas (PARO + AVERIA)
+      prisma.maquinaEvento.groupBy({
+        by: ["maquinaId"],
+        where: { 
+          inicio: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) },
+          tipo: { in: ["PARO", "AVERIA"] }
+        },
+        _count: { _all: true },
+      }),
+      // Solo averías
+      prisma.maquinaEvento.groupBy({
+        by: ["maquinaId"],
+        where: { 
+          inicio: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) },
+          tipo: "AVERIA"
+        },
+        _count: { _all: true },
+      }),
+      // Costos de mantenimiento últimos 30 días
+      prisma.maquinaMantenimiento.groupBy({
+        by: ["maquinaId"],
+        where: { 
+          fechaReal: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) },
+          estado: "COMPLETADO"
+        },
+        _sum: { costo: true },
+      }),
+      // Próximos mantenimientos programados
+      prisma.maquinaMantenimiento.findMany({
+        where: { 
+          estado: "PENDIENTE",
+          fechaProg: { gte: new Date() }
+        },
+        orderBy: { fechaProg: "asc" },
       }),
     ]);
 
@@ -38,12 +78,31 @@ export const getMachinesCached = cache(
 
     const sumMap = new Map(eventos30d.map(e => [e.maquinaId, Number(e._sum.horas || 0)]));
     const pendMap = new Map(pendientes.map(p => [p.maquinaId, Number(p._count._all || 0)]));
+    const fallasMap = new Map(fallas30d.map(f => [f.maquinaId, Number(f._count._all || 0)]));
+    const averiasMap = new Map(averias30d.map(a => [a.maquinaId, Number(a._count._all || 0)]));
+    const costosMap = new Map(costos30d.map(c => [c.maquinaId, Number(c._sum.costo || 0)]));
     const lastMap = new Map<string, MachineRow["ultimoEvento"]>();
+    
+    // Mapa de próximos mantenimientos por máquina
+    const nextMaintMap = new Map<string, Date>();
+    proximosMantenimientos.forEach(m => {
+      if (!nextMaintMap.has(m.maquinaId)) {
+        nextMaintMap.set(m.maquinaId, m.fechaProg);
+      }
+    });
+
     for (const e of lastByMachine) {
       if (!lastMap.has(e.maquinaId)) {
         lastMap.set(e.maquinaId, { tipo: e.tipo, inicio: e.inicio, fin: e.fin ?? undefined });
       }
     }
+
+    // Función auxiliar para calcular horas hasta próximo mantenimiento
+    const calcularHorasParaMant = (fechaMant: Date | undefined): number | null => {
+      if (!fechaMant) return null;
+      const diffMs = fechaMant.getTime() - Date.now();
+      return diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0;
+    };
 
     return maquinas.map(m => ({
       id: m.id,
@@ -52,9 +111,14 @@ export const getMachinesCached = cache(
       categoria: m.categoria,
       estado: m.estado as MachineRow["estado"],
       ubicacion: m.ubicacion,
-      horasUlt30d: sumMap.get(m.id) ?? 0,
+      horasUlt30d: Number(sumMap.get(m.id) ?? 0),
       pendMant: pendMap.get(m.id) ?? 0,
       ultimoEvento: lastMap.get(m.id) ?? null,
+      // Nuevas métricas - convertir Decimal a number
+      paradasPorFallas30d: fallasMap.get(m.id) ?? 0,
+      averias30d: averiasMap.get(m.id) ?? 0,
+      horasParaSigMant: calcularHorasParaMant(nextMaintMap.get(m.id)),
+      costoMant30d: Number(costosMap.get(m.id) ?? 0),
     }));
   },
   ["machines:list"],
@@ -93,15 +157,42 @@ export const getMachineDetail = cache(
   const horasTot = eventos.reduce((s,e)=> s + Number(e.horas || 0), 0);
     const usoPctAprox = Math.min(100, (horasTot / (30*8)) * 100); // asumiendo 8h/día, 30 días
 
+    // Nuevas métricas para el detalle
+    const paradasPorFallas = eventos.filter(e => e.tipo === "PARO" || e.tipo === "AVERIA").length;
+    const averias = eventos.filter(e => e.tipo === "AVERIA").length;
+    const costoMantenimientos = mantenimientos
+      .filter(m => m.estado === "COMPLETADO" && m.fechaReal && m.fechaReal >= since30)
+      .reduce((sum, m) => sum + Number(m.costo || 0), 0);
+
+    // Próximo mantenimiento programado
+    const proximoMant = mantenimientos
+      .filter(m => m.estado === "PENDIENTE" && m.fechaProg > new Date())
+      .sort((a, b) => a.fechaProg.getTime() - b.fechaProg.getTime())[0];
+
+    const horasParaSigMant = proximoMant 
+      ? Math.round((proximoMant.fechaProg.getTime() - Date.now()) / (1000 * 60 * 60))
+      : null;
+
     return {
       maquina: m,
-      eventos,
-      mantenimientos,
+      eventos: eventos.map(e => ({
+        ...e,
+        horas: Number(e.horas), // Convertir Decimal a number
+      })),
+      mantenimientos: mantenimientos.map(m => ({
+        ...m,
+        costo: Number(m.costo), // Convertir Decimal a number
+      })),
       serie30d: horasSerie,
       kpis: {
         horas30d: horasTot,
         usoPctAprox,
         pendMant: mantenimientos.filter(mm => mm.estado === "PENDIENTE").length,
+        // Nuevas métricas
+        paradasPorFallas30d: paradasPorFallas,
+        averias30d: averias,
+        horasParaSigMant,
+        costoMant30d: costoMantenimientos,
       }
     };
   },

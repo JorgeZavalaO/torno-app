@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ interface QuickHoursFormProps {
 }
 
 export function QuickHoursForm({ machines, ots, onSubmit }: QuickHoursFormProps) {
+  const router = useRouter();
   const [selectedMachine, setSelectedMachine] = useState(machines[0]?.id || "");
   const [selectedOT, setSelectedOT] = useState(ots[0]?.id || "");
   const [hours, setHours] = useState(1);
@@ -43,8 +45,9 @@ export function QuickHoursForm({ machines, ots, onSubmit }: QuickHoursFormProps)
       if (note.trim()) fd.set("nota", note.trim());
       
       await onSubmit(fd);
-      setHours(1);
-      setNote("");
+  setHours(1);
+  setNote("");
+  startTransition(() => router.refresh());
     } finally {
       setIsLoading(false);
     }

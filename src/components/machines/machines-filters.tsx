@@ -13,6 +13,7 @@ interface MachinesFiltersProps {
   categoryFilter: string;
   onCategoryChange: (value: string) => void;
   categories: string[];
+  statusOptions?: { value: string; label: string }[];
 }
 
 export function MachinesFilters({
@@ -22,7 +23,8 @@ export function MachinesFilters({
   onStatusChange,
   categoryFilter,
   onCategoryChange,
-  categories
+  categories,
+  statusOptions
 }: MachinesFiltersProps) {
   return (
     <div className="space-y-4">
@@ -54,9 +56,17 @@ export function MachinesFilters({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los estados</SelectItem>
-              <SelectItem value="ACTIVA">Activa</SelectItem>
-              <SelectItem value="MANTENIMIENTO">Mantenimiento</SelectItem>
-              <SelectItem value="BAJA">Baja</SelectItem>
+              {statusOptions && statusOptions.length > 0 ? (
+                statusOptions.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))
+              ) : (
+                <>
+                  <SelectItem value="ACTIVA">Activa</SelectItem>
+                  <SelectItem value="MANTENIMIENTO">Mantenimiento</SelectItem>
+                  <SelectItem value="BAJA">Baja</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>

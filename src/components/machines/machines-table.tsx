@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Wrench, Activity } from "lucide-react";
+import { Edit, Trash2, Wrench, Activity, AlertTriangle, Clock, DollarSign } from "lucide-react";
 
 type MachineRow = {
   id: string;
@@ -16,6 +16,11 @@ type MachineRow = {
   horasUlt30d: number;
   pendMant: number;
   ultimoEvento?: { tipo: string; inicio: string | Date | null } | null;
+  // Nuevas métricas
+  paradasPorFallas30d: number;
+  averias30d: number;
+  horasParaSigMant: number | null;
+  costoMant30d: number;
 };
 
 interface MachinesTableProps {
@@ -23,9 +28,15 @@ interface MachinesTableProps {
   canWrite: boolean;
   onEdit: (machine: MachineRow) => void;
   onDelete: (id: string) => void;
+  statusOptions?: { value: string; label: string; color?: string | null }[];
 }
 
-const getStatusBadge = (estado: MachineRow["estado"]) => {
+const getStatusBadge = (estado: MachineRow["estado"], statusOptions?: { value: string; label: string; color?: string | null }[]) => {
+  const match = statusOptions?.find(o => o.value === estado);
+  if (match) {
+    const style = match.color ? { backgroundColor: `${match.color}22`, color: match.color } : undefined;
+    return <Badge style={style}>{match.label}</Badge>;
+  }
   switch (estado) {
     case "ACTIVA":
       return <Badge variant="default" className="bg-green-100 text-green-800">Activa</Badge>;
@@ -44,7 +55,7 @@ const getUsageIcon = (hours: number) => {
   return <span title="Bajo uso"><Activity className="h-4 w-4 text-gray-400" /></span>;
 };
 
-export function MachinesTable({ machines, canWrite, onEdit, onDelete }: MachinesTableProps) {
+export function MachinesTable({ machines, canWrite, onEdit, onDelete, statusOptions }: MachinesTableProps) {
   if (machines.length === 0) {
     return (
       <div className="text-center py-12">
@@ -62,11 +73,13 @@ export function MachinesTable({ machines, canWrite, onEdit, onDelete }: Machines
           <TableHead>Código</TableHead>
           <TableHead>Nombre</TableHead>
           <TableHead>Categoría</TableHead>
-          <TableHead>Ubicación</TableHead>
-          <TableHead className="text-center">Estado</TableHead>
+          <TableHead>Estado</TableHead>
           <TableHead className="text-center">Uso 30d</TableHead>
           <TableHead className="text-center">Horas 30d</TableHead>
-          <TableHead className="text-center">Mant. Pend.</TableHead>
+          <TableHead className="text-center">Paradas</TableHead>
+          <TableHead className="text-center">Averías</TableHead>
+          <TableHead className="text-center">Sig. Mant.</TableHead>
+          <TableHead className="text-center">Costo Mant.</TableHead>
           <TableHead className="text-center">Acciones</TableHead>
         </TableRow>
       </TableHeader>
@@ -81,15 +94,15 @@ export function MachinesTable({ machines, canWrite, onEdit, onDelete }: Machines
               >
                 {machine.nombre}
               </Link>
+              <div className="text-xs text-muted-foreground">
+                {machine.ubicacion || "Sin ubicación"}
+              </div>
             </TableCell>
             <TableCell className="text-sm text-muted-foreground">
               {machine.categoria || "—"}
             </TableCell>
-            <TableCell className="text-sm text-muted-foreground">
-              {machine.ubicacion || "—"}
-            </TableCell>
-            <TableCell className="text-center">
-              {getStatusBadge(machine.estado)}
+            <TableCell>
+              {getStatusBadge(machine.estado, statusOptions)}
             </TableCell>
             <TableCell className="text-center">
               {getUsageIcon(machine.horasUlt30d)}
@@ -98,12 +111,49 @@ export function MachinesTable({ machines, canWrite, onEdit, onDelete }: Machines
               {machine.horasUlt30d.toFixed(1)}h
             </TableCell>
             <TableCell className="text-center">
-              {machine.pendMant > 0 ? (
+              {machine.paradasPorFallas30d > 0 ? (
+                <div className="flex items-center justify-center gap-1">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm font-medium">{machine.paradasPorFallas30d}</span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-sm">0</span>
+              )}
+            </TableCell>
+            <TableCell className="text-center">
+              {machine.averias30d > 0 ? (
                 <Badge variant="destructive" className="text-xs">
-                  {machine.pendMant}
+                  {machine.averias30d}
                 </Badge>
               ) : (
-                <span className="text-muted-foreground">—</span>
+                <span className="text-muted-foreground text-sm">0</span>
+              )}
+            </TableCell>
+            <TableCell className="text-center">
+              {machine.horasParaSigMant !== null ? (
+                <div className="flex items-center justify-center gap-1">
+                  <Clock className="h-4 w-4 text-blue-500" />
+                  <span className="text-sm font-medium">
+                    {machine.horasParaSigMant > 24 
+                      ? `${Math.round(machine.horasParaSigMant / 24)}d`
+                      : `${machine.horasParaSigMant}h`
+                    }
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-sm">—</span>
+              )}
+            </TableCell>
+            <TableCell className="text-center">
+              {machine.costoMant30d > 0 ? (
+                <div className="flex items-center justify-center gap-1">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium">
+                    ${machine.costoMant30d.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-sm">$0</span>
               )}
             </TableCell>
             <TableCell>

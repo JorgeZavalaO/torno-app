@@ -17,9 +17,19 @@ interface MachineEvent {
 
 interface MachineEventsTableProps {
   events: MachineEvent[];
+  eventOptions?: { value: string; label: string; color?: string | null }[];
 }
 
-const getEventBadge = (tipo: string) => {
+const getEventBadge = (tipo: string, eventOptions?: { value: string; label: string; color?: string | null }[]) => {
+  const match = eventOptions?.find(o => o.value === tipo);
+  if (match) {
+    const style = match.color ? { backgroundColor: `${match.color}22`, color: match.color } : undefined;
+    return (
+      <Badge style={style}>
+        {match.label}
+      </Badge>
+    );
+  }
   const variants = {
     USO: "default",
     PARO: "destructive", 
@@ -35,7 +45,7 @@ const getEventBadge = (tipo: string) => {
   );
 };
 
-export function MachineEventsTable({ events }: MachineEventsTableProps) {
+export function MachineEventsTable({ events, eventOptions }: MachineEventsTableProps) {
   if (events.length === 0) {
     return (
       <Card>
@@ -83,7 +93,7 @@ export function MachineEventsTable({ events }: MachineEventsTableProps) {
                   {new Date(event.inicio).toLocaleString()}
                 </TableCell>
                 <TableCell>
-                  {getEventBadge(event.tipo)}
+                  {getEventBadge(event.tipo, eventOptions)}
                 </TableCell>
                 <TableCell className="font-mono text-sm">
                   {event.ot?.codigo || "—"}

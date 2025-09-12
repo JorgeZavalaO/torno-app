@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { assertCanAssignRoles } from "@/app/lib/guards";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { cacheTags } from "@/app/lib/cache-tags";
 
 type MinimalUser = { id: string; email: string; displayName: string | null };
@@ -53,12 +54,15 @@ export async function assignRoleToUser(formData: FormData): Promise<ActionResult
 const CreateUserSchema = z.object({
   email: emailSchema,
   displayName: z.string().max(120, "Máximo 120 caracteres").optional(),
+  // contraseña opcional para creación por admin
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional(),
 });
 
 const UpdateUserSchema = z.object({
   id: z.string().uuid(),
   email: emailSchema.optional(),
   displayName: z.string().max(120, "Máximo 120 caracteres").optional(),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional(),
 });
 
 export async function createUser(formData: FormData): Promise<ActionResult> {
@@ -66,18 +70,29 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
   const parsed = CreateUserSchema.safeParse({
     email: formData.get("email"),
     displayName: formData.get("displayName") || undefined,
+    password: formData.get("password") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
 
   try {
-    const created = await prisma.userProfile.create({
-      data: {
-        email: parsed.data.email,
-        // ⚠️ Evita IDs "pending-*"; deja integraciones externas sincronizar el ID real
-        stackUserId: "",
-        displayName: parsed.data.displayName ?? null,
-      },
-    });
+    const data: {
+      email: string;
+      stackUserId: string;
+      displayName: string | null;
+      passwordHash?: string;
+    } = {
+      email: parsed.data.email,
+      // ⚠️ Evita IDs "pending-*"; deja integraciones externas sincronizar el ID real
+      stackUserId: "",
+      displayName: parsed.data.displayName ?? null,
+    };
+
+    if (parsed.data.password) {
+      const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+      data.passwordHash = passwordHash;
+    }
+
+    const created = await prisma.userProfile.create({ data });
 
     revalidateTag(cacheTags.users);
     revalidatePath("/admin/users", "page");
@@ -97,18 +112,29 @@ export async function updateUser(formData: FormData): Promise<ActionResult> {
     id: formData.get("id"),
     email: formData.get("email") || undefined,
     displayName: formData.get("displayName") || undefined,
+    password: formData.get("password") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
 
-  const { id, email, displayName } = parsed.data;
+  const { id, email, displayName, password } = parsed.data;
 
   try {
+    const updateData: {
+      email?: string;
+      displayName?: string;
+      passwordHash?: string;
+    } = {};
+
+    if (email) updateData.email = email;
+    if (displayName !== undefined) updateData.displayName = displayName;
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 12);
+      updateData.passwordHash = passwordHash;
+    }
+
     const updated = await prisma.userProfile.update({
       where: { id },
-      data: {
-        ...(email ? { email } : {}),
-        ...(displayName !== undefined ? { displayName } : {}),
-      },
+      data: updateData,
     });
 
     revalidateTag(cacheTags.users);

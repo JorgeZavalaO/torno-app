@@ -481,6 +481,55 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+enum TipoCatalogo {
+  // Productos e Inventario
+  UNIDAD_MEDIDA          // m, kg, pz, etc.
+  CATEGORIA_PRODUCTO     // Reemplazar enum CategoriaProducto
+  TIPO_MOVIMIENTO        // Reemplazar enum TipoMovimiento
+  
+  // Ordenes de Trabajo
+  ESTADO_OT              // Reemplazar enum EstadoOT
+  PRIORIDAD_OT          // Reemplazar enum PrioridadOT
+  TIPO_ACABADO          // Pintado, Cromado, etc.
+  
+  // Máquinas
+  ESTADO_MAQUINA        // Reemplazar enum MaquinaEstado
+  EVENTO_MAQUINA        // Reemplazar enum MaquinaEventoTipo
+  CATEGORIA_MAQUINA     // Torno, Fresadora, etc.
+  TIPO_MANTENIMIENTO    // Preventivo, Correctivo, etc.
+  ESTADO_MANTENIMIENTO  // Pendiente, Completado, etc.
+  
+  // Compras
+  ESTADO_SC             // Reemplazar enum EstadoSC
+  ESTADO_OC             // Reemplazar enum EstadoOC
+  
+  // Cotizaciones
+  ESTADO_COTIZACION     // Reemplazar enum QuoteStatus
+  MONEDA                // PEN, USD, EUR
+  TIPO_PARAMETRO        // Reemplazar enum ParamType
+}
+
+model ConfiguracionCatalogo {
+  id          String      @id @default(uuid())
+  tipo        TipoCatalogo
+  codigo      String      // Código único dentro del tipo
+  nombre      String      // Nombre mostrado al usuario
+  descripcion String?
+  orden       Int         @default(0)
+  activo      Boolean     @default(true)
+  color       String?     // Para UI (badges, estados)
+  icono       String?     // Para UI
+  
+  // Metadatos adicionales
+  propiedades Json?       // Para casos especiales
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([tipo, codigo])
+  @@index([tipo, activo, orden])
+}
+
 enum MaquinaEstado {
   ACTIVA
   MANTENIMIENTO

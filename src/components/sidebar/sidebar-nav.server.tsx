@@ -1,23 +1,24 @@
 import { getCurrentUser } from "@/app/lib/auth";
-import SidebarNavClient, { NavItem, NavGroup } from "./sidebar-nav.client";
+import ClientOnly from "@/components/client-only";
+import SidebarNavClient from "./sidebar-nav.client";
+import type { NavItem, NavGroup } from "./sidebar-nav.client";
 import type { SidebarUser } from "./nav-user";
 import { getUserPermissionSet } from "@/app/lib/rbac";
 
 const allNavItems: (NavItem & { requiredPerm?: string; group?: string })[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", group: "dashboard", description: "Panel principal de control" },
+  { href: "/dashboard", label: "Inicio", icon: "Home", group: "dashboard", description: "Panel principal de control" },
   { href: "/ot", label: "Órdenes de Trabajo", icon: "ClipboardList", requiredPerm: "workorders.read", group: "production", description: "Gestión de órdenes de trabajo" },
   { href: "/programacion", label: "Programación", icon: "CalendarDays", requiredPerm: "workorders.read", group: "production", description: "Calendario de OTs" },
-  { href: "/control", label: "Control de Producción", icon: "Activity", requiredPerm: "production.read", group: "production", description: "Monitoreo en tiempo real" },
-  { href: "/maquinas", label: "Máquinas", icon: "Cog", requiredPerm: "machines.read", group: "production", description: "Estado y configuración de máquinas" },
+  { href: "/control", label: "Operaciones (Control)", icon: "Activity", requiredPerm: "production.read", group: "production", description: "Monitoreo operativo en tiempo real" },
+  { href: "/maquinas", label: "Máquinas", icon: "Cpu", requiredPerm: "machines.read", group: "production", description: "Estado y configuración de máquinas" },
   { href: "/cotizador", label: "Cotizador", icon: "Calculator", requiredPerm: "quotes.read", group: "sales", description: "Herramienta de cotización", isNew: true },
   { href: "/clientes", label: "Clientes", icon: "Users", requiredPerm: "clients.read", group: "sales", description: "Base de datos de clientes" },
-  { href: "/inventario", label: "Inventario", icon: "Package", requiredPerm: "inventory.read", group: "purchases", description: "Control de stock y materiales" },
+  { href: "/inventario", label: "Almacén", icon: "Archive", requiredPerm: "inventory.read", group: "purchases", description: "Control de stock y materiales" },
   { href: "/compras", label: "Compras", icon: "ShoppingCart", requiredPerm: "purchases.read", group: "purchases", description: "Gestión de proveedores y compras" },
-  { href: "/admin/users", label: "Usuarios", icon: "User", requiredPerm: "roles.read", group: "system", description: "Administración de usuarios" },
-  { href: "/admin/roles", label: "Roles", icon: "Shield", requiredPerm: "roles.read", group: "system", description: "Gestión de roles del sistema" },
-  { href: "/admin/permissions", label: "Permisos", icon: "KeyRound", requiredPerm: "permissions.read", group: "system", description: "Listado y gestión de permisos" },
-  { href: "/admin/role-permissions", label: "Roles ↔ Permisos", icon: "Link2", requiredPerm: "roles.read", group: "system", description: "Asignación de permisos por rol" },
+  // Consolidamos en un único dashboard de administración
+  { href: "/admin", label: "Administración", icon: "Shield", group: "system", description: "Panel de administración central" },
   { href: "/admin/parametros", label: "Parámetros", icon: "Settings", requiredPerm: "settings.costing.read", group: "system", description: "Configuración y parámetros del sistema" },
+  { href: "/admin/catalogos", label: "Catálogos", icon: "List", requiredPerm: "settings.catalogos.read", group: "system", description: "Listados configurables del sistema" },
 ];
 
 async function getItemBadges(item: NavItem & { requiredPerm?: string; group?: string }) {
@@ -46,7 +47,19 @@ export default async function SidebarNavServer() {
   const permSet = await getUserPermissionSet(me.email);
 
   const allowed = allNavItems
-    .filter((item) => !item.requiredPerm || permSet.has(item.requiredPerm))
+    .filter((item) => {
+      // Mostrar el panel /admin si el usuario tiene cualquiera de los permisos administrativos relevantes
+      if (item.href === "/admin") {
+        return (
+          permSet.has("roles.read") ||
+          permSet.has("permissions.read") ||
+          permSet.has("users.assignRoles") ||
+          permSet.has("settings.costing.read") ||
+          permSet.has("settings.catalogos.read")
+        );
+      }
+      return !item.requiredPerm || permSet.has(item.requiredPerm);
+    })
     .map(({ href, label, icon, group, description, isNew, badge }) => ({ href, label, icon, group, description, isNew, badge })) as (NavItem & { group?: string })[];
 
   const itemsWithBadges = await Promise.all(
@@ -78,5 +91,12 @@ export default async function SidebarNavServer() {
 
   const userWithStatus = await getUserWithStatus({ name: userName, email: me.email, image: userImage });
 
-  return <SidebarNavClient items={groupedOutput} brand="TornoApp" user={userWithStatus} />;
+  // Render the client navigation inside a ClientOnly wrapper to avoid running client hooks on the server
+  return (
+    <ClientOnly>
+      {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+      {/* @ts-ignore-next-line */}
+      <SidebarNavClient items={groupedOutput} brand="TornoApp" user={userWithStatus} />
+    </ClientOnly>
+  );
 }

@@ -114,14 +114,14 @@ export async function assertCanWriteProfile() {
   return u;
 }
 
-// Programación (lectura/escritura de scheduling)
-export async function assertCanReadScheduling() {
+// Configuración de catálogos (configuraciones del sistema)
+export async function assertCanReadCatalogos() {
   const u = await assertAuthenticated();
-  if (!await userHasPermission(u.email, "workorders.read")) throw new Error("No autorizado");
+  if (!await userHasPermission(u.email, "settings.catalogos.read")) throw new Error("No autorizado");
   return u;
 }
-export async function assertCanWriteScheduling() {
+export async function assertCanWriteCatalogos() {
   const u = await assertAuthenticated();
-  if (!await userHasPermission(u.email, "workorders.write")) throw new Error("No autorizado");
+  if (!await userHasPermission(u.email, "settings.catalogos.write")) throw new Error("No autorizado");
   return u;
 }

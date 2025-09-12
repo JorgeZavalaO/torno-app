@@ -11,7 +11,7 @@ import { ProvidersList } from "@/components/compras/providers-list";
 import { CreateProviderDialog } from "@/components/compras/create-provider-dialog";
 import { RecalculateCostsButton } from "@/components/compras/recalculate-costs-button";
 
-export default function ComprasClient({ currency, canWrite, providers, scs, ocs, products, actions }: {
+export default function ComprasClient({ currency, canWrite, providers, scs, ocs, products, actions, estadoSCOptions, estadoOCOptions }: {
   currency: string;
   canWrite: boolean;
   providers: Provider[];
@@ -19,6 +19,8 @@ export default function ComprasClient({ currency, canWrite, providers, scs, ocs,
   ocs: OCRow[];
   products: Product[];
   actions: Actions;
+  estadoSCOptions: { value: string; label: string; color?: string | null }[];
+  estadoOCOptions: { value: string; label: string; color?: string | null }[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"sc" | "oc" | "prov">("sc");
@@ -64,12 +66,12 @@ export default function ComprasClient({ currency, canWrite, providers, scs, ocs,
 
         {/* SC */}
         <TabsContent value="sc" className="space-y-4">
-          <SCList rows={scs} providers={providers} canWrite={canWrite} actions={actions} />
+          <SCList rows={scs} providers={providers} canWrite={canWrite} actions={actions} estadoOptions={estadoSCOptions} />
         </TabsContent>
 
         {/* OC */}
         <TabsContent value="oc" className="space-y-4">
-          <OCList rows={ocs} canWrite={canWrite} actions={actions} currency={currency} />
+          <OCList rows={ocs} canWrite={canWrite} actions={actions} currency={currency} estadoOptions={estadoOCOptions} />
         </TabsContent>
 
         {/* Proveedores */}

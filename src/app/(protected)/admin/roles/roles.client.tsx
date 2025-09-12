@@ -2,15 +2,17 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
+import CreateEditDialog from "@/components/ui/create-edit-dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+// import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Shield, Plus, Search, Edit3, Trash2, Save, X, FileText } from "lucide-react";
+import { Shield, Plus, Search, Edit3, Trash2, Save, X } from "lucide-react";
 
 type Role = { id: string; name: string; description: string | null };
 type Actions = {
@@ -186,21 +188,8 @@ function RoleRow({
     });
   };
 
-  const handleDelete = () => {
-    if (!confirm(`¿Estás seguro de eliminar el rol "${item.name}"?\n\nEsta acción no se puede deshacer.`)) return;
-    const fd = new FormData();
-    fd.set("id", item.id);
-
-    startTransition(async () => {
-      const res = await actions.deleteRole(fd);
-      if (res.ok) {
-        toast.success(res.message ?? "Rol eliminado");
-        onDeleted(item.id);
-      } else {
-        toast.error(res.message ?? "Error al eliminar");
-      }
-    });
-  };
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const handleDelete = () => setConfirmOpen(true);
 
   const handleCancel = (field: "name" | "description") => {
     if (field === "name") setName(item.name);
@@ -300,6 +289,29 @@ function RoleRow({
               className="text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-200">
               <Trash2 className="h-4 w-4" />
             </Button>
+            <ConfirmDialog
+              open={confirmOpen}
+              onOpenChange={setConfirmOpen}
+              title="Eliminar rol"
+              description={`¿Estás seguro de eliminar el rol "${item.name}"? Esta acción no se puede deshacer.`}
+              confirmText="Eliminar"
+              destructive
+              loading={isPending}
+              onConfirm={() => {
+                const fd = new FormData();
+                fd.set("id", item.id);
+                startTransition(async () => {
+                  const res = await actions.deleteRole(fd);
+                  if (res.ok) {
+                    toast.success(res.message ?? "Rol eliminado");
+                    onDeleted(item.id);
+                    setConfirmOpen(false);
+                  } else {
+                    toast.error(res.message ?? "Error al eliminar");
+                  }
+                });
+              }}
+            />
           </div>
         </TableCell>
       )}
@@ -316,32 +328,6 @@ function CreateDialog({
   onOpenChange: (open: boolean) => void;
   onCreated: (role: Role) => void;
 }) {
-  const [isPending, startTransition] = useTransition();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    const fd = new FormData();
-    fd.set("name", name.trim());
-    fd.set("description", description.trim());
-
-    startTransition(async () => {
-      const res = await onAction(fd);
-      if (res.ok && res.item) {
-        toast.success(res.message ?? "Rol creado exitosamente");
-        onCreated(res.item);
-        setName("");
-        setDescription("");
-        onOpenChange(false);
-      } else {
-        toast.error(res.message ?? "Error al crear el rol");
-      }
-    });
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
@@ -350,70 +336,27 @@ function CreateDialog({
           Nuevo Rol
         </Button>
       </DialogTrigger>
-
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Shield className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <DialogTitle className="text-xl">Crear Nuevo Rol</DialogTitle>
-              <p className="text-sm text-muted-foreground">Define un nuevo rol para el sistema</p>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="role-name" className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                Nombre del rol *
-              </Label>
-              <Input
-                id="role-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ej: Administrador, Editor, Viewer..."
-                required
-                maxLength={80}
-                disabled={isPending}
-              />
-              <div className="text-xs text-muted-foreground">{name.length}/80 caracteres</div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="role-description" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Descripción (opcional)
-              </Label>
-              <Textarea
-                id="role-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe los permisos y responsabilidades de este rol..."
-                rows={3}
-                maxLength={300}
-                disabled={isPending}
-              />
-              <div className="text-xs text-muted-foreground">{description.length}/300 caracteres</div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancelar</Button>
-            <Button type="submit" disabled={isPending || !name.trim()} className="min-w-24">
-              {isPending ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Creando...
-                </div>
-              ) : "Crear Rol"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+      <CreateEditDialog
+        open={isOpen}
+        onOpenChange={onOpenChange}
+        title="Crear Nuevo Rol"
+        description="Define un nuevo rol para el sistema"
+        submitLabel="Crear Rol"
+        fields={[
+          { name: "name", label: "Nombre del rol", required: true, maxLength: 80, placeholder: "Ej: Administrador, Editor..." },
+          { name: "description", label: "Descripción (opcional)", textarea: true, maxLength: 300, placeholder: "Describe el rol..." },
+        ]}
+        onSubmit={async (fd) => {
+          const res = await onAction(fd);
+          if (res.ok && res.item) {
+            toast.success(res.message ?? "Rol creado exitosamente");
+            onCreated(res.item);
+            onOpenChange(false);
+          } else {
+            toast.error(res.message ?? "Error al crear el rol");
+          }
+        }}
+      />
     </Dialog>
   );
 }

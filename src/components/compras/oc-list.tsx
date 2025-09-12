@@ -11,7 +11,7 @@ import { Pagination } from "./pagination";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-export function OCList({ rows, canWrite, actions, currency = "PEN" }: { rows: OCRow[]; canWrite: boolean; actions: Actions; currency?: string }) {
+export function OCList({ rows, canWrite, actions, currency = "PEN", estadoOptions }: { rows: OCRow[]; canWrite: boolean; actions: Actions; currency?: string; estadoOptions?: { value: string; label: string; color?: string | null }[] }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -64,7 +64,7 @@ export function OCList({ rows, canWrite, actions, currency = "PEN" }: { rows: OC
                 <TableCell className="text-sm text-muted-foreground">{new Date(o.fecha).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right font-medium">{fmtCurrency(o.total, currency)}</TableCell>
                 <TableCell className="text-center">
-                  <OCBadge estado={o.estado} />
+                  <OCBadge estado={o.estado} options={estadoOptions} />
                 </TableCell>
                 <TableCell className="text-center">
                   {canWrite && (o.estado === "OPEN" || o.estado === "PARTIAL") && (

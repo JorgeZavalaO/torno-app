@@ -16,6 +16,8 @@ interface ControlDashboardProps {
   quicklog: QuickLog;
   actions: Actions;
   onRefresh?: () => void;
+  prioridadOptions: { value: string; label: string; color?: string | null }[];
+  estadoOptions: { value: string; label: string; color?: string | null }[];
 }
 
 export function ControlDashboard({ 
@@ -23,7 +25,9 @@ export function ControlDashboard({
   overview, 
   quicklog, 
   actions, 
-  onRefresh 
+  onRefresh,
+  prioridadOptions,
+  estadoOptions,
 }: ControlDashboardProps) {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
@@ -94,6 +98,8 @@ export function ControlDashboard({
           quicklog={quicklog}
           actions={actions}
           canWrite={canWrite}
+          prioridadOptions={prioridadOptions}
+          estadoOptions={estadoOptions}
         />
       </div>
     </div>

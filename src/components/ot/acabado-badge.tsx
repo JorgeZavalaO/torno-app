@@ -61,13 +61,18 @@ function getAcabadoConfig(acabado: string) {
 export function AcabadoBadge({ 
   acabado, 
   className, 
-  showIcon = true 
+  showIcon = true,
+  options,
 }: { 
   acabado: string; 
   className?: string;
   showIcon?: boolean;
+  options?: { value: string; label: string; color?: string | null }[];
 }) {
+  const fromCatalog = options?.find(o => o.value === acabado);
   const { icon: Icon, className: configClassName } = getAcabadoConfig(acabado);
+  const label = fromCatalog?.label || acabado;
+  const styleFromCatalog = fromCatalog?.color ? { borderColor: fromCatalog.color, color: fromCatalog.color } : undefined;
   
   return (
     <Badge 
@@ -77,18 +82,19 @@ export function AcabadoBadge({
         configClassName, 
         className
       )}
+      style={styleFromCatalog}
     >
       {showIcon && <Icon className="h-3 w-3 mr-1.5" />}
-      <span className="capitalize">{acabado.toLowerCase()}</span>
+      <span className="capitalize">{label}</span>
     </Badge>
   );
 }
 
-export function AcabadoDisplay({ acabado }: { acabado: string }) {
+export function AcabadoDisplay({ acabado, options }: { acabado: string; options?: { value: string; label: string; color?: string | null }[] }) {
   return (
     <div className="flex items-center gap-2 mt-1">
       <span className="text-xs text-muted-foreground font-medium">Acabado:</span>
-      <AcabadoBadge acabado={acabado} />
+      <AcabadoBadge acabado={acabado} options={options} />
     </div>
   );
 }

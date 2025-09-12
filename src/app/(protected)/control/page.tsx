@@ -4,6 +4,8 @@ import { userHasPermission } from "@/app/lib/rbac";
 import { getProductionOverviewCached, getQuickLogData } from "@/app/server/queries/production";
 import ControlClient from "./control.client";
 import { logWorkAndPieces } from "@/app/(protected)/control/actions";
+import { getCatalogoOptions } from "@/app/server/services/catalogos";
+import type { TipoCatalogo } from "@prisma/client";
 
 export default async function ControlPage() {
   const me = await getCurrentUser();
@@ -16,9 +18,11 @@ export default async function ControlPage() {
   ]);
   if (!canRead) redirect("/");
 
-  const [overview, quicklog] = await Promise.all([
+  const [overview, quicklog, prioridadOptions, estadoOptions] = await Promise.all([
     getProductionOverviewCached(14),
     getQuickLogData(),
+    getCatalogoOptions("PRIORIDAD_OT" as TipoCatalogo),
+    getCatalogoOptions("ESTADO_OT" as TipoCatalogo),
   ]);
 
   return (
@@ -26,6 +30,8 @@ export default async function ControlPage() {
       canWrite={canWrite}
       overview={overview}
       quicklog={quicklog}
+      prioridadOptions={prioridadOptions}
+      estadoOptions={estadoOptions}
       actions={{ logWorkAndPieces }}
     />
   );

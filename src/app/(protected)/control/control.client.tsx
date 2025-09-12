@@ -10,11 +10,15 @@ export default function ControlClient({
   overview,
   quicklog,
   actions,
+  prioridadOptions,
+  estadoOptions,
 }: {
   canWrite: boolean;
   overview: Overview;
   quicklog: QuickLog;
   actions: Actions;
+  prioridadOptions: { value: string; label: string; color?: string | null }[];
+  estadoOptions: { value: string; label: string; color?: string | null }[];
 }) {
   const router = useRouter();
   
@@ -32,6 +36,8 @@ export default function ControlClient({
         quicklog={quicklog}
         actions={actions}
         onRefresh={handleRefresh}
+        prioridadOptions={prioridadOptions}
+        estadoOptions={estadoOptions}
       />
     </div>
   );

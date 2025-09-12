@@ -45,6 +45,8 @@ interface WIPTableProps {
   onDelete?: (item: WIPRow) => void;
   onRefresh?: () => void;
   loading?: boolean;
+  prioridadOptions?: { value: string; label: string; color?: string | null }[];
+  estadoOptions?: { value: string; label: string; color?: string | null }[];
 }
 
 type SortField = "codigo" | "cliente" | "prioridad" | "avance" | "fecha";
@@ -58,7 +60,9 @@ export function WIPTable({
   actions,
   canWrite = false,
   onRefresh,
-  loading = false 
+  loading = false,
+  prioridadOptions,
+  estadoOptions,
 }: WIPTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -254,8 +258,16 @@ export function WIPTable({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos los estados</SelectItem>
-                      <SelectItem value="OPEN">Abierta</SelectItem>
-                      <SelectItem value="IN_PROGRESS">En Proceso</SelectItem>
+                      {estadoOptions && estadoOptions.length > 0 ? (
+                        estadoOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="OPEN">Abierta</SelectItem>
+                          <SelectItem value="IN_PROGRESS">En Proceso</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
 
@@ -265,10 +277,18 @@ export function WIPTable({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas las prioridades</SelectItem>
-                      <SelectItem value="URGENT">Urgente</SelectItem>
-                      <SelectItem value="HIGH">Alta</SelectItem>
-                      <SelectItem value="MEDIUM">Media</SelectItem>
-                      <SelectItem value="LOW">Baja</SelectItem>
+                      {prioridadOptions && prioridadOptions.length > 0 ? (
+                        prioridadOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="URGENT">Urgente</SelectItem>
+                          <SelectItem value="HIGH">Alta</SelectItem>
+                          <SelectItem value="MEDIUM">Media</SelectItem>
+                          <SelectItem value="LOW">Baja</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
 
@@ -437,10 +457,10 @@ export function WIPTable({
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        <StatusBadge estado={item.estado} />
+                        <StatusBadge estado={item.estado} options={estadoOptions} />
                       </TableCell>
                       <TableCell className="text-center">
-                        <PriorityBadge prioridad={item.prioridad} />
+                        <PriorityBadge prioridad={item.prioridad} options={prioridadOptions} />
                       </TableCell>
                       <TableCell className="text-right font-mono font-medium">
                         <Tooltip>

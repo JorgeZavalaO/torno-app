@@ -31,14 +31,17 @@ const config: Record<EstadoOT, { label: string; className: string; variant?: "de
   },
 };
 
-export function StatusBadge({ estado, className }: { estado: EstadoOT; className?: string }) {
+type CatalogOption = { value: string; label: string; color?: string | null };
+
+export function StatusBadge({ estado, className, options }: { estado: EstadoOT; className?: string; options?: CatalogOption[] }) {
   const { label, className: configClassName, variant } = config[estado];
+  const labelFromCatalog = options?.find(o => o.value === estado)?.label;
   return (
     <Badge 
       variant={variant || "default"} 
       className={cn(configClassName, className)}
     >
-      {label}
+      {labelFromCatalog || label}
     </Badge>
   );
 }
