@@ -1,4 +1,4 @@
-import { prisma } from "./src/app/lib/prisma";
+import { prisma } from "../../../src/app/lib/prisma";
 
 /**
  * Script para limpiar los datos de prueba

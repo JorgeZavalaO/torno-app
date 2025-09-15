@@ -1,4 +1,4 @@
-import { prisma } from "./src/app/lib/prisma";
+import { prisma } from "../../../src/app/lib/prisma";
 
 /**
  * Script de prueba para verificar las métricas de máquinas
@@ -185,7 +185,7 @@ async function testMachinesMetrics() {
     console.log("\n🔄 Probando función completa getMachinesCached...");
     
     try {
-      const { getMachinesCached } = await import("./src/app/server/queries/machines");
+      const { getMachinesCached } = await import("../../../src/app/server/queries/machines");
       const machines = await getMachinesCached();
       
       const testMachineResult = machines.find(m => m.codigo === "TEST-001");

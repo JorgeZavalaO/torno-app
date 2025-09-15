@@ -1,4 +1,4 @@
-import { prisma } from "./src/app/lib/prisma";
+import { prisma } from "../../../src/app/lib/prisma";
 
 /**
  * Script para crear datos de prueba y verificar la implementación completa

@@ -4,7 +4,7 @@
  * Script para probar la creación de productos con códigos equivalentes
  */
 
-import { createProduct } from '../src/app/(protected)/inventario/actions';
+import { createProduct } from '../../../src/app/(protected)/inventario/actions';
 
 async function testCreateProduct() {
   try {
