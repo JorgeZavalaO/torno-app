@@ -25,6 +25,9 @@ export default function InventoryClient({
   products,
   recentMovs,
   productOptions,
+  uomOptions,
+  categoryOptions,
+  movementTypeOptions,
   actions,
 }:{
   currency: string;
@@ -32,6 +35,9 @@ export default function InventoryClient({
   products: ProductRow[];
   recentMovs: MovementRow[];
   productOptions: ProductOption[];
+  uomOptions: { value: string; label: string }[];
+  categoryOptions: { value: string; label: string }[];
+  movementTypeOptions: { value: string; label: string }[];
   actions: Actions;
 }) {
   const router = useRouter();
@@ -154,6 +160,8 @@ export default function InventoryClient({
             onOpenChange={setShowNewProduct}
             onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
             actions={actions}
+            uomOptions={uomOptions}
+            categoryOptions={categoryOptions}
           />
           <EditProductDialog
             currency={currency}
@@ -170,6 +178,8 @@ export default function InventoryClient({
               removeEquivalentCode: actions.removeEquivalentCode,
               getProductEquivalentCodes: actions.getProductEquivalentCodes,
             }}
+            uomOptions={uomOptions}
+            categoryOptions={categoryOptions}
           />
           <NewMovementDialog
             currency={currency}
@@ -178,12 +188,14 @@ export default function InventoryClient({
             products={productOptions}
             onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
             actions={actions}
+            movementTypeOptions={movementTypeOptions}
           />
           <ImportProductsDialog
             open={showImport}
             onOpenChange={setShowImport}
             onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
             actions={actions}
+            categoryOptions={categoryOptions}
           />
         </>
       )}

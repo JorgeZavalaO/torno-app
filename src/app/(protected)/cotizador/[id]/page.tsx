@@ -31,6 +31,8 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
     kwh: toNum(quote.kwh),
     validUntil: quote.validUntil ?? null,
     notes: quote.notes ?? null,
+    tipoTrabajoId: quote.tipoTrabajoId ?? null,
+    tipoTrabajo: quote.tipoTrabajo ?? null,
     giPct: toNum(quote.giPct),
     marginPct: toNum(quote.marginPct),
     hourlyRate: toNum(quote.hourlyRate),
@@ -61,6 +63,8 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
         kwh: number;
         validUntil?: Date | null;
         notes?: string | null;
+        tipoTrabajoId?: string | null;
+        tipoTrabajo?: { id: string; nombre: string; descripcion: string | null } | null;
         giPct: number;
         marginPct: number;
         hourlyRate: number;

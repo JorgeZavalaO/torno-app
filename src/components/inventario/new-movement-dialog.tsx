@@ -53,7 +53,8 @@ interface FormErrors {
 }
 
 export function NewMovementDialog({
-  open, onOpenChange, products, actions, onSuccess, currency = "PEN"
+  open, onOpenChange, products, actions, onSuccess, currency = "PEN",
+  movementTypeOptions,
 }: {
   open: boolean; 
   onOpenChange: (o: boolean) => void;
@@ -61,10 +62,11 @@ export function NewMovementDialog({
   actions: { createMovement: (fd: FormData) => Promise<{ok: boolean; message?: string}> };
   onSuccess: (msg: string) => void;
   currency?: string;
+  movementTypeOptions?: Array<{ value: string; label: string }>;
 }) {
   const router = useRouter();
   const [productoId, setProductoId] = useState("");
-  const [tipo, setTipo] = useState<typeof types[number]["v"]>("INGRESO_COMPRA");
+  const [tipo, setTipo] = useState<string>("INGRESO_COMPRA");
   const [cantidad, setCantidad] = useState<number | "">(1);
   const [costoUnitario, setCostoUnitario] = useState<number | "">(0);
   const [refTabla, setRefTabla] = useState("");
@@ -80,8 +82,23 @@ export function NewMovementDialog({
     }
   }, [open, products, productoId]);
 
+  // Map movement type options from catalog or use defaults
+  const mappedTypes = movementTypeOptions 
+    ? movementTypeOptions.map(option => {
+        // Map catalog options to the expected format
+        const defaultType = types.find(t => t.v === option.value);
+        return defaultType || {
+          v: option.value,
+          label: option.label,
+          description: `Movimiento: ${option.label}`,
+          icon: Settings,
+          color: "bg-blue-50 text-blue-700 border-blue-200"
+        };
+      })
+    : types;
+
   const selectedProduct = products.find(p => p.sku === productoId);
-  const selectedType = types.find(t => t.v === tipo);
+  const selectedType = mappedTypes.find(t => t.v === tipo);
   const isIngreso = tipo.startsWith("INGRESO");
   
   const reset = () => {
@@ -226,7 +243,7 @@ export function NewMovementDialog({
           <div className="space-y-3">
             <Label className="text-sm font-medium">Tipo de movimiento *</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {types.map(type => {
+              {mappedTypes.map(type => {
                 const Icon = type.icon;
                 return (
                   <div

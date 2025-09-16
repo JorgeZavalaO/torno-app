@@ -36,16 +36,22 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle,
-  Clock,
   Package,
   DollarSign
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QuoteLinesEditor, PiezaLine, MaterialLine } from "./quote-lines-editor";
+import { getTiposTrabajo } from "@/app/(protected)/cotizador/actions";
 
 type Client = { id: string; nombre: string; ruc: string };
 type CostingParams = Record<string, string | number>;
 type CreateQuoteAction = (fd: FormData) => Promise<{ ok: boolean; id?: string; message?: string }>;
+
+type TipoTrabajo = { id: string; nombre: string; descripcion: string | null; propiedades?: unknown; codigo: string };
+type TiposTrabajoResponse = {
+  principales: TipoTrabajo[];
+  subcategorias: TipoTrabajo[];
+};
 
 interface NewQuoteDialogProps {
   open: boolean;
@@ -71,6 +77,9 @@ export function NewQuoteDialog({
   const [validUntil, setValidUntil] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [pedidoReferencia, setPedidoReferencia] = useState<string>("");
+  const [tipoTrabajoId, setTipoTrabajoId] = useState<string>("");
+  const [tipoTrabajoSubcategoriaId, setTipoTrabajoSubcategoriaId] = useState<string>("");
+  const [tiposTrabajo, setTiposTrabajo] = useState<TiposTrabajoResponse | null>(null);
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
   const [forceMaterials, setForceMaterials] = useState<boolean>(false);
@@ -119,6 +128,8 @@ export function NewQuoteDialog({
     setKwh(0);
     setNotes("");
     setPedidoReferencia("");
+    setTipoTrabajoId("");
+    setTipoTrabajoSubcategoriaId("");
     setPiezasLines([]);
     setMaterialesLines([]);
     // Mantener la fecha de vigencia
@@ -138,6 +149,8 @@ export function NewQuoteDialog({
   if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
   if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
+  if (tipoTrabajoSubcategoriaId) formData.set("tipoTrabajoId", tipoTrabajoSubcategoriaId);
+  else if (tipoTrabajoId) formData.set("tipoTrabajoId", tipoTrabajoId);
   if (piezasLines.length) formData.set("piezas", JSON.stringify(piezasLines));
   if (materialesLines.length) formData.set("materialesDetalle", JSON.stringify(materialesLines));
 
@@ -173,21 +186,42 @@ export function NewQuoteDialog({
     }
   }, [open, validUntil]);
 
-  // Sincronizar qty y materials en tiempo real si existen líneas detalladas
+  // Cargar tipos de trabajo
   useEffect(() => {
-    if (piezasLines.length) {
-      const q = piezasLines.reduce((s,p)=> s + (p.qty || 0), 0);
-      if (q !== qty) setQty(q);
+    if (open) {
+      startTransition(async () => {
+        try {
+          const tipos = await getTiposTrabajo();
+          setTiposTrabajo(tipos as TiposTrabajoResponse);
+        } catch (error) {
+          console.error("Error loading tipos de trabajo:", error);
+        }
+      });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [piezasLines]);
+  }, [open]);
+
+  // Limpiar subcategoría cuando cambia el tipo principal
   useEffect(() => {
-    if (materialesLines.length) {
-      const m = Number(materialesLines.reduce((s,m)=> s + (m.qty * m.unitCost), 0).toFixed(2));
-      if (m !== materials) setMaterials(m);
+    if (tipoTrabajoId) {
+      const tipoSeleccionado = tiposTrabajo?.principales.find(t => t.id === tipoTrabajoId);
+      if (tipoSeleccionado?.codigo !== "SERVICIOS") {
+        setTipoTrabajoSubcategoriaId("");
+      }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [materialesLines]);
+  }, [tipoTrabajoId, tiposTrabajo?.principales]);
+
+  // Obtener subcategorías disponibles para el tipo seleccionado
+  const subcategoriasDisponibles = useMemo(() => {
+    if (!tiposTrabajo || !tipoTrabajoId) return [];
+    const tipoSeleccionado = tiposTrabajo.principales.find(t => t.id === tipoTrabajoId);
+    if (tipoSeleccionado?.codigo === "SERVICIOS") {
+      return tiposTrabajo.subcategorias.filter(s => {
+        const props = s.propiedades as { parent?: string; isSubcategory?: boolean };
+        return props?.parent === "SERVICIOS";
+      });
+    }
+    return [];
+  }, [tiposTrabajo, tipoTrabajoId]);
 
   return (
   <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -287,19 +321,59 @@ export function NewQuoteDialog({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="validUntil" className="text-sm font-medium flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          Vigente hasta
-                        </Label>
-                        <Input
-                          id="validUntil"
-                          type="date"
-                          value={validUntil}
-                          onChange={(e) => setValidUntil(e.target.value)}
-                          disabled={pending}
-                          className="h-11"
-                        />
+                        <Label htmlFor="tipoTrabajo" className="text-sm font-medium">Tipo de Trabajo</Label>
+                        <Select value={tipoTrabajoId} onValueChange={setTipoTrabajoId} disabled={pending}>
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Seleccionar tipo de trabajo..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tiposTrabajo?.principales.map((tipo) => (
+                              <SelectItem key={tipo.id} value={tipo.id}>
+                                <div className="flex flex-col items-start py-1">
+                                  <div className="font-medium">{tipo.nombre}</div>
+                                  {tipo.descripcion && (
+                                    <div className="text-sm text-muted-foreground">
+                                      {tipo.descripcion}
+                                    </div>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Tipo de trabajo para la cotización (opcional)
+                        </p>
                       </div>
+
+                      {/* Subcategoría de servicios - solo visible cuando se selecciona "Servicios" */}
+                      {subcategoriasDisponibles.length > 0 && (
+                        <div className="space-y-2">
+                          <Label htmlFor="tipoTrabajoSubcategoria" className="text-sm font-medium">Tipo de Servicio</Label>
+                          <Select value={tipoTrabajoSubcategoriaId} onValueChange={setTipoTrabajoSubcategoriaId} disabled={pending}>
+                            <SelectTrigger className="h-11">
+                              <SelectValue placeholder="Seleccionar tipo de servicio..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {subcategoriasDisponibles.map((subcategoria) => (
+                                <SelectItem key={subcategoria.id} value={subcategoria.id}>
+                                  <div className="flex flex-col items-start py-1">
+                                    <div className="font-medium">{subcategoria.nombre}</div>
+                                    {subcategoria.descripcion && (
+                                      <div className="text-sm text-muted-foreground">
+                                        {subcategoria.descripcion}
+                                      </div>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Especifica el tipo de servicio requerido
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </Card>
                 </TabsContent>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FileUp, Download } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
@@ -10,15 +10,17 @@ import { CATEGORIES } from "@/lib/product-categories";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function ImportProductsDialog({
-  open, 
+  open,
   onOpenChange,
   onSuccess,
-  actions
-}:{
+  actions,
+  categoryOptions,
+}: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSuccess: (msg: string) => void;
-  actions: { importProducts: (file: File) => Promise<{ok: boolean; message?: string; imported?: number}> };
+  actions: { importProducts: (file: File) => Promise<{ ok: boolean; message?: string; imported?: number }> };
+  categoryOptions?: { value: string; label: string }[];
 }) {
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -30,19 +32,17 @@ export function ImportProductsDialog({
 
   const downloadTemplate = () => {
     // CSV template: Nombre,Categoría,UOM,Costo,StockMinimo
+    const cats = categoryOptions && categoryOptions.length > 0 ? categoryOptions.map((c) => c.value) : CATEGORIES;
     const sampleRows = [
-      `Ejemplo Pieza 1,${CATEGORIES[0]},kg,120.50,10`,
-      `Ejemplo Pieza 2,${CATEGORIES[1]},pz,350.00,2`,
-      `Ejemplo Pieza 3,${CATEGORIES[4]},pz,150.00,5`,
-      `Ejemplo Pieza 4,${CATEGORIES[2]},l,45.75,5`,
-      `Ejemplo Pieza 5,${CATEGORIES[3]},und,78.20,`,
+      `Ejemplo Pieza 1,${cats[0]},kg,120.50,10`,
+      `Ejemplo Pieza 2,${cats[1] ?? cats[0]},pz,350.00,2`,
+      `Ejemplo Pieza 3,${cats[4] ?? cats[0]},pz,150.00,5`,
+      `Ejemplo Pieza 4,${cats[2] ?? cats[0]},l,45.75,5`,
+      `Ejemplo Pieza 5,${cats[3] ?? cats[0]},und,78.20,`,
     ];
 
-    const templateContent = [
-      "Nombre,Categoría,UOM,Costo,StockMinimo",
-      ...sampleRows,
-    ].join("\n");
-    
+    const templateContent = ["Nombre,Categoría,UOM,Costo,StockMinimo", ...sampleRows].join("\n");
+
     const blob = new Blob([templateContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -59,7 +59,7 @@ export function ImportProductsDialog({
       toast.error("Debes seleccionar un archivo CSV");
       return;
     }
-    
+
     setUploading(true);
     try {
       const result = await actions.importProducts(file);
@@ -83,23 +83,21 @@ export function ImportProductsDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Importar productos</DialogTitle>
-          <DialogDescription>
-            Importa múltiples productos desde un archivo CSV
-          </DialogDescription>
+          <div className="text-sm text-muted-foreground">Importa múltiples productos desde un archivo CSV</div>
         </DialogHeader>
-        
+
         <Alert>
           <AlertDescription>
             Descarga la plantilla CSV para ver el formato requerido. No incluyas SKUs, se generarán automáticamente.
           </AlertDescription>
         </Alert>
-        
+
         <Button variant="outline" onClick={downloadTemplate} className="gap-2">
           <Download className="h-4 w-4" /> Descargar plantilla
         </Button>
-        
+
         <Separator />
-        
+
         <div className="grid w-full max-w-sm items-center gap-1.5">
           <label htmlFor="csvFile" className="text-sm font-medium">
             Archivo CSV
@@ -108,19 +106,14 @@ export function ImportProductsDialog({
             id="csvFile"
             type="file"
             accept=".csv"
-            className="block w-full text-sm text-slate-500
-              file:mr-4 file:py-2 file:px-4
-              file:rounded-md file:border-0
-              file:text-sm file:font-semibold
-              file:bg-primary file:text-white
-              hover:file:bg-primary/90"
+            className={"block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90"}
             onChange={handleFileChange}
           />
           <p className="text-xs text-muted-foreground">
             {file ? `Archivo seleccionado: ${file.name}` : "Ningún archivo seleccionado"}
           </p>
         </div>
-        
+
         <div className="flex justify-end gap-2">
           <Button variant="outline" disabled={uploading} onClick={() => onOpenChange(false)}>
             Cancelar

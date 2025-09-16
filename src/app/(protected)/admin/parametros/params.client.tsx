@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 // import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -34,7 +35,13 @@ import {
   Info, 
   Loader2,
   AlertTriangle,
-  Settings
+  Settings,
+  Globe,
+  Percent,
+  DollarSign,
+  Hash,
+  Type,
+  TrendingUp
 } from "lucide-react";
 
 type Item = {
@@ -46,6 +53,14 @@ type Item = {
   valueNumber: string | null;
   valueText: string | null;
   unit: string | null;
+};
+
+type MonedaOption = {
+  value: string;
+  label: string;
+  color: string | null;
+  icono: string | null;
+  descripcion: string | null;
 };
 
 type Actions = {
@@ -62,9 +77,23 @@ type ItemWithUI = Item & {
 };
 
 const GROUP_ICONS = {
-  general: "🌐",
-  margenes: "📊",
-  costos: "💰",
+  general: Globe,
+  margenes: TrendingUp,
+  costos: DollarSign,
+} as const;
+
+const PARAM_TYPE_ICONS = {
+  NUMBER: Hash,
+  PERCENT: Percent,
+  CURRENCY: DollarSign,
+  TEXT: Type,
+} as const;
+
+const PARAM_TYPE_COLORS = {
+  NUMBER: "text-blue-600",
+  PERCENT: "text-green-600", 
+  CURRENCY: "text-amber-600",
+  TEXT: "text-purple-600",
 } as const;
 
 const GROUP_DESCRIPTIONS = {
@@ -77,10 +106,12 @@ export default function ParamsClient({
   initialItems, 
   canWrite, 
   actions,
+  monedaOptions = []
 }: {
   initialItems: Item[];
   canWrite: boolean;
   actions: Actions;
+  monedaOptions?: MonedaOption[];
 }) {
   const [items, setItems] = useState<ItemWithUI[]>(() =>
     initialItems.map(i => ({
@@ -227,14 +258,20 @@ export default function ParamsClient({
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Settings className="h-6 w-6 text-primary" />
-              <h1 className="text-2xl font-bold">Parámetros del Cotizador</h1>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-primary">
+              <Settings className="h-8 w-8" />
             </div>
-            <p className="text-muted-foreground">
-              Configura los valores que se utilizan en el cálculo de cotizaciones
-            </p>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                Parámetros del Sistema
+              </h1>
+              <p className="text-base text-muted-foreground">
+                Configura las tarifas, márgenes y parámetros de cotización del taller
+              </p>
+              {/* Debug: mostrar cuántas opciones de moneda se pasaron desde el servidor */}
+              <p className="text-sm text-muted-foreground mt-1">Monedas en catálogo: {monedaOptions.length}</p>
+            </div>
           </div>
           
           {canWrite && (
@@ -298,49 +335,28 @@ export default function ParamsClient({
         )}
 
         {/* Parameter Groups */}
-        {[...groups.entries()].map(([group, arr]) => (
-          <Card key={group} className="overflow-hidden">
-            <div className="px-6 py-4 border-b bg-muted/50">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">
-                  {GROUP_ICONS[group as keyof typeof GROUP_ICONS] || "⚙️"}
-                </span>
-                <div>
-                  <h3 className="font-semibold text-lg capitalize">{group}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {GROUP_DESCRIPTIONS[group as keyof typeof GROUP_DESCRIPTIONS] || "Configuración del sistema"}
-                  </p>
+        {[...groups.entries()].map(([group, arr]) => {
+          const IconComponent = GROUP_ICONS[group as keyof typeof GROUP_ICONS];
+          
+          return (
+            <Card key={group} className="overflow-hidden">
+              <div className="px-6 py-4 border-b bg-muted/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                    <IconComponent className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg capitalize">{group}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {GROUP_DESCRIPTIONS[group as keyof typeof GROUP_DESCRIPTIONS] || "Configuración del sistema"}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {arr.map((item) => (
-                  item.key === "currency" ? (
-                    <div key={item.id} className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">{item.label ?? item.key}</Label>
-                        {item.hasChanges && (
-                          <Badge variant="secondary" className="text-xs">Modificado</Badge>
-                        )}
-                      </div>
-                      <div className="flex gap-2 items-center">
-                        <select
-                          className="border rounded px-3 py-2"
-                          value={String(item.uiValue ?? "PEN")}
-                          onChange={(e) => updateItem(item.id, e.target.value)}
-                          disabled={!canWrite}
-                        >
-                          <option value="PEN">PEN</option>
-                          <option value="USD">USD</option>
-                        </select>
-                        {canWrite && item.hasChanges && item.isValid && (
-                          <Button size="sm" onClick={() => saveOne(item)}>Guardar</Button>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {arr.map((item) => (
                     <ParameterField
                       key={item.id}
                       item={item}
@@ -348,13 +364,14 @@ export default function ParamsClient({
                       canWrite={canWrite}
                       onChange={(v) => updateItem(item.id, v)}
                       onSave={() => saveOne(item)}
+                      monedaOptions={monedaOptions}
                     />
-                  )
-                ))}
+                  ))}
               </div>
             </div>
           </Card>
-        ))}
+        );
+        })}
 
         {/* Reset Confirmation Dialog */}
         <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
@@ -385,12 +402,14 @@ function ParameterField({
   canWrite,
   onChange,
   onSave,
+  monedaOptions = []
 }: {
   item: ItemWithUI;
   currency?: string;
   canWrite: boolean;
   onChange: (v: number | string) => void;
   onSave: () => Promise<void>;
+  monedaOptions?: MonedaOption[];
 }) {
   const [pending, start] = useTransition();
   const label = item.label ?? item.key;
@@ -403,12 +422,101 @@ function ParameterField({
   };
 
   if (item.type === "TEXT") {
+    // Special case for currency field - use Select with catalog options
+    if (item.key === "currency" && monedaOptions.length > 0) {
+      return (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`p-1 rounded ${PARAM_TYPE_COLORS[item.type]}`}>
+                {(() => {
+                  const IconComponent = PARAM_TYPE_ICONS[item.type];
+                  return <IconComponent className="h-4 w-4" />;
+                })()}
+              </div>
+              <Label htmlFor={item.key} className="text-sm font-medium">
+                {label}
+              </Label>
+            </div>
+            {item.hasChanges && (
+              <Badge variant="secondary" className="text-xs">
+                Modificado
+              </Badge>
+            )}
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Select
+                value={String(item.uiValue ?? "")}
+                onValueChange={(value) => onChange(value)}
+                disabled={!canWrite}
+              >
+                <SelectTrigger className={!item.isValid ? "border-destructive" : item.hasChanges ? "border-primary" : ""}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monedaOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" style={{ color: option.color || "#6B7280" }} />
+                        <span>{option.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {canWrite && item.hasChanges && item.isValid && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={handleSave} 
+                      disabled={pending}
+                    >
+                      {pending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Guardar cambio</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            
+            {!item.isValid && (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <XCircle className="h-3 w-3" />
+                {item.validationMessage}
+              </p>
+            )}
+            
+            {item.unit && (
+              <p className="text-xs text-muted-foreground">Formato: {item.unit}</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Regular TEXT field
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <Label htmlFor={item.key} className="text-sm font-medium">
-            {label}
-          </Label>
+          <div className="flex items-center gap-2">
+            <div className={`p-1 rounded ${PARAM_TYPE_COLORS[item.type]}`}>
+              {(() => {
+                const IconComponent = PARAM_TYPE_ICONS[item.type];
+                return <IconComponent className="h-4 w-4" />;
+              })()}
+            </div>
+            <Label htmlFor={item.key} className="text-sm font-medium">
+              {label}
+            </Label>
+          </div>
           {item.hasChanges && (
             <Badge variant="secondary" className="text-xs">
               Modificado
@@ -468,9 +576,17 @@ function ParameterField({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <Label htmlFor={item.key} className="text-sm font-medium">
-          {label}
-        </Label>
+        <div className="flex items-center gap-2">
+          <div className={`p-1 rounded ${PARAM_TYPE_COLORS[item.type]}`}>
+            {(() => {
+              const IconComponent = PARAM_TYPE_ICONS[item.type];
+              return <IconComponent className="h-4 w-4" />;
+            })()}
+          </div>
+          <Label htmlFor={item.key} className="text-sm font-medium">
+            {label}
+          </Label>
+        </div>
         {item.hasChanges && (
           <Badge variant="secondary" className="text-xs">
             Modificado

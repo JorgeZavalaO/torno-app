@@ -156,6 +156,9 @@ model Cotizacion {
   notes          String?
   pedidoReferencia String?   // Referencia de pedido ERP
 
+  tipoTrabajoId  String?     // Tipo de trabajo seleccionado
+  tipoTrabajo    ConfiguracionCatalogo? @relation(fields: [tipoTrabajoId], references: [id], onDelete: SetNull)
+
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -362,9 +365,26 @@ model OrdenTrabajo {
   cotizacionId  String?
   notas         String?
   acabado       String?
-  fechaLimite   DateTime?   // Fecha límite de entrega/programación
+  fechaLimite   DateTime?
   creadaEn      DateTime   @default(now())
   actualizadaEn DateTime   @updatedAt
+
+  // --- NUEVO: snapshot de la cotización ---
+  currency            String    @default("PEN")
+  costQuoteMaterials  Decimal?  @db.Decimal(18,2)
+  costQuoteLabor      Decimal?  @db.Decimal(18,2)
+  costQuoteOverheads  Decimal?  @db.Decimal(18,2)
+  costQuoteTotal      Decimal?  @db.Decimal(18,2)
+
+  // --- NUEVO: costos reales acumulados de la OT ---
+  costMaterials       Decimal   @db.Decimal(18,2) @default(0)  // de SALIDA_OT
+  costLabor           Decimal   @db.Decimal(18,2) @default(0)  // horas * tarifa
+  costOverheads       Decimal   @db.Decimal(18,2) @default(0)  // depreciación, alquiler, tooling, etc.
+  costTotal           Decimal   @db.Decimal(18,2) @default(0)  // suma de los anteriores
+
+  // --- NUEVO: snapshot de parámetros de costeo usados ---
+  costParams          Json?
+
   cliente          Cliente?         @relation(fields: [clienteId], references: [id])
   cotizacion       Cotizacion?      @relation(fields: [cotizacionId], references: [id])
   materiales       OTMaterial[]
@@ -507,6 +527,7 @@ enum TipoCatalogo {
   ESTADO_COTIZACION     // Reemplazar enum QuoteStatus
   MONEDA                // PEN, USD, EUR
   TIPO_PARAMETRO        // Reemplazar enum ParamType
+  TIPO_TRABAJO          // Fabricación, Transformación, Rectificación, Servicios
 }
 
 model ConfiguracionCatalogo {
@@ -525,6 +546,9 @@ model ConfiguracionCatalogo {
   
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+
+  // Relaciones
+  cotizaciones Cotizacion[]
 
   @@unique([tipo, codigo])
   @@index([tipo, activo, orden])

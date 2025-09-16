@@ -141,11 +141,47 @@ async function main() {
     update: {},
   });
 
+  // 8. Poblar catálogos básicos
+  console.log("📚 Poblando catálogos básicos...");
+  
+  // Tipos de trabajo
+  const tiposTrabajo = [
+    { codigo: "FABRICACION", nombre: "Fabricación", descripcion: "Trabajos de fabricación de piezas", orden: 1 },
+    { codigo: "TRANSFORMACION", nombre: "Transformación", descripcion: "Trabajos de transformación de materiales", orden: 2 },
+    { codigo: "RECTIFICACION", nombre: "Rectificación", descripcion: "Trabajos de rectificación y acabado", orden: 3 },
+    { codigo: "SERVICIOS", nombre: "Servicios", descripcion: "Servicios especializados", orden: 4 },
+    // Subcategorías de servicios
+    { codigo: "SERVICIO_SOLDADURA_AUTOGENA", nombre: "Soldadura Autógena", descripcion: "Servicio de soldadura autógena", orden: 5, propiedades: { parent: "SERVICIOS", isSubcategory: true } },
+    { codigo: "SERVICIO_SOLDADURA_TIG", nombre: "Soldadura TIG", descripcion: "Servicio de soldadura TIG", orden: 6, propiedades: { parent: "SERVICIOS", isSubcategory: true } },
+    { codigo: "SERVICIO_PROTECTORES_METALICOS", nombre: "Protectores Metálicos", descripcion: "Servicio para protectores metálicos", orden: 7, propiedades: { parent: "SERVICIOS", isSubcategory: true } },
+  ];
+
+  for (const tipo of tiposTrabajo) {
+    await prisma.configuracionCatalogo.upsert({
+      where: { tipo_codigo: { tipo: "TIPO_TRABAJO", codigo: tipo.codigo } },
+      create: {
+        tipo: "TIPO_TRABAJO",
+        codigo: tipo.codigo,
+        nombre: tipo.nombre,
+        descripcion: tipo.descripcion,
+        orden: tipo.orden,
+        propiedades: tipo.propiedades,
+      },
+      update: {
+        nombre: tipo.nombre,
+        descripcion: tipo.descripcion,
+        orden: tipo.orden,
+        propiedades: tipo.propiedades,
+      },
+    });
+  }
+
   console.log("✅ Seed completado exitosamente!");
   console.log(`📧 Email: ${ADMIN_EMAIL}`);
   console.log(`🔑 Password: ${ADMIN_PASS}`);
   console.log(`👥 Permisos creados: ${allPerms.length}`);
   console.log(`🎭 Roles creados: admin (todos los permisos), operator (solo lectura)`);
+  console.log(`📚 Tipos de trabajo creados: ${tiposTrabajo.length}`);
 }
 
 main()

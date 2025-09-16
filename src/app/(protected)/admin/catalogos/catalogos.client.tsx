@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { TipoCatalogo } from "@prisma/client";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import type { CatalogosByTipo, CatalogoItem } from "@/app/server/services/catalogos";
 // Nota: no importamos el módulo de acciones aquí para evitar que un "module object" sea
 // pasado desde el servidor hacia este Client Component. En su lugar, la página servidor
@@ -45,6 +45,7 @@ const TIPO_LABELS: Record<TipoCatalogo, { label: string; category: string; descr
   ESTADO_OC: { label: "Estados OC", category: "Compras", description: "Estados de órdenes de compra" },
   
   ESTADO_COTIZACION: { label: "Estados de Cotización", category: "Cotizaciones", description: "Estados del flujo de cotizaciones" },
+  TIPO_TRABAJO: { label: "Tipos de Trabajo", category: "Cotizaciones", description: "Tipos de trabajo disponibles" },
   MONEDA: { label: "Monedas", category: "Configuración", description: "Monedas disponibles" },
   TIPO_PARAMETRO: { label: "Tipos de Parámetro", category: "Configuración", description: "Tipos de parámetros del sistema" },
 };
@@ -60,6 +61,50 @@ export function CatalogosClient({ catalogosByTipo, canWrite, actions }: Catalogo
   const [editingItem, setEditingItem] = useState<CatalogoItem | null>(null);
   const [selectedTipo, setSelectedTipo] = useState<TipoCatalogo | null>(null);
   const [pending, startTransition] = useTransition();
+  
+  // Estado para controlar qué secciones están colapsadas
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    // Por defecto todas las secciones están colapsadas para ahorrar espacio
+    const sections = Object.values(TipoCatalogo).reduce((acc, tipo) => {
+      acc[tipo] = true; // Colapsadas por defecto
+      return acc;
+    }, {} as Record<string, boolean>);
+    return sections;
+  });
+
+  // Función para alternar el estado de colapso de una sección
+  const toggleCollapse = (sectionKey: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }));
+  };
+  
+  // Efecto para manejar la visibilidad del campo de tipo padre
+  useEffect(() => {
+    if (isDialogOpen && selectedTipo === TipoCatalogo.TIPO_TRABAJO) {
+      const isSubcategorySwitch = document.getElementById('isSubcategory') as HTMLInputElement;
+      const parentField = document.getElementById('parentField');
+      
+      if (isSubcategorySwitch && parentField) {
+        const isChecked = isSubcategorySwitch.checked;
+        parentField.style.display = isChecked ? 'block' : 'none';
+        
+        // Agregar event listener para cambios futuros
+        const handleChange = (e: Event) => {
+          const target = e.target as HTMLInputElement;
+          parentField.style.display = target.checked ? 'block' : 'none';
+        };
+        
+        isSubcategorySwitch.addEventListener('change', handleChange);
+        
+        // Cleanup
+        return () => {
+          isSubcategorySwitch.removeEventListener('change', handleChange);
+        };
+      }
+    }
+  }, [isDialogOpen, selectedTipo]);
   
   // Agrupar tipos por categoría
   const categorias = Object.values(TipoCatalogo).reduce((acc, tipo) => {
@@ -141,15 +186,26 @@ export function CatalogosClient({ catalogosByTipo, canWrite, actions }: Catalogo
                   style={{ backgroundColor: item.color }}
                 />
               )}
-              <div>
+              <div className="flex-1">
                 <div className="font-medium">{item.nombre}</div>
                 <div className="text-sm text-muted-foreground">
                   Código: {item.codigo} {item.descripcion && `• ${item.descripcion}`}
+                  {item.propiedades && (() => {
+                    try {
+                      const props = JSON.parse(item.propiedades as string);
+                      if (props.isSubcategory) {
+                        return <span className="ml-2 text-blue-600">• Subcategoría</span>;
+                      }
+                    } catch {}
+                    return null;
+                  })()}
                 </div>
               </div>
-              {!item.activo && (
-                <Badge variant="secondary">Inactivo</Badge>
-              )}
+              
+              {/* Badge para mostrar el estado activo/inactivo */}
+              <Badge variant={item.activo ? "default" : "secondary"}>
+                {item.activo ? "Activo" : "Inactivo"}
+              </Badge>
             </div>
             
             {canWrite && (
@@ -199,9 +255,23 @@ export function CatalogosClient({ catalogosByTipo, canWrite, actions }: Catalogo
                   <Card key={tipo}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{info.label}</CardTitle>
-                          <CardDescription>{info.description}</CardDescription>
+                        <div className="flex items-center gap-2 flex-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleCollapse(tipo)}
+                            className="p-1 h-6 w-6"
+                          >
+                            {collapsedSections[tipo] ? (
+                              <ChevronRight className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <div>
+                            <CardTitle className="text-lg">{info.label}</CardTitle>
+                            <CardDescription>{info.description}</CardDescription>
+                          </div>
                         </div>
                         {canWrite && (
                           <div className="flex items-center gap-2">
@@ -255,9 +325,11 @@ export function CatalogosClient({ catalogosByTipo, canWrite, actions }: Catalogo
                         )}
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      {renderItemList(items)}
-                    </CardContent>
+                    {!collapsedSections[tipo] && (
+                      <CardContent>
+                        {renderItemList(items)}
+                      </CardContent>
+                    )}
                   </Card>
                 );
               })}
@@ -301,6 +373,10 @@ export function CatalogosClient({ catalogosByTipo, canWrite, actions }: Catalogo
                   required
                   disabled={!!editingItem} // No permitir cambiar código en edición
                 />
+                {/* Campo hidden para asegurar que el código se envíe cuando está deshabilitado */}
+                {editingItem && (
+                  <input type="hidden" name="codigo" value={editingItem.codigo} />
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="orden">Orden</Label>
@@ -375,6 +451,53 @@ export function CatalogosClient({ catalogosByTipo, canWrite, actions }: Catalogo
               />
               <Label htmlFor="activo">Activo</Label>
             </div>
+
+            {/* Campos específicos para tipos de trabajo */}
+            {selectedTipo === TipoCatalogo.TIPO_TRABAJO && (
+              <div className="space-y-4 border-t pt-4">
+                <h4 className="text-sm font-medium">Configuración de Jerarquía</h4>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="isSubcategory"
+                    name="isSubcategory"
+                    defaultChecked={editingItem?.propiedades ? (() => {
+                      try {
+                        const props = JSON.parse(editingItem.propiedades as string);
+                        return props.isSubcategory === true;
+                      } catch {
+                        return false;
+                      }
+                    })() : false}
+                  />
+                  <Label htmlFor="isSubcategory">Es subcategoría de Servicios</Label>
+                </div>
+
+                {/* Campo para seleccionar el tipo padre (solo visible si es subcategoría) */}
+                <div className="space-y-2" id="parentField" style={{ display: 'none' }}>
+                  <Label htmlFor="parent">Tipo Padre</Label>
+                  <select
+                    id="parent"
+                    name="parent"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    defaultValue={editingItem?.propiedades ? (() => {
+                      try {
+                        const props = JSON.parse(editingItem.propiedades as string);
+                        return props.parent || "";
+                      } catch {
+                        return "";
+                      }
+                    })() : ""}
+                  >
+                    <option value="">Seleccionar tipo padre...</option>
+                    <option value="SERVICIOS">Servicios</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Solo las subcategorías pueden tener un tipo padre
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end space-x-2">
               <Button

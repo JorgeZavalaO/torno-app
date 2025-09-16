@@ -7,6 +7,7 @@ import { cacheTags } from "@/app/lib/cache-tags";
 import { prisma } from "@/app/lib/prisma";
 import { getCurrentUser } from "@/app/lib/auth";
 import { assertCanWriteWorkorders } from "@/app/lib/guards";
+import { getCostingValues } from "@/app/server/queries/costing-params";
 
 type R = { ok: true; message?: string; id?: string; codigo?: string } | { ok: false; message: string };
 const D = (n: number | string | null | undefined) => new Prisma.Decimal(n ?? 0);
@@ -65,6 +66,59 @@ export async function recomputeOTState(otId: string) {
     await prisma.ordenTrabajo.update({ where: { id: otId }, data: { estado: next } });
     bumpAll(otId);
   }
+}
+
+// NUEVO: recálculo completo de costos de una OT
+export async function recomputeOTCosts(otId: string) {
+  // 1) Materiales: suma de (|cantidad| * costoUnitario) de SALIDA_OT referenciadas a la OT
+  const movs = await prisma.movimiento.findMany({
+    where: { refTabla: "OrdenTrabajo", refId: otId, tipo: "SALIDA_OT" },
+    select: { cantidad: true, costoUnitario: true },
+  });
+  const matsCost = movs.reduce((s, m) => {
+    const qty = Math.abs(Number(m.cantidad || 0)); // salidas son negativas; usar valor absoluto
+    const cu  = Number(m.costoUnitario || 0);
+    return s + qty * cu;
+  }, 0);
+
+  // 2) Mano de obra: horas * tarifa
+  const aggHoras = await prisma.parteProduccion.aggregate({
+    where: { otId },
+    _sum: { horas: true },
+  });
+  const horas = Number(aggHoras._sum.horas || 0);
+
+  // 3) Parámetros de costeo (mismos del cotizador)
+  const v = await getCostingValues();
+  const hourlyRate = Number(v.hourlyRate || 0);
+  const depr       = Number(v.deprPerHour || 0);
+  const rent       = Number(v.rentPerHour || 0);
+  const toolingPc  = Number(v.toolingPerPiece || 0);
+
+  // 4) Piezas terminadas para costear tooling por pieza (si aplica)
+  const piezas = await prisma.oTPieza.findMany({ where: { otId }, select: { qtyHecha: true } });
+  const piezasHechas = piezas.reduce((s, p) => s + Number(p.qtyHecha || 0), 0);
+
+  // 5) Cálculos
+  const costLabor      = hourlyRate * horas;
+  const costOverByHour = (depr + rent) * horas;
+  // Nota: energía (kWh) no la estás registrando por ahora en el control; queda 0
+  const costEnergy     = 0; // o estima si luego registras kWh
+  const costTooling    = toolingPc * piezasHechas;
+  const costOverheads  = costOverByHour + costEnergy + costTooling;
+
+  const costTotal = matsCost + costLabor + costOverheads;
+
+  await prisma.ordenTrabajo.update({
+    where: { id: otId },
+    data: {
+      costMaterials: D(matsCost),
+      costLabor:     D(costLabor),
+      costOverheads: D(costOverheads),
+      costTotal:     D(costTotal),
+      costParams:    v as unknown as Prisma.JsonObject,
+    },
+  });
 }
 
 /* --------------------------- Schemas --------------------------- */
@@ -357,6 +411,7 @@ export async function emitOTMaterials(payload: z.infer<typeof EmitMaterialsSchem
   });
 
   await recomputeOTState(otId);
+  await recomputeOTCosts(otId); // NUEVO: recalcular costos después de emitir materiales
   bumpAll(otId);
   revalidateTag(cacheTags.inventoryProducts);
   revalidateTag(cacheTags.inventoryMovs);

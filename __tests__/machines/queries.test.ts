@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { prisma } from '@/app/lib/prisma';
 import { getMachinesCached, getMachineDetail } from '@/app/server/queries/machines';
 
 // Mock Prisma para testing
@@ -21,7 +20,25 @@ jest.mock('@/app/lib/prisma', () => ({
   },
 }));
 
-const mockPrisma = prisma as jest.Mocked<typeof prisma>;
+// Import after mock to get the mocked version
+import { prisma } from '@/app/lib/prisma';
+
+// Type the mocked prisma with explicit mock types
+const mockPrisma = {
+  maquina: {
+    findMany: prisma.maquina.findMany as jest.Mock,
+    findUnique: prisma.maquina.findUnique as jest.Mock,
+  },
+  maquinaEvento: {
+    groupBy: prisma.maquinaEvento.groupBy as jest.Mock,
+    findMany: prisma.maquinaEvento.findMany as jest.Mock,
+  },
+  maquinaMantenimiento: {
+    groupBy: prisma.maquinaMantenimiento.groupBy as jest.Mock,
+    findMany: prisma.maquinaMantenimiento.findMany as jest.Mock,
+  },
+  $queryRaw: prisma.$queryRaw as jest.Mock,
+};
 
 describe('Machines Queries', () => {
   beforeEach(() => {

@@ -11,8 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Edit, AlertCircle, Info, Trash2 } from "lucide-react";
-import { unidadesMedida } from "../../app/(protected)/inventario/uoms";
-import { CATEGORIES } from "@/lib/product-categories";
+// Category options should be provided from server via catalog; fallback to empty array
 import type { ProductRow } from "./types";
 
 interface FormErrors {
@@ -40,6 +39,8 @@ export function EditProductDialog({
   product,
   actions,
   currency = "PEN",
+  uomOptions = [],
+  categoryOptions = [],
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -53,11 +54,13 @@ export function EditProductDialog({
     getProductEquivalentCodes: (sku: string) => Promise<Array<{ id: string; sistema: string; codigo: string; descripcion?: string | null }>>;
   };
   currency?: string;
+  uomOptions?: { value: string; label: string }[];
+  categoryOptions?: { value: string; label: string }[];
 }) {
   const router = useRouter();
   const [nombre, setNombre] = useState("");
-  const [categoria, setCategoria] = useState<(typeof CATEGORIES)[number]>(CATEGORIES[0]);
-  const [uom, setUom] = useState("pz");
+  const [categoria, setCategoria] = useState<string>(categoryOptions[0]?.value || "");
+  const [uom, setUom] = useState(uomOptions[0]?.value || "pz");
   const [costo, setCosto] = useState<number | "">(0);
   const [stockMinimo, setStockMinimo] = useState<number | "">("");
   const [errors, setErrors] = useState<FormErrors>({});
@@ -108,8 +111,8 @@ export function EditProductDialog({
 
   const reset = () => {
     setNombre("");
-    setCategoria(CATEGORIES[0]);
-    setUom("pz");
+    setCategoria(categoryOptions[0]?.value || "");
+    setUom(uomOptions[0]?.value || "pz");
     setCosto(0);
     setStockMinimo("");
     setEqCodes([]);
@@ -306,20 +309,20 @@ export function EditProductDialog({
                 </Label>
                 <Select 
                   value={categoria} 
-                  onValueChange={v => setCategoria(v as (typeof CATEGORIES)[number])}
+                  onValueChange={setCategoria}
                 >
                   <SelectTrigger id="categoria">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c} className="py-3">
+                    {categoryOptions.map((c) => (
+                      <SelectItem key={c.value} value={c.value} className="py-3">
                         <div className="flex flex-col">
                           <span className="font-medium">
-                            {c.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                            {c.label}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {c.replace("_", "-").toLowerCase()}
+                            {c.value.replace("_", "-").toLowerCase()}
                           </span>
                         </div>
                       </SelectItem>
@@ -337,7 +340,7 @@ export function EditProductDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {unidadesMedida.map(um => (
+                    {uomOptions.map(um => (
                       <SelectItem key={um.value} value={um.value} className="py-3">
                         <div className="flex items-center justify-between w-full">
                           <span className="font-medium">{um.label}</span>

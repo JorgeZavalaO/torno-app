@@ -18,18 +18,19 @@ export const getQuotesCached = cache(
   { tags: [cacheTags.quotes] }
 );
 
-export async function getQuoteById(id: string): Promise<(PlainQuote & { ordenesTrabajo?: { id: string; codigo: string }[] }) | null> {
+export async function getQuoteById(id: string): Promise<(PlainQuote & { ordenesTrabajo?: { id: string; codigo: string }[]; tipoTrabajo?: { id: string; nombre: string; descripcion: string | null } | null }) | null> {
   const q = await prisma.cotizacion.findUnique({
     where: { id },
     include: { 
       cliente: { select: { id: true, nombre: true, ruc: true, email: true } },
+      tipoTrabajo: { select: { id: true, nombre: true, descripcion: true } },
       ordenesTrabajo: { select: { id: true, codigo: true } }
     },
   });
   if (!q) return null;
   const ser = serializeQuote(q, true);
   // return serialized quote plus related OTs (id + codigo)
-  return { ...ser, ordenesTrabajo: q.ordenesTrabajo };
+  return { ...ser, ordenesTrabajo: q.ordenesTrabajo, tipoTrabajo: q.tipoTrabajo };
 }
 
 export async function getQuotesByClientIdPlain(clientId: string, limit = 50) {

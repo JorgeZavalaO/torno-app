@@ -52,6 +52,14 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     unit: "PEN/hora" 
   },
   { 
+    key: "laborCost", 
+    label: "Costo de mano de obra", 
+    group: "costos", 
+    type: "CURRENCY", 
+    valueNumber: new Prisma.Decimal("25.00"), 
+    unit: "PEN/hora" 
+  },
+  { 
     key: "kwhRate", 
     label: "Costo de energía eléctrica", 
     group: "costos", 

@@ -1,4 +1,4 @@
-import { getCatalogosByTipo } from "@/app/server/services/catalogos";
+import { getCatalogosByTipoAdmin } from "@/app/server/services/catalogos";
 import { assertCanReadCatalogos, assertCanWriteCatalogos } from "@/app/lib/guards";
 import { CatalogosClient } from "./catalogos.client";
 import { upsertCatalogoItem, deleteCatalogoItem, reorderCatalogo, resetCatalogoTipo } from "./actions";
@@ -13,7 +13,8 @@ export default async function CatalogosPage() {
     // No puede escribir
   }
 
-  const catalogosByTipo = await getCatalogosByTipo();
+  // Usar la función admin que incluye elementos inactivos
+  const catalogosByTipo = await getCatalogosByTipoAdmin();
 
   return (
     <div className="space-y-8">

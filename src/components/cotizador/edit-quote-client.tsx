@@ -20,9 +20,17 @@ import { Save, Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
 import { QuoteStatusBadge } from "./quote-status-badge";
 import Link from "next/link";
 import { QuoteLinesEditor, PiezaLine, MaterialLine } from "./quote-lines-editor";
+import { getTiposTrabajo } from "@/app/(protected)/cotizador/actions";
 
 type Client = { id: string; nombre: string; ruc: string };
 type CostingParams = Record<string, string | number>;
+type UpdateQuoteAction = (quoteId: string, fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+
+type TipoTrabajo = { id: string; nombre: string; descripcion: string | null; propiedades?: unknown; codigo: string };
+type TiposTrabajoResponse = {
+  principales: TipoTrabajo[];
+  subcategorias: TipoTrabajo[];
+};
 
 type QuoteDetail = {
   id: string;
@@ -37,14 +45,18 @@ type QuoteDetail = {
   validUntil?: Date | null;
   notes?: string | null;
   pedidoReferencia?: string | null;
+  tipoTrabajoId?: string | null;
+  tipoTrabajo?: {
+    id: string;
+    nombre: string;
+    descripcion: string | null;
+  } | null;
   cliente: {
     id: string;
     nombre: string;
     ruc: string;
   };
 };
-
-type UpdateQuoteAction = (quoteId: string, fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 
 interface EditQuoteClientProps {
   quote: QuoteDetail;
@@ -63,6 +75,9 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
   const [validUntil, setValidUntil] = useState<string>("");
   const [notes, setNotes] = useState<string>(quote.notes || "");
   const [pedidoReferencia, setPedidoReferencia] = useState<string>(quote.pedidoReferencia || "");
+  const [tipoTrabajoId, setTipoTrabajoId] = useState<string>(quote.tipoTrabajoId || "");
+  const [tipoTrabajoSubcategoriaId, setTipoTrabajoSubcategoriaId] = useState<string>("");
+  const [tiposTrabajo, setTiposTrabajo] = useState<TiposTrabajoResponse | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
@@ -122,6 +137,8 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
     if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
     if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
+    if (tipoTrabajoSubcategoriaId) formData.set("tipoTrabajoId", tipoTrabajoSubcategoriaId);
+    else if (tipoTrabajoId) formData.set("tipoTrabajoId", tipoTrabajoId);
   if (piezasLines.length) formData.set("piezas", JSON.stringify(piezasLines));
   if (materialesLines.length) formData.set("materialesDetalle", JSON.stringify(materialesLines));
 
@@ -181,31 +198,40 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote.id]);
 
-  // Re-sincronizar qty si cambian líneas manualmente
+  // Limpiar subcategoría cuando cambia el tipo principal
   useEffect(() => {
-    if (piezasLines.length) {
-      const qSum = piezasLines.reduce((s,l)=> s + (l.qty||0), 0);
-      if (qSum !== qty) {
-        setQty(qSum);
-        setDerivedQty(true);
+    if (tipoTrabajoId && tiposTrabajo) {
+      const tipoSeleccionado = tiposTrabajo.principales.find(t => t.id === tipoTrabajoId);
+      if (tipoSeleccionado?.codigo !== "SERVICIOS") {
+        setTipoTrabajoSubcategoriaId("");
       }
-    } else if (derivedQty) {
-      setDerivedQty(false); // permitir edición manual de qty si ya no hay líneas
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [piezasLines]);
+  }, [tipoTrabajoId, tiposTrabajo]);
+
+  // Obtener subcategorías disponibles para el tipo seleccionado
+  const subcategoriasDisponibles = useMemo(() => {
+    if (!tiposTrabajo || !tipoTrabajoId) return [];
+    const tipoSeleccionado = tiposTrabajo.principales.find(t => t.id === tipoTrabajoId);
+    if (tipoSeleccionado?.codigo === "SERVICIOS") {
+      return tiposTrabajo.subcategorias.filter(s => {
+        const props = s.propiedades as { parent?: string; isSubcategory?: boolean };
+        return props?.parent === "SERVICIOS";
+      });
+    }
+    return [];
+  }, [tiposTrabajo, tipoTrabajoId]);
+
+  // Cargar tipos de trabajo
   useEffect(() => {
-    if (materialesLines.length) {
-      const mSum = Number(materialesLines.reduce((s,l)=> s + (l.qty * l.unitCost), 0).toFixed(2));
-      if (mSum !== materials) {
-        setMaterials(mSum);
-        setDerivedMaterials(true);
+    startTransition(async () => {
+      try {
+        const tipos = await getTiposTrabajo();
+        setTiposTrabajo(tipos as TiposTrabajoResponse);
+      } catch (error) {
+        console.error("Error loading tipos de trabajo:", error);
       }
-    } else if (derivedMaterials) {
-      setDerivedMaterials(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [materialesLines]);
+    });
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -300,6 +326,69 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
 
                 <div>
                   <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tipoTrabajo">Tipo de Trabajo</Label>
+                      <Select 
+                        value={tipoTrabajoId} 
+                        onValueChange={setTipoTrabajoId} 
+                        disabled={pending || !canEdit}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar tipo de trabajo..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tiposTrabajo?.principales.map((tipo) => (
+                            <SelectItem key={tipo.id} value={tipo.id}>
+                              <div>
+                                <div className="font-medium">{tipo.nombre}</div>
+                                {tipo.descripcion && (
+                                  <div className="text-sm text-muted-foreground">
+                                    {tipo.descripcion}
+                                  </div>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Tipo de trabajo para la cotización (opcional)
+                      </p>
+                    </div>
+
+                    {/* Subcategoría de servicios - solo visible cuando se selecciona "Servicios" */}
+                    {subcategoriasDisponibles.length > 0 && (
+                      <div className="space-y-2">
+                        <Label htmlFor="tipoTrabajoSubcategoria">Tipo de Servicio</Label>
+                        <Select 
+                          value={tipoTrabajoSubcategoriaId} 
+                          onValueChange={setTipoTrabajoSubcategoriaId} 
+                          disabled={pending || !canEdit}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar tipo de servicio..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subcategoriasDisponibles.map((subcategoria) => (
+                              <SelectItem key={subcategoria.id} value={subcategoria.id}>
+                                <div>
+                                  <div className="font-medium">{subcategoria.nombre}</div>
+                                  {subcategoria.descripcion && (
+                                    <div className="text-sm text-muted-foreground">
+                                      {subcategoria.descripcion}
+                                    </div>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Especifica el tipo de servicio requerido
+                        </p>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <Label htmlFor="pedidoReferencia">Pedido de Referencia</Label>
                       <Input

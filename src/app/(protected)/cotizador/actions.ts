@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { Prisma, TipoCatalogo } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
@@ -21,6 +21,7 @@ const InputSchema = z.object({
   validUntil: z.string().optional(), // ISO date
   notes: z.string().max(500).optional(),
   pedidoReferencia: z.string().max(100).optional(), // Referencia de pedido ERP
+  tipoTrabajoId: z.string().uuid().optional(), // Tipo de trabajo seleccionado
 });
 
 /* ---------- Helpers Decimal ---------- */
@@ -35,6 +36,45 @@ export async function listQuotes() {
 function bumpQuotesCache() {
   revalidateTag(cacheTags.quotes);
   revalidatePath("/cotizador", "page");
+}
+
+type TipoTrabajoPropiedades = {
+  parent?: string;
+  isSubcategory?: boolean;
+};
+
+export async function getTiposTrabajo() {
+  await assertCanReadQuotes(); // O algún permiso apropiado
+  // Centralizamos el acceso usando el servicio de catálogos (misma tabla, con cache)
+  const tipos = await prisma.configuracionCatalogo.findMany({
+    where: {
+      tipo: TipoCatalogo.TIPO_TRABAJO,
+      activo: true,
+    },
+    orderBy: { orden: "asc" },
+    select: {
+      id: true,
+      nombre: true,
+      descripcion: true,
+      propiedades: true,
+      codigo: true,
+    },
+  });
+
+  // Separar tipos principales de subcategorías
+  const principales = tipos.filter(t => {
+    const props = t.propiedades as TipoTrabajoPropiedades;
+    return !props?.isSubcategory;
+  });
+  const subcategorias = tipos.filter(t => {
+    const props = t.propiedades as TipoTrabajoPropiedades;
+    return props?.isSubcategory;
+  });
+
+  return {
+    principales,
+    subcategorias
+  };
 }
 
 export async function createQuote(fd: FormData): Promise<Result> {
@@ -90,6 +130,7 @@ export async function createQuote(fd: FormData): Promise<Result> {
     validUntil: fd.get("validUntil") || undefined,
     notes: fd.get("notes") || undefined,
     pedidoReferencia: fd.get("pedidoReferencia") || undefined,
+    tipoTrabajoId: fd.get("tipoTrabajoId") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
@@ -181,6 +222,7 @@ export async function createQuote(fd: FormData): Promise<Result> {
       validUntil: input.validUntil ? new Date(input.validUntil) : null,
       notes: input.notes ?? null,
       pedidoReferencia: input.pedidoReferencia ?? null,
+      tipoTrabajoId: input.tipoTrabajoId ?? null,
       status: "DRAFT",
     },
     select: { id: true },
@@ -275,6 +317,7 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
     validUntil: fd.get("validUntil") || undefined,
     notes: fd.get("notes") || undefined,
     pedidoReferencia: fd.get("pedidoReferencia") || undefined,
+    tipoTrabajoId: fd.get("tipoTrabajoId") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
@@ -377,6 +420,7 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
         validUntil: input.validUntil ? new Date(input.validUntil) : null,
         notes: input.notes ?? null,
         pedidoReferencia: input.pedidoReferencia ?? null,
+        tipoTrabajoId: input.tipoTrabajoId ?? null,
         updatedAt: new Date(),
       },
     });
@@ -469,6 +513,24 @@ export async function createOTFromQuote(quoteId: string): Promise<Result> {
   }
     // materialesLines es opcional: si no hay materiales detallados, creamos la OT sin materiales.
 
+  // ▼ Extraer costos del breakdown para snapshot en OT
+  type BreakdownCosts = {
+    materials?: number; labor?: number; energy?: number;
+    depreciation?: number; tooling?: number; rent?: number;
+    total?: number;
+  };
+  type BreakdownFull = {
+    params?: { currency?: string };
+    costs?: BreakdownCosts;
+  };
+  const bd = (breakdown as BreakdownFull) || {};
+  const c: BreakdownCosts = bd?.costs || {};
+
+  const quoteMaterials = Number(c.materials ?? 0);
+  const quoteLabor     = Number(c.labor ?? 0);
+  const quoteOverheads = Number(c.depreciation ?? 0) + Number(c.tooling ?? 0) + Number(c.rent ?? 0) + Number(c.energy ?? 0);
+  const quoteTotal     = Number(c.total ?? (quoteMaterials + quoteLabor + quoteOverheads));
+
   // Generar código correlativo (duplicado ligero de lógica de ot/actions.ts)
   async function nextOTCode() {
     const now = new Date();
@@ -494,6 +556,14 @@ export async function createOTFromQuote(quoteId: string): Promise<Result> {
         estado: "OPEN",
         codigo,
         notas: null,
+
+        // ▼ snapshot de la cotización
+        currency: String((bd?.params?.currency) || "PEN"),
+        costQuoteMaterials: D(quoteMaterials),
+        costQuoteLabor:     D(quoteLabor),
+        costQuoteOverheads: D(quoteOverheads),
+        costQuoteTotal:     D(quoteTotal),
+        costParams: bd?.params || undefined,
       },
       select: { id: true, codigo: true }
     });

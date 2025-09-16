@@ -7,6 +7,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanWritePurchases } from "@/app/lib/guards";
 import { getCurrentUser } from "@/app/lib/auth";
+import { recomputeOTCosts } from "@/app/(protected)/ot/actions";
 
 type Result = { ok: true; message?: string; id?: string; codigo?: string } | { ok: false; message: string };
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
@@ -614,6 +615,16 @@ export async function receiveOC(fd: FormData): Promise<Result> {
   bump();
   revalidateTag(cacheTags.inventoryProducts);
   revalidateTag(cacheTags.inventoryMovs);
+
+  // Recalcular costos de la OT asociada si la OC proviene de una SC vinculada a una OT
+  const sc = await prisma.solicitudCompra.findUnique({
+    where: { id: oc.scId },
+    select: { otId: true }
+  });
+  if (sc?.otId) {
+    try { await recomputeOTCosts(sc.otId); } catch {}
+  }
+
   return { ok: true, message: "Mercadería recepcionada", newEstado: finalEstado } as unknown as Result & { newEstado?: string };
 }
 

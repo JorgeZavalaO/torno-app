@@ -12,13 +12,16 @@ type Result = { ok: true; message?: string; id?: string } | { ok: false; message
 const CatalogoItemSchema = z.object({
   id: z.string().uuid().optional(),
   tipo: z.nativeEnum(TipoCatalogo),
-  codigo: z.string().min(1).max(50),
-  nombre: z.string().min(1).max(200),
-  descripcion: z.string().max(500).optional(),
+  codigo: z.string().min(1, "El código es requerido").max(50),
+  nombre: z.string().min(1, "El nombre es requerido").max(200),
+  descripcion: z.string().max(500).optional().or(z.literal("")),
   orden: z.number().int().min(0).max(9999),
-  activo: z.boolean().optional(),
-  color: z.string().max(20).optional(),
-  icono: z.string().max(50).optional(),
+  activo: z.boolean().default(true),
+  color: z.string().max(20).optional().or(z.literal("")),
+  icono: z.string().max(50).optional().or(z.literal("")),
+  // Campos específicos para tipos de trabajo
+  isSubcategory: z.boolean().default(false),
+  parent: z.string().optional().or(z.literal("")),
 });
 
 /**
@@ -28,23 +31,57 @@ export async function upsertCatalogoItem(fd: FormData): Promise<Result> {
   try {
     await assertCanWriteCosting();
 
+    // Fix para el switch: verificar explícitamente si el checkbox está presente
+    const activoValue = fd.has("activo") ? fd.get("activo") === "on" || fd.get("activo") === "true" : false;
+
+    // Función helper para obtener valores string seguros
+    const getString = (name: string): string | undefined => {
+      const value = fd.get(name);
+      return value === null ? undefined : (value as string);
+    };
+
     const parsed = CatalogoItemSchema.safeParse({
-      id: fd.get("id") || undefined,
-      tipo: fd.get("tipo"),
-      codigo: fd.get("codigo"),
-      nombre: fd.get("nombre"),
-      descripcion: fd.get("descripcion") || undefined,
-      orden: Number(fd.get("orden") || 0),
-      activo: fd.get("activo") === "true",
-      color: fd.get("color") || undefined,
-      icono: fd.get("icono") || undefined,
+      id: getString("id"),
+      tipo: getString("tipo"),
+      codigo: getString("codigo"),
+      nombre: getString("nombre"),
+      descripcion: getString("descripcion"),
+      orden: Number(getString("orden") || "0"),
+      activo: activoValue,
+      color: getString("color"),
+      icono: getString("icono"),
+      // Campos específicos para tipos de trabajo
+      isSubcategory: getString("isSubcategory") === "true",
+      parent: getString("parent"),
     });
 
     if (!parsed.success) {
-      return { ok: false, message: parsed.error.issues[0].message };
+      console.error("Validation error:", parsed.error.issues);
+      console.error("Form data debug:", {
+        tipo: getString("tipo"),
+        codigo: getString("codigo"),
+        nombre: getString("nombre"),
+        descripcion: getString("descripcion"),
+        orden: getString("orden"),
+        activo: activoValue,
+        color: getString("color"),
+        icono: getString("icono"),
+        isSubcategory: getString("isSubcategory"),
+        parent: getString("parent"),
+      });
+      return { ok: false, message: `Error de validación: ${parsed.error.issues[0].message}` };
     }
 
     const data = parsed.data;
+
+    // Construir propiedades JSON para tipos de trabajo
+    let propiedades: { isSubcategory?: boolean; parent?: string | null } | undefined = undefined;
+    if (data.tipo === TipoCatalogo.TIPO_TRABAJO && (data.isSubcategory || data.parent)) {
+      propiedades = {
+        isSubcategory: data.isSubcategory || false,
+        parent: data.parent || null,
+      };
+    }
 
     // Si es edición, verificar que el elemento existe
     if (data.id) {
@@ -66,6 +103,7 @@ export async function upsertCatalogoItem(fd: FormData): Promise<Result> {
           activo: data.activo ?? true,
           color: data.color || null,
           icono: data.icono || null,
+          propiedades,
         },
       });
 
@@ -86,16 +124,27 @@ export async function upsertCatalogoItem(fd: FormData): Promise<Result> {
         return { ok: false, message: "Ya existe un elemento con ese código en este tipo de catálogo" };
       }
 
+      // Orden automático: obtener el siguiente orden disponible
+      let ordenFinal = data.orden;
+      if (ordenFinal === 0) {
+        const maxOrden = await prisma.configuracionCatalogo.aggregate({
+          where: { tipo: data.tipo },
+          _max: { orden: true },
+        });
+        ordenFinal = (maxOrden._max.orden || 0) + 1;
+      }
+
       const created = await prisma.configuracionCatalogo.create({
         data: {
           tipo: data.tipo,
           codigo: data.codigo,
           nombre: data.nombre,
           descripcion: data.descripcion || null,
-          orden: data.orden,
+          orden: ordenFinal,
           activo: data.activo ?? true,
           color: data.color || null,
           icono: data.icono || null,
+          propiedades,
         },
       });
 
@@ -178,8 +227,13 @@ export async function resetCatalogoTipo(tipo: TipoCatalogo): Promise<Result> {
   try {
     await assertCanWriteCosting();
 
-    // Aquí podrías implementar la lógica para restablecer a valores por defecto
-    // Por ahora, simplemente reactivamos todos los elementos de ese tipo
+    if (tipo === TipoCatalogo.TIPO_TRABAJO) {
+      // Reset específico para tipos de trabajo con estructura jerárquica
+      await resetTiposTrabajo();
+      return { ok: true, message: "Tipos de trabajo restablecidos correctamente" };
+    }
+
+    // Para otros tipos, simplemente reactivamos todos los elementos
     await prisma.configuracionCatalogo.updateMany({
       where: { tipo },
       data: { activo: true },
@@ -191,4 +245,51 @@ export async function resetCatalogoTipo(tipo: TipoCatalogo): Promise<Result> {
     console.error("Error en resetCatalogoTipo:", error);
     return { ok: false, message: "Error interno del servidor" };
   }
+}
+
+/**
+ * Función específica para reset de tipos de trabajo con estructura jerárquica
+ */
+async function resetTiposTrabajo() {
+  // Primero desactivamos todos los tipos de trabajo existentes
+  await prisma.configuracionCatalogo.updateMany({
+    where: { tipo: TipoCatalogo.TIPO_TRABAJO },
+    data: { activo: false },
+  });
+
+  // Luego creamos/actualizamos los tipos principales y subcategorías
+  const tiposTrabajo = [
+    { codigo: "FABRICACION", nombre: "Fabricación", descripcion: "Trabajos de fabricación de piezas", orden: 1 },
+    { codigo: "TRANSFORMACION", nombre: "Transformación", descripcion: "Trabajos de transformación de materiales", orden: 2 },
+    { codigo: "RECTIFICACION", nombre: "Rectificación", descripcion: "Trabajos de rectificación y acabado", orden: 3 },
+    { codigo: "SERVICIOS", nombre: "Servicios", descripcion: "Servicios especializados", orden: 4 },
+    // Subcategorías de servicios
+    { codigo: "SERVICIO_SOLDADURA_AUTOGENA", nombre: "Soldadura Autógena", descripcion: "Servicio de soldadura autógena", orden: 5, propiedades: { parent: "SERVICIOS", isSubcategory: true } },
+    { codigo: "SERVICIO_SOLDADURA_TIG", nombre: "Soldadura TIG", descripcion: "Servicio de soldadura TIG", orden: 6, propiedades: { parent: "SERVICIOS", isSubcategory: true } },
+    { codigo: "SERVICIO_PROTECTORES_METALICOS", nombre: "Protectores Metálicos", descripcion: "Servicio para protectores metálicos", orden: 7, propiedades: { parent: "SERVICIOS", isSubcategory: true } },
+  ];
+
+  for (const tipo of tiposTrabajo) {
+    await prisma.configuracionCatalogo.upsert({
+      where: { tipo_codigo: { tipo: TipoCatalogo.TIPO_TRABAJO, codigo: tipo.codigo } },
+      create: {
+        tipo: TipoCatalogo.TIPO_TRABAJO,
+        codigo: tipo.codigo,
+        nombre: tipo.nombre,
+        descripcion: tipo.descripcion,
+        orden: tipo.orden,
+        propiedades: tipo.propiedades,
+        activo: true,
+      },
+      update: {
+        nombre: tipo.nombre,
+        descripcion: tipo.descripcion,
+        orden: tipo.orden,
+        propiedades: tipo.propiedades,
+        activo: true,
+      },
+    });
+  }
+
+  revalidatePath("/admin/catalogos");
 }

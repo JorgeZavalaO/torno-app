@@ -25,6 +25,7 @@ export type PlainQuote = {
   validUntil: Date | null;
   notes: string | null;
   pedidoReferencia: string | null;
+  tipoTrabajoId: string | null;
   createdAt: Date;
   updatedAt: Date;
   cliente?: { id: string; nombre: string; ruc: string; email?: string | null };
@@ -46,6 +47,7 @@ type PrismaLikeQuote = {
   breakdown: unknown;
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   validUntil: Date | null; notes: string | null; pedidoReferencia: string | null;
+  tipoTrabajoId: string | null;
   createdAt: Date; updatedAt: Date;
   cliente?: { id: string; nombre: string; ruc: string; email?: string | null };
 };
@@ -78,6 +80,7 @@ export function serializeQuote(q: PrismaLikeQuote, withClient = true): PlainQuot
     validUntil: q.validUntil ?? null,
     notes: q.notes ?? null,
     pedidoReferencia: q.pedidoReferencia ?? null,
+    tipoTrabajoId: q.tipoTrabajoId ?? null,
     createdAt: q.createdAt,
     updatedAt: q.updatedAt,
     cliente: withClient && q.cliente

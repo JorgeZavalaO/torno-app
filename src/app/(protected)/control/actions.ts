@@ -7,6 +7,7 @@ import { assertCanWriteProduction } from "@/app/lib/guards";
 import { logHoursBulk, logPieces } from "@/app/server/services/production";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { recomputeOTCosts } from "@/app/(protected)/ot/actions"; // IMPORTA
 
 /* -------------------------------------------------------------------------- */
 /*                                Infra común                                 */
@@ -302,6 +303,7 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
     if (!rP.ok) return { ok: false, message: rP.message || "Error al registrar piezas" };
   }
 
+  await recomputeOTCosts(otId); // NUEVO: recalcular costos después de registrar horas/piezas
   bumpControl([otId]);
   return { ok: true, message: "Registro guardado" };
 }

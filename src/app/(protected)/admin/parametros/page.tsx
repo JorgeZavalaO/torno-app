@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getCostingParamsCached } from "@/app/server/queries/costing-params";
+import { getCatalogoOptions } from "@/app/server/services/catalogos";
 import ParamsClient from "./params.client";
 import { bulkUpdate, resetDefaults, updateOne, pingCosting } from "./actions";
 import { Card } from "@/components/ui/card";
@@ -75,7 +76,10 @@ async function ParamsContent() {
     // Validate permissions and ensure defaults
     await pingCosting();
 
-    const params = await getCostingParamsCached();
+    const [params, monedaOptions] = await Promise.all([
+      getCostingParamsCached(),
+      getCatalogoOptions('MONEDA')
+    ]);
 
     // Convert valueNumber from Decimal | null to string | null for client component
     const mappedParams = params.map((p) => ({
@@ -88,6 +92,7 @@ async function ParamsContent() {
         initialItems={mappedParams}
         canWrite={canWrite}
         actions={{ bulkUpdate, resetDefaults, updateOne }}
+        monedaOptions={monedaOptions}
       />
     );
   } catch (error) {

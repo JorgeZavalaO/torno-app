@@ -3,9 +3,11 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getProductsWithStock, getRecentMovements } from "@/app/server/queries/inventory";
 import InventoryClient from "./inventory.client";
-import { pingInventory, createProduct, updateProduct, deleteProduct, createMovement, importProducts, addEquivalentCode, removeEquivalentCode, getProductEquivalentCodes, searchProducts } from "./actions";
+import { createProduct, updateProduct, deleteProduct, createMovement, importProducts, addEquivalentCode, removeEquivalentCode, getProductEquivalentCodes, searchProducts, pingInventory } from "./actions";
 import { prisma } from "@/app/lib/prisma";
 import { getCostingParamByKey } from "@/app/server/queries/costing-params";
+import { getCatalogoOptions } from "@/app/server/services/catalogos";
+import { TipoCatalogo } from "@prisma/client";
 
 export default async function InventoryPage() {
   const me = await getCurrentUser();
@@ -17,7 +19,12 @@ export default async function InventoryPage() {
   ]);
   if (!canRead) redirect("/");
 
-  await pingInventory();
+  // Obtener opciones del catálogo centralizado
+  const [uomOptions, categoryOptions, movementTypeOptions] = await Promise.all([
+    getCatalogoOptions(TipoCatalogo.UNIDAD_MEDIDA),
+    getCatalogoOptions(TipoCatalogo.CATEGORIA_PRODUCTO),
+    getCatalogoOptions(TipoCatalogo.TIPO_MOVIMIENTO),
+  ]);
 
   const [productsFromDb, recents] = await Promise.all([
     getProductsWithStock(),
@@ -38,11 +45,14 @@ export default async function InventoryPage() {
 
   return (
     <InventoryClient
-  currency={currency}
+      currency={currency}
       canWrite={canWrite}
       products={products}
       recentMovs={recents}
       productOptions={productOptions}
+      uomOptions={uomOptions}
+      categoryOptions={categoryOptions}
+      movementTypeOptions={movementTypeOptions}
       actions={{ createProduct, updateProduct, deleteProduct, createMovement, importProducts, addEquivalentCode, removeEquivalentCode, getProductEquivalentCodes, searchProducts }}
     />
   );

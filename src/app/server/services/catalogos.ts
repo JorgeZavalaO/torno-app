@@ -22,7 +22,33 @@ export interface CatalogosByTipo {
 }
 
 /**
- * Obtener todos los elementos del catálogo por tipo
+ * Obtener todos los elementos del catálogo por tipo (incluyendo inactivos para administración)
+ */
+export const getCatalogosByTipoAdmin = unstable_cache(
+  async (): Promise<CatalogosByTipo> => {
+    const items = await prisma.configuracionCatalogo.findMany({
+      // No filtrar por activo para mostrar todos en admin
+      orderBy: [{ tipo: 'asc' }, { orden: 'asc' }],
+    });
+
+    const catalogosByTipo: CatalogosByTipo = {};
+    
+    for (const item of items) {
+      const tipoKey = item.tipo;
+      if (!catalogosByTipo[tipoKey]) {
+        catalogosByTipo[tipoKey] = [];
+      }
+      catalogosByTipo[tipoKey].push(item as CatalogoItem);
+    }
+
+    return catalogosByTipo;
+  },
+  ['catalogos:admin:all'],
+  { revalidate: 300 }
+);
+
+/**
+ * Obtener todos los elementos del catálogo por tipo (solo activos para uso general)
  */
 export const getCatalogosByTipo = unstable_cache(
   async (): Promise<CatalogosByTipo> => {
@@ -83,6 +109,13 @@ export const getCatalogoItem = async (tipo: TipoCatalogo, codigo: string): Promi
  */
 export const getCatalogoOptions = async (tipo: TipoCatalogo) => {
   const items = await getCatalogoByTipo(tipo);
+  // Debug logging to verify items returned from DB
+  try {
+    console.log(`[getCatalogoOptions] tipo=${tipo} -> count=${items.length} items:`, items.map(i => ({ codigo: i.codigo, nombre: i.nombre })));
+  } catch (e) {
+    // ignore logging errors
+    console.log('[getCatalogoOptions] logging error', e);
+  }
   return items.map(item => ({
     value: item.codigo,
     label: item.nombre,

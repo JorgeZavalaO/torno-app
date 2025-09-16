@@ -26,7 +26,9 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
+        // ensure the tabs list stays above following content (cards) to avoid being hidden
+        // responsive: on small screens allow fit width (scrollable), on medium+ use full width
+        "relative z-10 bg-muted text-muted-foreground w-full sm:w-fit md:w-full overflow-x-auto whitespace-nowrap rounded-lg p-[3px]",
         className
       )}
       {...props}
