@@ -161,6 +161,97 @@ export default function OTDetailClient({
         </Card>
       </div>
 
+      {/* Costos Detallados */}
+      <Card className="overflow-hidden">
+        <div className="p-4 font-semibold flex items-center gap-2">
+          <div className="h-4 w-4 rounded bg-amber-500"></div>
+          Costos de la OT
+        </div>
+        <div className="p-4 space-y-4">
+          {/* Costos Calculados */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Materiales</div>
+              <div className="text-xl font-bold text-blue-600">
+                {ot.costMaterials ? `S/ ${ot.costMaterials.toFixed(2)}` : '—'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Mano de obra</div>
+              <div className="text-xl font-bold text-green-600">
+                {ot.costLabor ? `S/ ${ot.costLabor.toFixed(2)}` : '—'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Overheads</div>
+              <div className="text-xl font-bold text-orange-600">
+                {ot.costOverheads ? `S/ ${ot.costOverheads.toFixed(2)}` : '—'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Total</div>
+              <div className="text-2xl font-bold text-purple-600">
+                {ot.costTotal ? `S/ ${ot.costTotal.toFixed(2)}` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Costos de Cotización (Snapshot Inicial) */}
+          {(ot.costQuoteMaterials || ot.costQuoteLabor || ot.costQuoteOverheads || ot.costQuoteTotal) && (
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium text-muted-foreground mb-3">Costos estimados (de cotización)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Materiales estimados</div>
+                  <div className="text-sm font-medium text-blue-600">
+                    {ot.costQuoteMaterials ? `S/ ${ot.costQuoteMaterials.toFixed(2)}` : '—'}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Labor estimada</div>
+                  <div className="text-sm font-medium text-green-600">
+                    {ot.costQuoteLabor ? `S/ ${ot.costQuoteLabor.toFixed(2)}` : '—'}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Overheads estimados</div>
+                  <div className="text-sm font-medium text-orange-600">
+                    {ot.costQuoteOverheads ? `S/ ${ot.costQuoteOverheads.toFixed(2)}` : '—'}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Total estimado</div>
+                  <div className="text-sm font-medium text-purple-600">
+                    {ot.costQuoteTotal ? `S/ ${ot.costQuoteTotal.toFixed(2)}` : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Parámetros de Costeo */}
+          {ot.costParams && (
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium text-muted-foreground mb-3">Parámetros de costeo aplicados</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                {Object.entries(ot.costParams as Record<string, unknown>).map(([key, value]) => (
+                  <div key={key} className="flex justify-between">
+                    <span className="text-muted-foreground">{key}:</span>
+                    <span className="font-mono">{String(value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Nota informativa */}
+          <div className="text-xs text-muted-foreground border-t pt-3">
+            * Los costos se recalculan automáticamente tras emitir materiales, registrar producción o recibir compras vinculadas.
+            {ot.costTotal === 0 && " Los costos aparecerán una vez se registren movimientos o producción."}
+          </div>
+        </div>
+      </Card>
+
       {/* Materiales */}
       <Card className="overflow-hidden">
         <div className="p-4 font-semibold flex items-center gap-2"><Wrench className="h-4 w-4" /> Materiales planificados</div>

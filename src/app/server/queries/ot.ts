@@ -167,6 +167,20 @@ export const getOTDetail = cache(
       matsPend:           planM - emitM,
     };
 
+    // Normaliza costos calculados (Decimal -> number)
+    const costos = {
+      costMaterials: N(raw.costMaterials),
+      costLabor: N(raw.costLabor),
+      costOverheads: N(raw.costOverheads),
+      costTotal: N(raw.costTotal),
+      costParams: raw.costParams as Record<string, unknown> | null,
+      // Costos de cotización (snapshot inicial)
+      costQuoteMaterials: N(raw.costQuoteMaterials),
+      costQuoteLabor: N(raw.costQuoteLabor),
+      costQuoteOverheads: N(raw.costQuoteOverheads),
+      costQuoteTotal: N(raw.costQuoteTotal),
+    };
+
     // Objeto plano y serializable
     const ot = {
       id: raw.id,
@@ -181,6 +195,7 @@ export const getOTDetail = cache(
       materiales,
       piezas,
       partesProduccion,
+      ...costos, // Incluye todos los campos de costo
     };
 
     return { ot, kpis };

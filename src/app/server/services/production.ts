@@ -5,6 +5,7 @@ import { assertCanWriteWorkorders } from "@/app/lib/guards";
 import { revalidateTag, revalidatePath } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { z } from "zod";
+import { recomputeOTCosts } from "@/app/(protected)/ot/actions";
 
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 
@@ -62,6 +63,7 @@ export async function logHours(entry: z.infer<typeof SingleHoursSchema>){
   await prisma.parteProduccion.create({
     data:{ otId: parsed.data.otId, userId: targetUserId, horas: D(parsed.data.horas), maquina: parsed.data.maquina ?? null, nota: parsed.data.nota ?? null }
   });
+  await recomputeOTCosts(parsed.data.otId); // Recalcular costos después de registrar horas
   bump([parsed.data.otId]);
   return { ok:true as const, message:"Parte registrado" };
 }
@@ -88,6 +90,10 @@ export async function logHoursBulk(entries: z.infer<typeof SingleHoursSchema>[])
       await tx.ordenTrabajo.updateMany({ where: { id: { in: toStart } }, data: { estado: "IN_PROGRESS" } });
     }
   });
+  // Recalcular costos para todas las OTs afectadas
+  for (const otId of otIds) {
+    await recomputeOTCosts(otId);
+  }
   bump(otIds);
   return { ok:true as const, message:"Partes registrados" };
 }
@@ -181,6 +187,7 @@ export async function logPieces(payload: z.infer<typeof PiecesSchema>){
       }
     }
   });
+  await recomputeOTCosts(otId); // Recalcular costos después de registrar piezas terminadas
   bump([otId]);
   return { ok:true as const, message:"Producción registrada" };
 }

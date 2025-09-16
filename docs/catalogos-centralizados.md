@@ -36,11 +36,70 @@ export const getCatalogoOptions = async (tipo: TipoCatalogo) => {
 ### 3. Componentes Actualizados
 
 #### ✅ Módulo Inventario
-- **NewProductDialog**: recibe `uomOptions` y `categoryOptions`
-- **EditProductDialog**: recibe `uomOptions` y `categoryOptions` 
-- **NewMovementDialog**: recibe `movementTypeOptions`
-- **ImportProductsDialog**: recibe `categoryOptions` para plantilla CSV
+#### ✅ Módulo Inventario
+- NewProductDialog: recibe `uomOptions` y `categoryOptions`
+- EditProductDialog: recibe `uomOptions` y `categoryOptions`
+- NewMovementDialog: recibe `movementTypeOptions`
+- ImportProductsDialog: recibe `categoryOptions` para la plantilla CSV
 
+#### ✅ Módulo Órdenes de Trabajo
+- PrioritySelect: recibe `prioridadOptions`
+- NewOTDialog: recibe `prioridadOptions` y `acabadoOptions`
+- EditHeaderDialog: recibe `prioridadOptions` y `acabadoOptions`
+
+#### ✅ Páginas Server-Side
+- `/inventario`: obtiene `UNIDAD_MEDIDA`, `CATEGORIA_PRODUCTO`, `TIPO_MOVIMIENTO`
+- `/ot`: obtiene `PRIORIDAD_OT`, `TIPO_ACABADO`
+- `/ot/[id]`: obtiene `PRIORIDAD_OT`, `TIPO_ACABADO`
+
+## Catálogos Implementados
+
+### Inventario
+- UNIDAD_MEDIDA: 20+ unidades (pz, kg, m, etc.)
+- CATEGORIA_PRODUCTO: 5 categorías (Materia Prima, Herramienta de Corte, Consumible, Repuesto, Fabricación)
+- TIPO_MOVIMIENTO: Ingreso/Salida por compra/ajuste/OT
+
+
+- PRIORIDAD_OT: Baja, Media, Alta, Urgente
+- TIPO_ACABADO: Ninguno, Zincado, Tropicalizado, Pintado, Cromado, Natural
+- ESTADO_OT: Borrador, Planificada, En Progreso, Completada, Cancelada
+
+### Máquinas
+- ESTADO_MAQUINA: Activa, Mantenimiento, Baja
+- EVENTO_MAQUINA: Uso, Parada, Mantenimiento, Avería, Disponible
+
+### Compras y Cotizaciones
+- ESTADO_SC, ESTADO_OC, ESTADO_COTIZACION
+- MONEDA: PEN, USD, EUR, CLP, COP, MXN
+- TIPO_PARAMETRO: NUMBER, PERCENT, CURRENCY, TEXT
+
+### Tipos de Trabajo (Cotizador)
+- `TIPO_TRABAJO` con estructura jerárquica (ej. Servicios → subcategorías TIG, Autógena, Protectores Metálicos)
+
+## Seed y mantenimiento
+
+- TS: `prisma/scripts/seeds/seed-catalogos.ts` (recomendado)
+- SQL: `prisma/scripts/seed-catalogos.sql`
+
+Ejecución TS (opcional):
+
+```bash
+npx tsx prisma/scripts/seeds/seed-catalogos.ts
+```
+
+Reset específico (Tipos de Trabajo): desde `/admin/catalogos` botón Reset, o vía acción `resetCatalogoTipo('TIPO_TRABAJO')`, que recrea principales y subcategorías.
+
+## Beneficios
+
+1. Single Source of Truth: opciones centralizadas en BD
+2. Flexibilidad: cambios sin desplegar código
+3. Consistencia visual: colores/iconos desde catálogo
+4. Admin Friendly: UI para gestionar
+5. Testeable y escalable
+
+---
+
+Nota: se eliminó `src/app/(protected)/inventario/uoms.ts`. Los componentes usan ahora `getCatalogoOptions` con fallback.
 #### ✅ Módulo Órdenes de Trabajo
 - **PrioritySelect**: recibe `options` y mapea iconos/colores
 - **NewOTDialog**: recibe `prioridadOptions` y `acabadoOptions`

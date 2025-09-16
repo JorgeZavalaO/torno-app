@@ -9,7 +9,6 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanReadInventory, assertCanWriteInventory } from "@/app/lib/guards";
 import { generateSKU } from "./sku";
-import { randomUUID } from "crypto";
 import { getProductsWithStock } from "@/app/server/queries/inventory";
 
 type Result = { ok: true; message?: string; sku?: string; imported?: number } | { ok: false; message: string };
@@ -62,12 +61,22 @@ export async function addEquivalentCode(fd: FormData): Promise<Result> {
   if (!parsed.success) return { ok: false, message: "Datos inválidos del código" };
   const { productoId, sistema, codigo, descripcion } = parsed.data;
   try {
-    // Insert con SQL crudo (id se autogenera)
-    const id = randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO "ProductoCodigoEquivalente" ("id", "productoId", "sistema", "codigo", "descripcion")
-      VALUES (${id}::uuid, ${productoId}, ${sistema}, ${codigo}, ${descripcion ?? null})
-    `;
+    // Verificar que el producto existe
+    const producto = await prisma.producto.findUnique({
+      where: { sku: productoId },
+      select: { sku: true }
+    });
+    if (!producto) return { ok: false, message: "Producto no encontrado" };
+
+    // Crear código equivalente usando Prisma Client
+    await prisma.productoCodigoEquivalente.create({
+      data: {
+        productoId,
+        sistema,
+        codigo,
+        descripcion,
+      },
+    });
     revalidateTag(cacheTags.inventoryProducts);
     revalidateTag(cacheTags.inventoryKardex(productoId));
     revalidatePath(`/inventario/${encodeURIComponent(productoId)}`, "page");
@@ -89,18 +98,21 @@ export async function removeEquivalentCode(fd: FormData): Promise<Result> {
   if (!parsed.success) return { ok: false, message: "Datos inválidos" };
   const { id } = parsed.data;
   try {
-    // obtener productoId para invalidación
-    const rows = await prisma.$queryRaw<{ productoId: string }[]>`
-      SELECT "productoId" FROM "ProductoCodigoEquivalente" WHERE id = ${id} LIMIT 1
-    `;
-    const productoId = rows?.[0]?.productoId;
-    if (!productoId) return { ok: false, message: "Código no encontrado" };
-    await prisma.$executeRaw`
-      DELETE FROM "ProductoCodigoEquivalente" WHERE id = ${id}
-    `;
+    // Obtener productoId antes de eliminar
+    const eqCode = await prisma.productoCodigoEquivalente.findUnique({
+      where: { id },
+      select: { productoId: true }
+    });
+    if (!eqCode) return { ok: false, message: "Código no encontrado" };
+
+    // Eliminar usando Prisma Client
+    await prisma.productoCodigoEquivalente.delete({
+      where: { id }
+    });
+
     revalidateTag(cacheTags.inventoryProducts);
-    revalidateTag(cacheTags.inventoryKardex(productoId));
-    revalidatePath(`/inventario/${encodeURIComponent(productoId)}`, "page");
+    revalidateTag(cacheTags.inventoryKardex(eqCode.productoId));
+    revalidatePath(`/inventario/${encodeURIComponent(eqCode.productoId)}`, "page");
     return { ok: true, message: "Código eliminado" };
   } catch (e) {
     console.error(e);
@@ -111,22 +123,24 @@ export async function removeEquivalentCode(fd: FormData): Promise<Result> {
 export async function getProductEquivalentCodes(sku: string): Promise<Array<{ id: string; sistema: string; codigo: string; descripcion?: string | null }>> {
   await assertCanReadInventory();
   try {
-    const codes = await prisma.$queryRaw<Array<{
-      id: string;
-      sistema: string;
-      codigo: string;
-      descripcion: string | null;
-    }>>`
-      SELECT id, sistema, codigo, descripcion
-      FROM "ProductoCodigoEquivalente"
-      WHERE "productoId" = ${sku}
-      ORDER BY sistema ASC, codigo ASC
-    `;
+    const codes = await prisma.productoCodigoEquivalente.findMany({
+      where: { productoId: sku },
+      select: {
+        id: true,
+        sistema: true,
+        codigo: true,
+        descripcion: true,
+      },
+      orderBy: [
+        { sistema: 'asc' },
+        { codigo: 'asc' }
+      ]
+    });
     return codes;
   } catch (e) {
-    // Si la tabla no existe aún (42P01), retornar vacío
+    // Si la tabla no existe aún, retornar vacío
     const msg = e instanceof Error ? e.message : '';
-    if (msg.includes('42P01')) {
+    if (msg.includes('does not exist')) {
       return [];
     }
     throw e;
@@ -193,21 +207,26 @@ export async function createProduct(fd: FormData): Promise<r> {
     if (equivalentes.length > 0) {
       try {
         for (const eq of equivalentes) {
-          const id = randomUUID();
-          await prisma.$executeRaw`
-            INSERT INTO "ProductoCodigoEquivalente" ("id", "productoId", "sistema", "codigo", "descripcion")
-            VALUES (${id}::uuid, ${sku}, ${eq.sistema}, ${eq.codigo}, ${eq.descripcion ?? null})
-            ON CONFLICT ("sistema", "codigo") DO NOTHING
-          `;
+          await prisma.productoCodigoEquivalente.create({
+            data: {
+              productoId: sku,
+              sistema: eq.sistema,
+              codigo: eq.codigo,
+              descripcion: eq.descripcion,
+            },
+          });
         }
         // invalidaciones relacionadas
         revalidateTag(cacheTags.inventoryKardex(sku));
       } catch (e) {
         console.warn('Error insertando códigos equivalentes:', e);
         const msg = e instanceof Error ? e.message : '';
-        // Si la tabla no existe (42P01), no fallar la creación del producto
-        if (!msg.includes('42P01')) {
-          console.warn('No se pudieron insertar códigos equivalentes:', e);
+        // Si hay error de unicidad, continuar pero registrar
+        if (msg.includes('P2002')) {
+          console.warn('Algunos códigos equivalentes ya existían y no se insertaron');
+        } else {
+          // Para otros errores, fallar la creación del producto
+          throw e;
         }
       }
     }

@@ -12,9 +12,12 @@ TornoApp es una aplicación interna para gestionar un taller de manufactura: cot
 
 ## Novedades (sept. 2025)
 
-- Catálogos del sistema: nueva entidad `ConfiguracionCatalogo` para reemplazar/enriquecer enums, con UI en Administración → Catálogos (reordenar, activar/inactivar, color, icono, reset a valores por defecto).
-- Máquinas: métricas y KPIs ampliados (paradas por fallas, averías, costo de mantenimiento últimos 30 días, horas hasta próximo mantenimiento), registro de eventos, programación/edición de mantenimientos y registro rápido de horas.
-- Compras/Inventario: costeo por Promedio Ponderado automatizado al recibir OC + botón de recálculo manual para casos excepcionales.
+- Catálogos centralizados: nueva entidad `ConfiguracionCatalogo` para reemplazar/enriquecer enums, con UI en Administración → Catálogos (reordenar, activar/inactivar, color, icono, reset a valores por defecto).
+- Parámetros del sistema: página de “Parámetros” rediseñada con grupos e íconos; selección de moneda desde catálogo `MONEDA`.
+- Inventario/Compras: costeo por Promedio Ponderado automatizado al recibir OC + botón de recálculo manual; movimientos parametrizados por catálogo `TIPO_MOVIMIENTO`.
+- OT (Órdenes de Trabajo): recálculo idempotente de costos integrado a eventos (emisión de materiales, registro de horas/piezas, recepción de OC vinculada).
+- Cotizador: tipos de trabajo desde catálogo (`TIPO_TRABAJO`) con estructura jerárquica (Servicios → subcategorías), snapshot de costos al crear OT desde cotización.
+- Máquinas: métricas y KPIs ampliados, registro de eventos y mantenimiento.
 - Cotizador: conversión automática de parámetros tipo moneda al cambiar la moneda base; nuevas cotizaciones usan la moneda vigente. (Alertas y acciones masivas pendientes.)
 - RBAC consolidado: permisos de catálogos (`settings.catalogos.read/write`) y scripts para asignación/verificación.
 
@@ -254,6 +257,19 @@ UI en `Admin → Catálogos` para crear/editar, reordenar, activar/desactivar y 
 
 Más en `src/app/server/services/catalogos.ts` y páginas bajo `src/app/(protected)/admin/catalogos/`.
 
+Semilla de catálogos
+
+- Seed TS: `prisma/scripts/seeds/seed-catalogos.ts` (usa Prisma; ejecuta con tsx)
+- Alternativa SQL: `prisma/scripts/seed-catalogos.sql`
+
+Ejecutar (opcional):
+
+```bash
+npx tsx prisma/scripts/seeds/seed-catalogos.ts
+```
+
+Tipos implementados (no exhaustivo): `UNIDAD_MEDIDA`, `CATEGORIA_PRODUCTO`, `TIPO_MOVIMIENTO`, `PRIORIDAD_OT`, `TIPO_ACABADO`, `ESTADO_OT`, `ESTADO_MAQUINA`, `EVENTO_MAQUINA`, `ESTADO_SC`, `ESTADO_OC`, `ESTADO_COTIZACION`, `MONEDA`, `TIPO_PARAMETRO`, `TIPO_TRABAJO` (con subcategorías de Servicios).
+
 ## Costeo: Promedio Ponderado
 
 Resumen
@@ -285,6 +301,50 @@ Parámetros y casos especiales
 Validación y monitoreo
 - Logs en servidor durante `receiveOC` y recálculo.
 - SQL de verificación (ejemplo): calcula promedio ponderado en DB para comparar con `Producto.costo`.
+
+## Costeo de OT (detalle técnico)
+
+Esta sección describe cómo se calculan y persisten los costos de una Orden de Trabajo (OT) en el sistema.
+
+Resumen
+- El recálculo de costos de una OT es idempotente y está centralizado en la función `recomputeOTCosts(otId)` ubicada en `src/app/(protected)/ot/actions.ts`.
+- `recomputeOTCosts` agrupa materiales, mano de obra y overheads (depreciación, renta, tooling) y escribe el snapshot en la fila `OrdenTrabajo`.
+
+Campos persistidos en `OrdenTrabajo`
+- `costMaterials` (DECIMAL): costo de materiales asociados a la OT (sumatoria de movimientos SALIDA_OT relacionados).
+- `costLabor` (DECIMAL): costo de mano de obra calculado como `hourlyRate * totalHorasRegistradas`.
+- `costOverheads` (DECIMAL): overheads calculados como `(deprPerHour + rentPerHour) * horas + toolingPerPiece * piezasHechas + costEnergy`.
+- `costTotal` (DECIMAL): suma total (materials + labor + overheads).
+- `costParams` (JSON): snapshot de parámetros de costeo usados en el cálculo (por ejemplo `hourlyRate`, `deprPerHour`, `toolingPerPiece`, `rentPerHour`, `currency`).
+
+Fórmulas (implementación aproximada)
+- materials = Σ |cantidad| * costoUnitario (sobre movimientos `tipo = 'SALIDA_OT'` referenciando la OT)
+- labor = hourlyRate × totalHorasRegistradas
+- overheads_by_hour = (deprPerHour + rentPerHour) × totalHorasRegistradas
+- tooling = toolingPerPiece × piezasHechas
+- energy = (si se registra kWh) kwhRate × kwhRegistrado (actualmente puede ser 0 si no se registra)
+- costOverheads = overheads_by_hour + tooling + energy
+- costTotal = materials + labor + costOverheads
+
+Origen de parámetros
+- Los parámetros de costeo se obtienen desde `getCostingValues()` (cacheado en `src/app/server/queries/costing-params.ts`).
+
+Eventos que disparan `recomputeOTCosts`
+- Emisión de materiales a la OT (`emitOTMaterials`, `issueMaterials`): después de crear los movimientos SALIDA_OT se llama al recálculo.
+- Registro de producción (horas/piezas) (`logWorkAndPieces` y variantes): tras guardar horas y piezas se invoca `recomputeOTCosts(otId)`.
+- Recepción de Órdenes de Compra vinculadas a la OT (si la OC proviene de una SC vinculada que referencia una OT): al finalizar recepción se intenta recalcular la OT afectada.
+- Creación de OT desde una cotización (`createOTFromQuote`): se guarda un snapshot inicial de costos de la cotización en campos `costQuoteMaterials`, `costQuoteLabor`, `costQuoteOverheads`, `costQuoteTotal` para referencia histórica.
+
+Buenas prácticas
+- `recomputeOTCosts` está diseñada para ser idempotente: puede llamarse múltiples veces sin causar drift si las entradas (movimientos, partes, parámetros) no cambian.
+- Ejecutar recálculo manual sólo en casos excepcionales; por diseño los eventos del sistema deberían mantener los costos consistentes.
+- Para auditoría, revisa los movimientos (`movimiento`) y partes de producción (`parteProduccion`) vinculados a la OT.
+
+Dónde buscar el código
+- `src/app/(protected)/ot/actions.ts` → `recomputeOTCosts(otId)`
+- `src/app/(protected)/control/actions.ts` → llamadas a `logWorkAndPieces` que disparan recálculo
+- `src/app/(protected)/compras/actions.ts` → `receiveOC` llama a recálculo si la OC/SC está ligada a una OT
+
 
 ## Cotizador: sistema de moneda
 
@@ -341,6 +401,7 @@ prisma/
     maintenance/            # Scripts de mantenimiento y migraciones
     tests/                  # Scripts de prueba y datos de test
   scripts/admin.js          # Orquestador de comandos (Node)
+  scripts/seeds/            # Semillas adicionales (catálogos)
 ```
 
 Seed principal
