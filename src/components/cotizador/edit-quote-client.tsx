@@ -114,11 +114,11 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
     };
   }, [materials, hours, kwh, qty, gi, margin, hourlyRate, kwhRate, depr, tooling, rent]);
 
-  const formatCurrency = (amount: number) =>
+  const formatCurrency = (amount: number, c: string = currency) =>
     new Intl.NumberFormat(undefined, { 
       style: "currency", 
-      currency 
-    }).format(amount);
+      currency: c 
+    }).format(amount || 0);
 
   const formatDate = (date: Date) =>
     date.toISOString().slice(0, 10);

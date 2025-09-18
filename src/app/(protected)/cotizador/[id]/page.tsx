@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getQuoteById } from "@/app/server/queries/quotes";
 import { QuoteDetailView } from "@/components/cotizador/quote-detail-view";
+import { getCostingValues } from "@/app/server/queries/costing-params";
 
 export default async function QuoteDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -15,7 +16,10 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
   ]);
   if (!canRead) redirect("/");
 
-  const quote = await getQuoteById(id);
+  const [quote, params] = await Promise.all([
+    getQuoteById(id),
+    getCostingValues(),
+  ]);
   if (!quote) redirect("/cotizador");
 
   // Sanitizar: convertir Prisma.Decimal a number y asegurar objetos planos
@@ -52,7 +56,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
 
   return (
     <div className="p-6">
-      <QuoteDetailView quote={plainQuote as unknown as {
+  <QuoteDetailView systemCurrency={String(params.currency || 'PEN')} quote={plainQuote as unknown as {
         id: string;
         createdAt: Date;
         status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";

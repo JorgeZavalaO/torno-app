@@ -249,6 +249,8 @@ export default function ProgramacionClient({ items }: { items: OTItem[] }) {
                       });
                       const isOverdue = new Date(ot.fechaLimite).getTime() < Date.now() && ot.estado !== "DONE";
 
+                      // Ejemplo: botón para refrescar tras acción (puedes reemplazarlo por tu acción real)
+                      // Llama a handleOTAction() después de una acción real sobre la OT
                       return (
                         <Tooltip key={ot.id} delayDuration={150}>
                           <TooltipTrigger asChild>

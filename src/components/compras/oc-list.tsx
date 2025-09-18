@@ -11,7 +11,7 @@ import { Pagination } from "./pagination";
 import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-export function OCList({ rows, canWrite, actions, currency = "PEN", estadoOptions }: { rows: OCRow[]; canWrite: boolean; actions: Actions; currency?: string; estadoOptions?: { value: string; label: string; color?: string | null }[] }) {
+export function OCList({ rows, canWrite, actions, currency = "USD", estadoOptions }: { rows: OCRow[]; canWrite: boolean; actions: Actions; currency?: string; estadoOptions?: { value: string; label: string; color?: string | null }[] }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;

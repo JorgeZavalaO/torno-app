@@ -2,26 +2,38 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getClientsCached } from "@/app/server/queries/clients";
+import { getCostingValues } from "@/app/server/queries/costing-params";
 import ClientesClient from "./clientes.client";
 import { createClient, updateClient, deleteClient, importClients } from "./actions";
 
 export default async function ClientesPage() {
-  const me = await getCurrentUser();
-  if (!me) redirect("/handler/sign-in");
+  // Autenticación
+  const user = await getCurrentUser();
+  if (!user) redirect("/handler/sign-in");
 
+  // Verificar permisos
   const [canRead, canWrite] = await Promise.all([
-    userHasPermission(me.email, "clients.read"),
-    userHasPermission(me.email, "clients.write"),
+    userHasPermission(user.email, "clients.read"),
+    userHasPermission(user.email, "clients.write"),
   ]);
+
   if (!canRead) redirect("/");
 
-  const clients = await getClientsCached();
+  // Cargar datos
+  const [clients, params] = await Promise.all([getClientsCached(), getCostingValues()]);
 
+  // Render con datos y acciones
   return (
     <ClientesClient
       initialItems={clients}
       canWrite={canWrite}
-      actions={{ createClient, updateClient, deleteClient, importClients }}
+      params={params}
+      actions={{
+        createClient,
+        updateClient,
+        deleteClient,
+        importClients,
+      }}
     />
   );
 }

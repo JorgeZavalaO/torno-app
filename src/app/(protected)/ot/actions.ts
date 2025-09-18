@@ -20,6 +20,8 @@ function bumpAll(otId?: string) {
   revalidatePath("/control", "page");
   revalidatePath("/maquinas", "page");
   revalidatePath("/inventario", "page");
+  // Refrescar calendario de programación
+  revalidatePath("/programacion", "page");
 }
 
 /* ------------------- Helpers de negocio / estado ------------------- */

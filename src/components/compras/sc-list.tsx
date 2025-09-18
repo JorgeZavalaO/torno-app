@@ -32,12 +32,14 @@ export function SCList({
   canWrite,
   actions,
   estadoOptions,
+  currency = "USD",
 }: {
   rows: SCRow[];
   providers: Provider[];
   canWrite: boolean;
   actions: Actions;
   estadoOptions?: { value: string; label: string; color?: string | null }[];
+  currency?: string;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -166,7 +168,7 @@ export function SCList({
                     </div>
                   </TableCell>
 
-                  <TableCell className="text-right">{fmtCurrency(r.totalEstimado)}</TableCell>
+                  <TableCell className="text-right">{fmtCurrency(r.totalEstimado, currency)}</TableCell>
 
                   <TableCell className="text-center">
                     <SCBadge estado={r.estado} options={estadoOptions} />
@@ -295,7 +297,7 @@ export function SCList({
                               <TableCell className="text-right">{Number(i.cubierto || 0)}</TableCell>
                               <TableCell className="text-right">{Number(pendiente)}</TableCell>
                               <TableCell className="text-right">
-                                {i.costoEstimado != null ? fmtCurrency(Number(i.costoEstimado)) : "—"}
+                                {i.costoEstimado != null ? fmtCurrency(Number(i.costoEstimado), currency) : "—"}
                               </TableCell>
                             </TableRow>
                           );
@@ -307,7 +309,7 @@ export function SCList({
 
                 <div className="flex items-center justify-between pt-2">
                   <div className="text-sm text-muted-foreground">Total estimado</div>
-                  <div className="font-semibold">{fmtCurrency(selected.totalEstimado)}</div>
+                  <div className="font-semibold">{fmtCurrency(selected.totalEstimado, currency)}</div>
                 </div>
 
                 {/* Resumen de OCs asociadas */}

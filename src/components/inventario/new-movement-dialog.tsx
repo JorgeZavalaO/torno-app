@@ -4,7 +4,6 @@ import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Package, TrendingUp, TrendingDown, Settings, AlertCircle } from "lucide-react";
+import { ProductCombobox } from "@/components/inventario/product-combobox";
 
 const types = [
   { 
@@ -203,32 +203,21 @@ export function NewMovementDialog({
             <Label htmlFor="producto" className="text-sm font-medium">
               Producto *
             </Label>
-            <Select value={productoId} onValueChange={setProductoId}>
-              <SelectTrigger 
-                id="producto"
-                className={errors.productoId ? "border-red-500" : ""}
-              >
-                <SelectValue placeholder="Busca y selecciona un producto..." />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map(p => (
-                  <SelectItem key={p.sku} value={p.sku} className="py-3">
-                    <div className="flex flex-col">
-                      <span className="font-medium">{p.nombre}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {p.sku} • {p.uom}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+            <ProductCombobox
+              value={productoId}
+              onChange={setProductoId}
+              initialOptions={products} // { sku, nombre, uom } ya es suficiente
+              placeholder="Busca y selecciona un producto…"
+            />
+
             {errors.productoId && (
               <div className="flex items-center gap-1 text-sm text-red-600">
                 <AlertCircle className="h-4 w-4" />
                 {errors.productoId}
               </div>
             )}
+
             {selectedProduct && (
               <div className="p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center justify-between">
@@ -327,13 +316,13 @@ export function NewMovementDialog({
             </div>
           </div>
 
-          {/* Cost Summary */}
-    {cantidad && costoUnitario && (
+          {/* Cost Summary: solo mostrar si ambos son mayores a 0 */}
+          {Number(cantidad) > 0 && Number(costoUnitario) > 0 && (
             <div className="p-3 bg-muted/50 rounded-lg">
               <div className="flex justify-between items-center text-sm">
                 <span>Valor total del movimiento:</span>
                 <span className="font-mono font-medium">
-      {currency === "USD" ? "$" : "S/"}{(Number(cantidad) * Number(costoUnitario)).toFixed(2)}
+                  {currency === "USD" ? "$" : "S/"}{(Number(cantidad) * Number(costoUnitario)).toFixed(2)}
                 </span>
               </div>
             </div>

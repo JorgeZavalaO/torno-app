@@ -5,6 +5,7 @@ import { getOTListCached } from "@/app/server/queries/ot";
 import { prisma } from "@/app/lib/prisma";
 import { getClientsCached } from "@/app/server/queries/clients";
 import OTClient from "./ot.client";
+import { getCostingValues } from "@/app/server/queries/costing-params";
 import { createOT, setOTState, addMaterial, issueMaterials, createSCFromShortages } from "./actions";
 import { getCatalogoOptions } from "@/app/server/services/catalogos";
 import type { TipoCatalogo } from "@prisma/client";
@@ -19,12 +20,13 @@ export default async function OTPage() {
   ]);
   if (!canRead) redirect("/");
 
-  const [rows, products, clients, prioridadOptions, acabadoOptions] = await Promise.all([
+  const [rows, products, clients, prioridadOptions, acabadoOptions, costingValues] = await Promise.all([
     getOTListCached(),
     prisma.producto.findMany({ orderBy: { nombre: "asc" }, select: { sku: true, nombre: true, uom: true, categoria: true } }),
     getClientsCached().then(cs => cs.map(c => ({ id: c.id, nombre: c.nombre }))),
     getCatalogoOptions("PRIORIDAD_OT" as TipoCatalogo),
     getCatalogoOptions("TIPO_ACABADO" as TipoCatalogo),
+    getCostingValues(),
   ]);
 
   return (
@@ -36,6 +38,7 @@ export default async function OTPage() {
       prioridadOptions={prioridadOptions}
       acabadoOptions={acabadoOptions}
       actions={{ createOT, setOTState, addMaterial, issueMaterials, createSCFromShortages }}
+      currency={costingValues.currency as string}
     />
   );
 }

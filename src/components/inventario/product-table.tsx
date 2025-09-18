@@ -15,7 +15,7 @@ export interface ProductTableProps {
   canWrite?: boolean;
 }
 
-const defaultFmt = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: "PEN" }).format(n);
+const defaultFmt = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(n);
 
 export const ProductTable: React.FC<ProductTableProps> = ({ 
   products, 
@@ -33,6 +33,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
             <TableHead className="text-center">Categoría</TableHead>
             <TableHead className="text-center">Stock</TableHead>
             <TableHead className="text-right">Costo ref.</TableHead>
+            <TableHead className="text-right">Últ. ingreso</TableHead>
             <TableHead className="text-right">Valor</TableHead>
             {canWrite && <TableHead className="text-center">Acciones</TableHead>}
           </TableRow>
@@ -62,6 +63,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     <span className="text-xs text-muted-foreground"> / min {Number(p.stockMinimo).toFixed(0)}</span>
                   )}
                 </TableCell>
+                <TableCell className="text-right">{fmtCurrency(Number(p.refCost))}</TableCell>
                 <TableCell className="text-right">{fmtCurrency(Number(p.lastCost))}</TableCell>
                 <TableCell className="text-right font-medium">{fmtCurrency(Number(p.stockValue))}</TableCell>
                 {canWrite && (
@@ -80,7 +82,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
             );
           })}
           {products.length === 0 && (
-            <TableRow><TableCell colSpan={canWrite ? 7 : 6} className="py-10 text-center text-muted-foreground">Sin productos</TableCell></TableRow>
+            <TableRow><TableCell colSpan={canWrite ? 8 : 7} className="py-10 text-center text-muted-foreground">Sin productos</TableCell></TableRow>
           )}
         </TableBody>
       </Table>

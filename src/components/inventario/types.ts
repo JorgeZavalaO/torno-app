@@ -9,6 +9,7 @@ export type ProductRow = {
   stockMinimo: number | null;
   stock: number;
   lastCost: number;
+  refCost: number;
   stockValue: number;
   createdAt: string | Date;
   updatedAt: string | Date;

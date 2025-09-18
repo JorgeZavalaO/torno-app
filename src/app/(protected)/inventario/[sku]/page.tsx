@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getProductKardex } from "@/app/server/queries/inventory";
+import { getCostingParamByKey } from "@/app/server/queries/costing-params";
 import { Button } from "@/components/ui/button";
 import { EquivalentCodes } from "@/components/inventario/equivalent-codes";
 import { addEquivalentCode, removeEquivalentCode } from "../actions";
@@ -20,13 +21,19 @@ export default async function ProductKardexPage({ params }: { params: Promise<{ 
   const data = await getProductKardex(sku);
   if (!data) redirect("/inventario");
 
+  // Obtener la moneda del sistema desde parámetros
+  const currencyParam = await getCostingParamByKey("currency");
+  const systemCurrency = currencyParam?.valueText || "USD";
+
   const { producto, stock, movs, equivalentes } = data as typeof data & { equivalentes: { id: string; sistema: string; codigo: string; descripcion?: string | null }[] };
   const low =
     producto.stockMinimo != null &&
     Number(stock) < Number(producto.stockMinimo);
 
-  const fmtMoney = (n: number, c = "PEN") =>
-    new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n);
+  const fmtMoney = (n: number, c?: string) => {
+    const currency = c || systemCurrency;
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
+  };
 
   return (
     <div className="p-6 space-y-6">

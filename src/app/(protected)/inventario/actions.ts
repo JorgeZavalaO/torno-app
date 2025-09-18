@@ -16,6 +16,51 @@ type r = Result;
 
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 
+/**
+ * Calcula el costo promedio ponderado de un producto basado en los ingresos por compras.
+ * Considera solo los últimos N movimientos de INGRESO_COMPRA para evitar impacto de 
+ * ajustes o movimientos muy antiguos.
+ */
+async function calculateWeightedAverageCost(
+  tx: Prisma.TransactionClient, 
+  productoId: string, 
+  newQuantity: number, 
+  newCost: number,
+  maxMovements: number = 10
+): Promise<number> {
+  // Obtener los últimos movimientos de ingreso por compra
+  const movimientos = await tx.movimiento.findMany({
+    where: { 
+      productoId, 
+      tipo: "INGRESO_COMPRA",
+      cantidad: { gt: 0 } // Solo ingresos positivos
+    },
+    orderBy: { fecha: "desc" },
+    take: maxMovements,
+    select: { cantidad: true, costoUnitario: true }
+  });
+
+  // Calcular totales existentes
+  const existingTotal = movimientos.reduce((acc, mov) => 
+    acc + (Number(mov.cantidad) * Number(mov.costoUnitario)), 0
+  );
+  const existingQuantity = movimientos.reduce((acc, mov) => 
+    acc + Number(mov.cantidad), 0
+  );
+
+  // Agregar el nuevo movimiento al cálculo
+  const totalValue = existingTotal + (newQuantity * newCost);
+  const totalQuantity = existingQuantity + newQuantity;
+
+  // Evitar división por cero
+  if (totalQuantity <= 0) return newCost;
+
+  const averageCost = totalValue / totalQuantity;
+  
+  // Redondear a 2 decimales para consistencia
+  return Math.round(averageCost * 100) / 100;
+}
+
 const ProductSchema = z.object({
   sku: z.string().min(1),
   nombre: z.string().min(2),
@@ -330,12 +375,27 @@ export async function createMovement(fd: FormData): Promise<r> {
         },
       });
 
-      // Política de costo: actualizar costo de referencia con el último ingreso
+      // Política de costo: calcular promedio ponderado para ingresos por compra
       if (sign(tipo) === 1) {
-        await tx.producto.update({
-          where: { sku: productoId },
-          data: { costo: D(costoUnitario) },
-        });
+        if (tipo === "INGRESO_COMPRA") {
+          // Calcular costo promedio ponderado para ingresos por compra
+          const avgCost = await calculateWeightedAverageCost(
+            tx, 
+            productoId, 
+            cantidad, 
+            costoUnitario
+          );
+          await tx.producto.update({
+            where: { sku: productoId },
+            data: { costo: D(avgCost) },
+          });
+        } else {
+          // Para otros tipos de ingreso, usar el costo unitario directo
+          await tx.producto.update({
+            where: { sku: productoId },
+            data: { costo: D(costoUnitario) },
+          });
+        }
       }
     });
 
@@ -421,4 +481,70 @@ export async function searchProducts(searchTerm?: string) {
   }
   
   return getProductsWithStock(searchTerm);
+}
+
+/**
+ * Recalcula los costos promedio ponderado de todos los productos basado en su historial de compras.
+ * Útil para aplicar la nueva lógica a productos existentes.
+ */
+export async function recalculateAllProductCosts(): Promise<Result> {
+  await assertCanWriteInventory();
+  
+  try {
+    const productos = await prisma.producto.findMany({
+      select: { sku: true }
+    });
+
+    let updatedCount = 0;
+
+    await prisma.$transaction(async (tx) => {
+      for (const producto of productos) {
+        // Obtener movimientos de ingreso por compra para este producto
+        const movimientos = await tx.movimiento.findMany({
+          where: { 
+            productoId: producto.sku, 
+            tipo: "INGRESO_COMPRA",
+            cantidad: { gt: 0 }
+          },
+          orderBy: { fecha: "desc" },
+          take: 10, // Últimos 10 movimientos
+          select: { cantidad: true, costoUnitario: true }
+        });
+
+        if (movimientos.length === 0) continue; // Sin historial de compras
+
+        // Calcular promedio ponderado
+        const totalValue = movimientos.reduce((acc, mov) => 
+          acc + (Number(mov.cantidad) * Number(mov.costoUnitario)), 0
+        );
+        const totalQuantity = movimientos.reduce((acc, mov) => 
+          acc + Number(mov.cantidad), 0
+        );
+
+        if (totalQuantity > 0) {
+          const averageCost = Math.round((totalValue / totalQuantity) * 100) / 100;
+          
+          await tx.producto.update({
+            where: { sku: producto.sku },
+            data: { costo: new Prisma.Decimal(averageCost) }
+          });
+          
+          updatedCount++;
+        }
+      }
+    });
+
+    bumpAll();
+    
+    return { 
+      ok: true, 
+      message: `Costos recalculados para ${updatedCount} productos` 
+    };
+  } catch (error) {
+    console.error("Error recalculando costos:", error);
+    return { 
+      ok: false, 
+      message: "Error al recalcular costos de productos" 
+    };
+  }
 }

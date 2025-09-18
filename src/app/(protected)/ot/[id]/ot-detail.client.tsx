@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { Hammer, Wrench, Play, FilePlus2, Edit3 } from "lucide-react";
 import { StatusBadge, EstadoOT } from "@/components/ot/status-badge";
 import { PriorityBadge, Prioridad } from "@/components/ot/priority-badge";
@@ -14,6 +13,7 @@ import { AcabadoDisplay } from "@/components/ot/acabado-badge";
 import EditHeaderDialog from "@/components/ot/edit-header-dialog";
 import EmitMaterialsDialog from "@/components/ot/emit-materials-dialog";
 import RequestSCDialog from "@/components/ot/request-sc-dialog";
+import { toast } from "sonner";
 
 type Detail = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getOTDetail>>;
 type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>>;
@@ -34,15 +34,7 @@ type Actions = {
   recompute: (otId: string)=>Promise<void>;
 };
 
-export default function OTDetailClient({
-  canWrite,
-  detail,
-  products,
-  clients,
-  actions,
-  prioridadOptions,
-  acabadoOptions,
-}:{
+export default function OTDetailClient(props: {
   canWrite: boolean;
   detail: NonNullable<Detail>;
   products: ProductsMini;
@@ -50,7 +42,9 @@ export default function OTDetailClient({
   actions: Actions;
   prioridadOptions?: { value: string; label: string }[];
   acabadoOptions?: { value: string; label: string }[];
+  currency: string;
 }) {
+  const { canWrite, detail, products, clients, actions, prioridadOptions, acabadoOptions, currency } = props;
   const { ot, kpis } = detail;
   const router = useRouter();
   const [openEdit, setOpenEdit] = useState(false);
@@ -173,25 +167,25 @@ export default function OTDetailClient({
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Materiales</div>
               <div className="text-xl font-bold text-blue-600">
-                {ot.costMaterials ? `S/ ${ot.costMaterials.toFixed(2)}` : '—'}
+                {ot.costMaterials ? `${currency} ${ot.costMaterials.toFixed(2)}` : '—'}
               </div>
             </div>
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Mano de obra</div>
               <div className="text-xl font-bold text-green-600">
-                {ot.costLabor ? `S/ ${ot.costLabor.toFixed(2)}` : '—'}
+                {ot.costLabor ? `${currency} ${ot.costLabor.toFixed(2)}` : '—'}
               </div>
             </div>
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Overheads</div>
               <div className="text-xl font-bold text-orange-600">
-                {ot.costOverheads ? `S/ ${ot.costOverheads.toFixed(2)}` : '—'}
+                {ot.costOverheads ? `${currency} ${ot.costOverheads.toFixed(2)}` : '—'}
               </div>
             </div>
             <div className="space-y-1">
               <div className="text-sm text-muted-foreground">Total</div>
               <div className="text-2xl font-bold text-purple-600">
-                {ot.costTotal ? `S/ ${ot.costTotal.toFixed(2)}` : '—'}
+                {ot.costTotal ? `${currency} ${ot.costTotal.toFixed(2)}` : '—'}
               </div>
             </div>
           </div>
@@ -204,25 +198,25 @@ export default function OTDetailClient({
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Materiales estimados</div>
                   <div className="text-sm font-medium text-blue-600">
-                    {ot.costQuoteMaterials ? `S/ ${ot.costQuoteMaterials.toFixed(2)}` : '—'}
+                    {ot.costQuoteMaterials ? `${currency} ${ot.costQuoteMaterials.toFixed(2)}` : '—'}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Labor estimada</div>
                   <div className="text-sm font-medium text-green-600">
-                    {ot.costQuoteLabor ? `S/ ${ot.costQuoteLabor.toFixed(2)}` : '—'}
+                    {ot.costQuoteLabor ? `${currency} ${ot.costQuoteLabor.toFixed(2)}` : '—'}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Overheads estimados</div>
                   <div className="text-sm font-medium text-orange-600">
-                    {ot.costQuoteOverheads ? `S/ ${ot.costQuoteOverheads.toFixed(2)}` : '—'}
+                    {ot.costQuoteOverheads ? `${currency} ${ot.costQuoteOverheads.toFixed(2)}` : '—'}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Total estimado</div>
                   <div className="text-sm font-medium text-purple-600">
-                    {ot.costQuoteTotal ? `S/ ${ot.costQuoteTotal.toFixed(2)}` : '—'}
+                    {ot.costQuoteTotal ? `${currency} ${ot.costQuoteTotal.toFixed(2)}` : '—'}
                   </div>
                 </div>
               </div>

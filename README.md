@@ -8,17 +8,46 @@ Aplicación interna para gestión de taller de manufactura/torno: cotizaciones, 
 
 ## Resumen ejecutivo
 
-TornoApp es una aplicación interna para gestionar un taller de manufactura: cotizaciones, órdenes de trabajo (OT), inventario, compras, máquinas y administración (usuarios/roles/permisos, parámetros y catálogos). Está optimizada para rendimiento (índices SQL, caché por tags) y ofrece controles de seguridad basados en permisos. La moneda base del sistema es configurable (PEN/USD) con conversión automática de parámetros monetarios.
+TornoApp es una aplicación interna para gestionar un taller de manufactura: cotizaciones, órdenes de trabajo (OT), inventario## Sistema de moneda y propagación
+
+Implementación completa de moneda configurable con propagación automática a todos los módulos del sistema.
+
+Características principales
+1) **Configuración centralizada**
+  - Moneda base (`currency`) y tipo de cambio (`usdRate`) en parámetros de costeo.
+  - UI: Admin → Parámetros → grupo "General".
+  - Conversión automática de parámetros monetarios al cambiar PEN ↔ USD.
+
+2) **Propagación a módulos**
+  - **Órdenes de Trabajo**: costos mostrados en moneda seleccionada (materiales, labor, overheads, totales).
+  - **Cotizador**: nuevas cotizaciones usan moneda vigente; conversión de parámetros al cambiar base.
+  - **Inventario/Compras**: formateo de costos y precios según moneda configurada.
+  - **Calendario de programación**: muestra moneda vigente en header para referencia.
+
+3) **Formateo dinámico**
+  - Uso de `Intl.NumberFormat` para formateo según locale y moneda.
+  - Reemplazo de valores hardcodeados (ej. "S/") por moneda dinámica.
+
+4) **Sincronización de cambios**
+  - Cambios en OT se reflejan automáticamente en calendario de programación.
+  - Revalidación de caché tras modificaciones de parámetros o acciones en OT.
+
+Implementación técnica
+- Backend: `src/app/server/queries/costing-params.ts` para obtener moneda base.
+- Conversión: `src/app/(protected)/admin/parametros/actions.ts` para convertir parámetros monetarios.
+- Propagación: cada página server-side obtiene `getCostingValues()` y pasa `currency` como prop.
+- UI: componentes reciben y muestran moneda dinámica en lugar de valores fijos.s y administración (usuarios/roles/permisos, parámetros y catálogos). Está optimizada para rendimiento (índices SQL, caché por tags) y ofrece controles de seguridad basados en permisos. La moneda base del sistema es configurable (PEN/USD) con conversión automática de parámetros monetarios y propagación completa a todos los módulos.
 
 ## Novedades (sept. 2025)
 
 - Catálogos centralizados: nueva entidad `ConfiguracionCatalogo` para reemplazar/enriquecer enums, con UI en Administración → Catálogos (reordenar, activar/inactivar, color, icono, reset a valores por defecto).
-- Parámetros del sistema: página de “Parámetros” rediseñada con grupos e íconos; selección de moneda desde catálogo `MONEDA`.
+- Parámetros del sistema: página de "Parámetros" rediseñada con grupos e íconos; selección de moneda desde catálogo `MONEDA`.
+- Sistema de moneda: propagación completa de la moneda seleccionada en parámetros a todos los módulos (OT, cotizador, inventario, compras) con formateo dinámico y conversión automática.
 - Inventario/Compras: costeo por Promedio Ponderado automatizado al recibir OC + botón de recálculo manual; movimientos parametrizados por catálogo `TIPO_MOVIMIENTO`.
-- OT (Órdenes de Trabajo): recálculo idempotente de costos integrado a eventos (emisión de materiales, registro de horas/piezas, recepción de OC vinculada).
+- OT (Órdenes de Trabajo): recálculo idempotente de costos integrado a eventos (emisión de materiales, registro de horas/piezas, recepción de OC vinculada), sincronización automática con calendario de programación.
 - Cotizador: tipos de trabajo desde catálogo (`TIPO_TRABAJO`) con estructura jerárquica (Servicios → subcategorías), snapshot de costos al crear OT desde cotización.
 - Máquinas: métricas y KPIs ampliados, registro de eventos y mantenimiento.
-- Cotizador: conversión automática de parámetros tipo moneda al cambiar la moneda base; nuevas cotizaciones usan la moneda vigente. (Alertas y acciones masivas pendientes.)
+- Programación: calendario semanal con refresh automático tras cambios en OT desde cualquier módulo.
 - RBAC consolidado: permisos de catálogos (`settings.catalogos.read/write`) y scripts para asignación/verificación.
 
 ## Tabla de contenidos
@@ -201,11 +230,17 @@ prisma/
 - Producción / Órdenes de Trabajo
   - Piezas y materiales por OT, prioridad, acabado, fecha límite, partes de producción.
   - Integración con compras para emitir materiales y crear SC por faltantes.
+  - Propagación completa de la moneda seleccionada en parámetros con formateo dinámico de costos.
+  - Sincronización automática con calendario de programación tras cambios.
 - Máquinas
   - Listado con filtros y KPIs (horas últimos 30d, pendientes, fallas/averías, costo 30d, horas hasta próximo mant.).
   - Registro de eventos (uso, paro, avería), registro rápido de horas, programación/edición/cierre de mantenimiento.
 - Cotizador y Clientes
   - Parámetros de costeo, desglose y conversión automática de moneda.
+  - Propagación de la moneda base del sistema a nuevas cotizaciones.
+- Programación
+  - Calendario semanal de OTs con filtros por fecha límite.
+  - Refresh automático tras cambios en OT desde cualquier módulo del sistema.
 - Administración
   - Usuarios/roles/permisos y parámetros.
   - Catálogos del sistema (ver siguiente sección).
@@ -232,6 +267,8 @@ prisma/
 - Producción (Órdenes de Trabajo)
   - Crear/editar OT con piezas, materiales, prioridad y fecha límite: Producción → OT.
   - Emitir materiales e integrar con Compras para faltantes.
+  - Los costos se muestran en la moneda base seleccionada en parámetros.
+  - Cambios se sincronizan automáticamente con el calendario de programación.
 
 - Máquinas
   - KPIs, eventos (uso/paro/avería), registro de horas.
@@ -240,6 +277,11 @@ prisma/
 - Ventas / Cotizador
   - Crear/editar cotizaciones; nuevas toman la moneda vigente del sistema.
   - La conversión de parámetros monetarios ocurre al cambiar la moneda base (PEN/USD); las aprobadas no se modifican.
+
+- Programación
+  - Vista semanal del calendario de OTs con fecha límite.
+  - Navegación entre semanas y filtros por estado/prioridad.
+  - Actualización automática tras cambios en OT desde cualquier módulo.
 
 ## Catálogos del sistema
 

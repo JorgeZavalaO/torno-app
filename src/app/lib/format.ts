@@ -7,7 +7,7 @@
  */
 export function formatCurrency(
   amount: number | string,
-  currency: string = "PEN",
+  currency: string = "USD",
   locale: string = "es-PE"
 ): string {
   const numericAmount = typeof amount === "string" ? parseFloat(amount) : amount;

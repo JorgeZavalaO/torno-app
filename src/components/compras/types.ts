@@ -62,4 +62,20 @@ export type Actions = {
   updateSCCosts: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 };
 
-export const fmtCurrency = (n: number, c = "PEN") => new Intl.NumberFormat(undefined, { style: "currency", currency: c }).format(n);
+import { getCostingParamByKey } from "@/app/server/queries/costing-params";
+
+export const fmtCurrency = (n: number, c?: string) => {
+  const currency = c || "USD"; // fallback por si no se proporciona
+  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
+};
+
+export const fmtCurrencyAsync = async (n: number) => {
+  try {
+    const currencyParam = await getCostingParamByKey("currency");
+    const currency = currencyParam?.valueText || "USD";
+    return fmtCurrency(n, currency);
+  } catch (error) {
+    console.error("Error obteniendo moneda del sistema:", error);
+    return fmtCurrency(n, "USD");
+  }
+};

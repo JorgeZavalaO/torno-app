@@ -73,18 +73,21 @@ export const getProductsWithStock = cache(
     return products.map(p => {
       const stock = stockMap.get(p.sku) ?? 0;
       const lastCost = lastCostMap.get(p.sku) ?? toNum(p.costo);
+      // refCost es el costo referencial promedio almacenado en producto.costo
+      const refCost = toNum(p.costo);
       return {
         sku: p.sku,
         nombre: p.nombre,
         categoria: p.categoria,
         uom: p.uom,
-        costo: toNum(p.costo),
+        costo: refCost,
         stockMinimo: p.stockMinimo != null ? toNum(p.stockMinimo) : null,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
         stock,
         lastCost,
-        stockValue: Number((stock * lastCost).toFixed(2)),
+        refCost,
+        stockValue: Number((stock * refCost).toFixed(2)),
       };
     });
   },
@@ -162,4 +165,93 @@ export async function getProductKardex(sku: string) {
       importe: Number((toNum(m.cantidad) * toNum(m.costoUnitario)).toFixed(2)),
     })),
   };
+}
+
+export async function getProductsWithStockUncached(searchTerm?: string) {
+  // === Copia del cuerpo de getProductsWithStock, pero SIN unstable_cache ===
+  let equivalentProductIds: string[] = [];
+
+  if (searchTerm?.trim()) {
+    try {
+      const searchLower = searchTerm.toLowerCase().trim();
+      const equivalentMatches = await prisma.$queryRaw<{ productoId: string }[]>`
+        SELECT DISTINCT "productoId" 
+        FROM "ProductoCodigoEquivalente"
+        WHERE LOWER("sistema") LIKE ${`%${searchLower}%`} 
+           OR LOWER("codigo") LIKE ${`%${searchLower}%`}
+           OR LOWER("descripcion") LIKE ${`%${searchLower}%`}
+      `;
+      equivalentProductIds = equivalentMatches.map((m) => m.productoId);
+    } catch {}
+  }
+
+  let productWhere: { OR?: Array<{ nombre?: { contains: string; mode: 'insensitive' }; sku?: { contains: string; mode: 'insensitive' } | { in: string[] } }> } | undefined = undefined;
+  if (searchTerm?.trim()) {
+    productWhere = {
+      OR: [
+        { nombre: { contains: searchTerm, mode: "insensitive" as const } },
+        { sku: { contains: searchTerm, mode: "insensitive" as const } },
+        ...(equivalentProductIds.length > 0
+          ? [{ sku: { in: equivalentProductIds } }]
+          : []),
+      ],
+    };
+  }
+
+  const [products, sums, lastInCost] = await Promise.all([
+    prisma.producto.findMany({
+      where: productWhere,
+      orderBy: { nombre: "asc" },
+      select: {
+        sku: true,
+        nombre: true,
+        categoria: true,
+        uom: true,
+        costo: true,
+        stockMinimo: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.movimiento.groupBy({
+      by: ["productoId"],
+      _sum: { cantidad: true },
+    }),
+    prisma.$queryRaw<{ productoId: string; costoUnitario: number }[]>`
+      SELECT DISTINCT ON ("productoId") "productoId", "costoUnitario"
+      FROM "Movimiento"
+      WHERE "tipo" IN ('INGRESO_COMPRA','INGRESO_AJUSTE')
+      ORDER BY "productoId", "fecha" DESC
+    `,
+  ]);
+
+  const toNum = (v: unknown) =>
+    Number((v as { toString?(): string })?.toString?.() ?? v ?? 0);
+
+  const stockMap = new Map(sums.map((s) => [s.productoId, toNum(s._sum.cantidad)]));
+  const lastCostMap = new Map<string, number>();
+  for (const mov of lastInCost) {
+    if (!lastCostMap.has(mov.productoId))
+      lastCostMap.set(mov.productoId, toNum(mov.costoUnitario));
+  }
+
+  return products.map((p) => {
+    const stock = stockMap.get(p.sku) ?? 0;
+    const lastCost = lastCostMap.get(p.sku) ?? toNum(p.costo);
+    const refCost = toNum(p.costo);
+    return {
+      sku: p.sku,
+      nombre: p.nombre,
+      categoria: p.categoria,
+      uom: p.uom,
+      costo: refCost,
+      stockMinimo: p.stockMinimo != null ? toNum(p.stockMinimo) : null,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      stock,
+      lastCost,
+      refCost,
+      stockValue: Number((stock * refCost).toFixed(2)),
+    };
+  });
 }

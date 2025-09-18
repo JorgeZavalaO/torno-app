@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Eye, Edit, Send, Trash2, MoreHorizontal, Copy, FileText } from "lucide-react";
+import { Eye, Send, Trash2, MoreHorizontal, Copy, FileText } from "lucide-react";
 import Link from "next/link";
 import { QuoteDeleteDialog } from "./quote-delete-dialog";
 import { QuoteStatusDialog } from "./quote-status-dialog";
@@ -77,13 +77,6 @@ export function QuoteActions({ quote, canWrite }: QuoteActionsProps) {
               <>
                 <DropdownMenuSeparator />
                 
-                <DropdownMenuItem asChild>
-                  <Link href={`/cotizador/${quote.id}/edit`}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Editar
-                  </Link>
-                </DropdownMenuItem>
-
                 <DropdownMenuItem onClick={() => setStatusDialogOpen(true)}>
                   <Send className="h-4 w-4 mr-2" />
                   Cambiar estado

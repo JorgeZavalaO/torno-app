@@ -11,7 +11,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     label: "Moneda base del sistema", 
     group: "general", 
     type: "TEXT", 
-    valueText: "PEN", 
+    valueText: "USD", 
     unit: "Código ISO-4217" 
   },
   // Tipo de cambio USD -> PEN (valor: PEN por 1 USD)
@@ -49,7 +49,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     group: "costos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("75.00"), 
-    unit: "PEN/hora" 
+    unit: "USD/hora" 
   },
   { 
     key: "laborCost", 
@@ -57,7 +57,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     group: "costos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("25.00"), 
-    unit: "PEN/hora" 
+    unit: "USD/hora" 
   },
   { 
     key: "kwhRate", 
@@ -65,7 +65,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     group: "costos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("0.90"), 
-    unit: "PEN/kWh" 
+    unit: "USD/kWh" 
   },
   { 
     key: "deprPerHour", 
@@ -73,7 +73,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     group: "costos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("8.00"), 
-    unit: "PEN/hora de uso" 
+    unit: "USD/hora de uso" 
   },
   { 
     key: "toolingPerPiece", 
@@ -81,7 +81,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     group: "costos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("2.50"), 
-    unit: "PEN/pieza" 
+    unit: "USD/pieza" 
   },
   { 
     key: "rentPerHour", 
@@ -89,7 +89,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     group: "costos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("10.00"), 
-    unit: "PEN/hora de operación" 
+    unit: "USD/hora de operación" 
   },
 ];
 

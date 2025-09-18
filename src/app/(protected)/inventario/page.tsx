@@ -41,7 +41,7 @@ export default async function InventoryPage() {
 
   // Moneda actual del sistema
   const currencyParam = await getCostingParamByKey("currency");
-  const currency = String(currencyParam?.valueText ?? "PEN").toUpperCase();
+  const currency = String(currencyParam?.valueText ?? "USD").toUpperCase();
 
   return (
     <InventoryClient

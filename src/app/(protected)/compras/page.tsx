@@ -31,7 +31,7 @@ export default async function PurchasesPage() {
   ]);
 
   const currencyParam = await getCostingParamByKey("currency");
-  const currency = String(currencyParam?.valueText ?? "PEN").toUpperCase();
+  const currency = String(currencyParam?.valueText ?? "USD").toUpperCase();
 
   return (
     <ComprasClient

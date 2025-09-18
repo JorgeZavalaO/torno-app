@@ -20,6 +20,7 @@ export async function GET(
     status: q.status,
     total: q.total,
     unitPrice: q.unitPrice,
+    currency: q.currency, // incluir moneda por cotización
   }));
   return NextResponse.json(minimal);
 }

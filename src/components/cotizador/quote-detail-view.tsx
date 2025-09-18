@@ -58,9 +58,10 @@ type QuoteDetail = {
 interface QuoteDetailViewProps {
   quote: QuoteDetail;
   canWrite: boolean;
+  systemCurrency?: string;
 }
 
-export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
+export function QuoteDetailView({ quote, canWrite, systemCurrency = "PEN" }: QuoteDetailViewProps) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -102,10 +103,10 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
     return Number(v) || 0;
   };
 
-  const formatCurrency = (n: unknown) =>
+  const formatCurrency = (n: unknown, currencyOverride?: string) =>
     new Intl.NumberFormat(undefined, { 
       style: "currency", 
-      currency: quote.currency || "PEN" 
+      currency: currencyOverride || quote.currency || systemCurrency 
     }).format(toNum(n));
 
   const formatDate = (date: Date) =>
@@ -141,6 +142,14 @@ export function QuoteDetailView({ quote, canWrite }: QuoteDetailViewProps) {
       <div className="flex items-start justify-between">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Cotización #{quote.id.slice(0, 8)}</h1>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{quote.currency}</span>
+            {quote.currency !== systemCurrency && (
+              <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium" title={`Moneda distinta a la del sistema (${systemCurrency})`}>
+                {systemCurrency}
+              </span>
+            )}
+          </div>
           {quote.ordenesTrabajo && quote.ordenesTrabajo.length > 0 && (
             <div className="text-sm text-muted-foreground">
               OT vinculada: <a className="underline" href={`/ot/${quote.ordenesTrabajo[0].id}`}>{quote.ordenesTrabajo[0].codigo}</a>

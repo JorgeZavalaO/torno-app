@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getOTDetail, getProductsMini, getClientsMini } from "@/app/server/queries/ot";
 import OTDetailClient from "./ot-detail.client";
+import { getCostingValues } from "@/app/server/queries/costing-params";
 import {
   updateOTHeader,
   emitOTMaterials,
@@ -24,12 +25,13 @@ export default async function OTDetailPage({ params }: { params: Promise<{ id: s
   ]);
   if (!canRead) redirect("/ots");
 
-  const [detail, products, clients, prioridadOptions, acabadoOptions] = await Promise.all([
+  const [detail, products, clients, prioridadOptions, acabadoOptions, costingValues] = await Promise.all([
     getOTDetail(id),
     getProductsMini(),
     getClientsMini(),
     getCatalogoOptions("PRIORIDAD_OT" as TipoCatalogo),
     getCatalogoOptions("TIPO_ACABADO" as TipoCatalogo),
+    getCostingValues(),
   ]);
   if (!detail) redirect("/ots");
 
@@ -48,6 +50,7 @@ export default async function OTDetailPage({ params }: { params: Promise<{ id: s
       }}
       prioridadOptions={prioridadOptions}
       acabadoOptions={acabadoOptions}
+      currency={costingValues.currency as string}
     />
   );
 }

@@ -52,10 +52,11 @@ type Actions = {
   createSCFromShortages: (otId: string) => Promise<{ok:boolean; message?:string; id?:string}>;
 };
 
-export default function OTClient({ canWrite, rows, products, actions, clients, prioridadOptions, acabadoOptions }:{
+export default function OTClient({ canWrite, rows, products, actions, clients, prioridadOptions, acabadoOptions, currency }:{
   canWrite: boolean; rows: OT[]; products: Product[]; actions: Actions; clients: ClientOption[];
   prioridadOptions?: { value: string; label: string }[];
   acabadoOptions?: { value: string; label: string }[];
+  currency: string;
 }) {
   const [q, setQ] = useState("");
   // items: current page rows from server
@@ -190,9 +191,14 @@ export default function OTClient({ canWrite, rows, products, actions, clients, p
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <h1 className="text-3xl font-bold tracking-tight">Órdenes de Trabajo</h1>
-          {shortageCount > 0 && <NotificationBubble count={shortageCount} title="OTs con faltantes de material" />}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Órdenes de Trabajo</h1>
+            {shortageCount > 0 && <NotificationBubble count={shortageCount} title="OTs con faltantes de material" />}
+          </div>
+          <span className="text-sm text-muted-foreground select-none border rounded px-2 py-0.5 bg-muted/40">
+            Moneda: <strong>{currency}</strong>
+          </span>
         </div>
         {canWrite && (
           <NewOTDialog

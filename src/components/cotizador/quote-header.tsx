@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Plus, FileBarChart, TrendingUp, Clock } from "lucide-react";
+import { Plus, FileBarChart, TrendingUp, Clock, AlertTriangle } from "lucide-react";
 import { NewQuoteDialog } from "./new-quote-dialog";
 import { useState } from "react";
 
@@ -19,7 +19,7 @@ interface Quote {
 interface QuoteHeaderProps {
   canWrite: boolean;
   clients: Client[];
-  params: CostingParams;
+  params: CostingParams; // debe incluir currency y opcionalmente usdRate
   action: CreateQuoteAction;
   quotes: Quote[];
 }
@@ -33,23 +33,42 @@ export function QuoteHeader({
 }: QuoteHeaderProps) {
   const [showNewDialog, setShowNewDialog] = useState(false);
 
+  const systemCurrency = String(params.currency || "PEN");
+  const usdRate = Number(params.usdRate || 0); // PEN por 1 USD (según defaults)
+
+  const approvedQuotes = quotes.filter(q => q.status === "APPROVED");
+  const approvedRawTotal = approvedQuotes.reduce((sum, q) => sum + q.total, 0);
+
+  // Conversión básica: solo soporta USD <-> PEN usando usdRate cuando está disponible.
+  const convertToSystem = (amount: number, from: string): number => {
+    if (!amount) return 0;
+    if (from === systemCurrency) return amount;
+    if ((from === "USD" && systemCurrency === "PEN") && usdRate > 0) return amount * usdRate;
+    if ((from === "PEN" && systemCurrency === "USD") && usdRate > 0) return amount / usdRate;
+    // Si no tenemos regla de conversión, devolvemos el amount original para no ocultar datos
+    return amount;
+  };
+
+  const approvedConvertedTotal = approvedQuotes.reduce((sum, q) => sum + convertToSystem(q.total, q.currency), 0);
+  const hasMixedCurrencies = approvedQuotes.some(q => q.currency !== systemCurrency);
+
   const stats = {
     total: quotes.length,
     draft: quotes.filter(q => q.status === "DRAFT").length,
     sent: quotes.filter(q => q.status === "SENT").length,
-    approved: quotes.filter(q => q.status === "APPROVED").length,
-    totalValue: quotes
-      .filter(q => q.status === "APPROVED")
-      .reduce((sum, q) => sum + q.total, 0),
+    approved: approvedQuotes.length,
+    approvedValueConverted: approvedConvertedTotal,
+    approvedValueRaw: approvedRawTotal,
+    hasMixedCurrencies,
   };
 
-  const formatCurrency = (amount: number, currency: string = "PEN") =>
+  const formatCurrency = (amount: number, currency: string = systemCurrency) =>
     new Intl.NumberFormat(undefined, { 
       style: "currency", 
       currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(amount || 0);
 
   return (
     <>
@@ -118,10 +137,24 @@ export function QuoteHeader({
                 <FileBarChart className="h-5 w-5 text-purple-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(stats.totalValue)}
+                <div className="flex items-center gap-2">
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(stats.approvedValueConverted, systemCurrency)}
+                  </div>
+                  {stats.hasMixedCurrencies && (
+                    <span title="Suma convertida a la moneda del sistema (mezcla de monedas)" className="text-amber-600">
+                      <AlertTriangle className="h-4 w-4" />
+                    </span>
+                  )}
                 </div>
-                <div className="text-sm text-muted-foreground">Valor aprobado</div>
+                <div className="text-sm text-muted-foreground">
+                  Valor aprobado ({systemCurrency})
+                </div>
+                {stats.hasMixedCurrencies && (
+                  <div className="mt-1 text-[10px] text-amber-600 font-medium">
+                    Conversión aprox. (USD↔PEN)
+                  </div>
+                )}
               </div>
             </div>
           </Card>

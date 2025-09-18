@@ -66,7 +66,7 @@ export default function ComprasClient({ currency, canWrite, providers, scs, ocs,
 
         {/* SC */}
         <TabsContent value="sc" className="space-y-4">
-          <SCList rows={scs} providers={providers} canWrite={canWrite} actions={actions} estadoOptions={estadoSCOptions} />
+          <SCList rows={scs} providers={providers} canWrite={canWrite} actions={actions} estadoOptions={estadoSCOptions} currency={currency} />
         </TabsContent>
 
         {/* OC */}
