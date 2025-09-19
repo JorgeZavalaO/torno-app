@@ -455,36 +455,48 @@ export default function OTClient({ canWrite, rows, products, actions, clients, p
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-2">
-                        {o.materiales.slice(0,3).map(m=>(
-                          <div key={m.id} className="text-xs">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="font-medium truncate max-w-32">{m.nombre}</span>
-                              <span className="text-muted-foreground">
-                                {m.qtyEmit}/{m.qtyPlan} {m.uom}
-                              </span>
+                      {(() => {
+                        const plan = o.materiales.reduce((s, m) => s + (Number(m.qtyPlan) || 0), 0);
+                        const emit = o.materiales.reduce((s, m) => s + (Number(m.qtyEmit) || 0), 0);
+                        const falt = o.materiales.reduce((s, m) => s + (Number(m.faltante) || 0), 0);
+                        const pend = Math.max(0, plan - emit);
+                        const variant: Parameters<typeof ProgressBar>[0]["variant"] = falt > 0
+                          ? "error"
+                          : emit >= plan && plan > 0
+                          ? "success"
+                          : "default";
+
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="font-medium">Materiales</div>
+                              <div className="text-muted-foreground font-mono">
+                                {emit}/{plan}
+                              </div>
                             </div>
                             <ProgressBar
-                              value={m.qtyEmit}
-                              max={m.qtyPlan}
-                              variant={m.faltante > 0 ? "error" : m.qtyEmit === m.qtyPlan ? "success" : "default"}
+                              value={emit}
+                              max={Math.max(1, plan)}
+                              variant={variant}
                               size="sm"
                               showPercentage={false}
                             />
-                            {m.faltante > 0 && (
-                              <div className="flex items-center gap-1 text-red-600 mt-1">
-                                <AlertTriangle className="h-3 w-3" />
-                                <span>Falta: {m.faltante} {m.uom}</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 text-[11px]">
+                              {pend > 0 ? (
+                                <Badge variant="secondary" className="px-1.5 py-0.5">{pend} pend.</Badge>
+                              ) : (
+                                <Badge className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">✔ listo</Badge>
+                              )}
+                              {falt > 0 && (
+                                <span className="inline-flex items-center gap-1 text-red-600">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Falta stock: {falt}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        ))}
-                        {o.materiales.length > 3 && (
-                          <div className="text-xs text-muted-foreground">
-                            +{o.materiales.length - 3} más
-                          </div>
-                        )}
-                      </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="inline-flex items-center gap-2">
