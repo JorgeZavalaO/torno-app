@@ -32,7 +32,7 @@ type QuoteDetail = {
   qty: number;
   materials: number;
   hours: number;
-  kwh: number;
+  kwh?: number; // obsolete field, kept optional for backward compatibility
   validUntil?: Date | null;
   notes?: string | null;
   pedidoReferencia?: string | null;
@@ -284,13 +284,7 @@ export function QuoteDetailView({ quote, canWrite, systemCurrency = "PEN" }: Quo
                 </div>
                 <div className="text-lg font-semibold">{toNum(quote.hours)}</div>
               </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
-                  <Zap className="h-4 w-4" />
-                  <span className="text-sm">kWh</span>
-                </div>
-                <div className="text-lg font-semibold">{toNum(quote.kwh)}</div>
-              </div>
+              {/* Campo kwh eliminado - el costo de energía se calcula como kwhRate * hours */}
             </div>
 
             <Separator />
@@ -400,7 +394,7 @@ export function QuoteDetailView({ quote, canWrite, systemCurrency = "PEN" }: Quo
                   <span className="font-medium">{formatCurrency(quote.hourlyRate)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tarifa kWh</span>
+                  <span>Costo eléctrico por hora</span>
                   <span className="font-medium">{formatCurrency(quote.kwhRate)}</span>
                 </div>
                 <div className="flex justify-between">

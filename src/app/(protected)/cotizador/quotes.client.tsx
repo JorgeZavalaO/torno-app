@@ -19,6 +19,7 @@ interface QuotesClientProps {
   canWrite: boolean;
   clients: Array<{ id: string; nombre: string; ruc: string }>;
   params: Record<string, string | number>;
+  machineCategories: Array<{ id: string; categoria: string; laborCost: number; deprPerHour: number }>;
   action: (fd: FormData) => Promise<{ ok: boolean; id?: string; message?: string }>;
 }
 
@@ -26,7 +27,8 @@ export default function QuotesClient({
   initialItems, 
   canWrite, 
   clients, 
-  params, 
+  params,
+  machineCategories, 
   action 
 }: QuotesClientProps) {
   const systemCurrency = String(params.currency || "PEN");
@@ -37,6 +39,7 @@ export default function QuotesClient({
         canWrite={canWrite}
         clients={clients}
         params={params}
+        machineCategories={machineCategories}
         action={action}
         quotes={initialItems}
       />

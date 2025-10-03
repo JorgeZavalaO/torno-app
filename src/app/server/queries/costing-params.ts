@@ -42,43 +42,20 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
     unit: "% sobre costo total" 
   },
   
-  // Operating costs
-  { 
-    key: "hourlyRate", 
-    label: "Tarifa por hora de torno", 
-    group: "costos", 
-    type: "CURRENCY", 
-    valueNumber: new Prisma.Decimal("75.00"), 
-    unit: "USD/hora" 
-  },
-  { 
-    key: "laborCost", 
-    label: "Costo de mano de obra", 
-    group: "costos", 
-    type: "CURRENCY", 
-    valueNumber: new Prisma.Decimal("25.00"), 
-    unit: "USD/hora" 
-  },
+  // Operating costs - COMPARTIDOS (aplicables a todas las categorías)
+  // NOTA: hourlyRate y deprPerHour ahora se obtienen de MachineCostingCategory
   { 
     key: "kwhRate", 
-    label: "Costo de energía eléctrica", 
-    group: "costos", 
+    label: "Costo de energía eléctrica por hora", 
+    group: "costos_compartidos", 
     type: "CURRENCY", 
-    valueNumber: new Prisma.Decimal("0.90"), 
-    unit: "USD/kWh" 
-  },
-  { 
-    key: "deprPerHour", 
-    label: "Depreciación de equipos", 
-    group: "costos", 
-    type: "CURRENCY", 
-    valueNumber: new Prisma.Decimal("8.00"), 
-    unit: "USD/hora de uso" 
+    valueNumber: new Prisma.Decimal("0.71"), 
+    unit: "USD/hora" 
   },
   { 
     key: "toolingPerPiece", 
     label: "Desgaste de herramientas", 
-    group: "costos", 
+    group: "costos_compartidos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("2.50"), 
     unit: "USD/pieza" 
@@ -86,7 +63,7 @@ const DEFAULTS: Omit<Prisma.CostingParamCreateInput, "id">[] = [
   { 
     key: "rentPerHour", 
     label: "Costo de alquiler del espacio", 
-    group: "costos", 
+    group: "costos_compartidos", 
     type: "CURRENCY", 
     valueNumber: new Prisma.Decimal("10.00"), 
     unit: "USD/hora de operación" 
@@ -325,4 +302,24 @@ export async function validateCostingParams(): Promise<{
       issues: ["Error during validation: " + (error as Error).message],
     };
   }
+}
+
+/**
+ * Helper para obtener los costos específicos según el tipo de máquina
+ * @deprecated Usar getCostsByCategory de machine-costing-categories.ts para mayor flexibilidad
+ * @param tipoMaquina - Tipo de máquina: "PARALELO", "CNC", o null para valores legacy
+ * @returns Objeto con los costos operativos de la máquina
+ */
+export async function getCostsByMachineType(tipoMaquina: "PARALELO" | "CNC" | null = null) {
+  // Redirigir a la nueva implementación
+  const { getCostsByCategory } = await import("./machine-costing-categories");
+  
+  if (tipoMaquina === "PARALELO") {
+    return getCostsByCategory("TORNO PARALELO");
+  } else if (tipoMaquina === "CNC") {
+    return getCostsByCategory("TORNO CNC");
+  }
+  
+  // Fallback a valores legacy si no se especifica tipo
+  return getCostsByCategory(null);
 }

@@ -9,6 +9,7 @@ import { assertCanReadQuotes, assertCanWriteQuotes } from "@/app/lib/guards";
 import { assertCanWriteWorkorders } from "@/app/lib/guards";
 import { revalidatePath as rp } from "next/cache";
 import { getCostingValues } from "@/app/server/queries/costing-params";
+import { getCostsByCategory } from "@/app/server/queries/machine-costing-categories";
 
 type Result = { ok: true; message?: string; id?: string } | { ok: false; message: string };
 
@@ -22,6 +23,7 @@ const InputSchema = z.object({
   notes: z.string().max(500).optional(),
   pedidoReferencia: z.string().max(100).optional(), // Referencia de pedido ERP
   tipoTrabajoId: z.string().uuid().optional(), // Tipo de trabajo seleccionado
+  machineCategory: z.string().optional(), // Categoría de máquina para costos
 });
 
 /* ---------- Helpers Decimal ---------- */
@@ -142,25 +144,30 @@ export async function createQuote(fd: FormData): Promise<Result> {
   }
 
   // Traemos parámetros actuales
-  const v = await getCostingValues(); // { currency, gi, margin, hourlyRate, ... }
+  const v = await getCostingValues(); // { currency, gi, margin, kwhRate, ... }
   const currency = String(v.currency || "PEN");
 
   const gi = D(v.gi ?? 0);                 // 0.15
   const margin = D(v.margin ?? 0);         // 0.20
-  const hourlyRate = D(v.hourlyRate ?? 0);
-  const kwhRate = D(v.kwhRate ?? 0);
-  const depr = D(v.deprPerHour ?? 0);
-  const tooling = D(v.toolingPerPiece ?? 0);
-  const rent = D(v.rentPerHour ?? 0);
+  
+  // Obtener costos según categoría de máquina seleccionada
+  const machineCategory = input.machineCategory || null;
+  const categoryCosts = await getCostsByCategory(machineCategory);
+  
+  const hourlyRate = D(categoryCosts.laborCost);     // De categoría
+  const depr = D(categoryCosts.deprPerHour);         // De categoría
+  const kwhRate = D(categoryCosts.kwhRate);          // Compartido
+  const tooling = D(categoryCosts.toolingPerPiece);  // Compartido
+  const rent = D(categoryCosts.rentPerHour);         // Compartido
 
   // Cálculo
   const qty = D(input.qty);
   const materials = D(input.materials);
   const hours = D(input.hours);
-  const kwh = D(input.kwh);
+  // kwh ya no se usa - ahora kwhRate es costo por hora
 
   const laborCost = hourlyRate.mul(hours);
-  const energyCost = kwhRate.mul(kwh);
+  const energyCost = kwhRate.mul(hours); // Cambiado: ahora es por hora, no por kWh
   const deprCost = depr.mul(hours);
   const toolingCost = tooling.mul(qty);
   const rentCost = rent.mul(hours);
@@ -176,7 +183,9 @@ export async function createQuote(fd: FormData): Promise<Result> {
   const breakdown = {
     inputs: {
       qty: input.qty,
-      materials: n2(materials), hours: n2(hours), kwh: n2(kwh),
+      materials: n2(materials), hours: n2(hours),
+      // kwh: se eliminó, ya no se usa
+      machineCategory, // Guardar categoría seleccionada
       piezasLines,
       materialesLines,
     },
@@ -213,7 +222,8 @@ export async function createQuote(fd: FormData): Promise<Result> {
       hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
 
       qty: input.qty,
-      materials, hours, kwh,
+      materials, hours,
+      // kwh: 0, // Campo obsoleto - se puede eliminar de la base de datos en el futuro
 
       costDirect: direct,
       giAmount, subtotal, marginAmount, total, unitPrice,

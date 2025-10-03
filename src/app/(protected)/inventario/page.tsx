@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getProductsWithStock, getRecentMovements } from "@/app/server/queries/inventory";
 import InventoryClient from "./inventory.client";
-import { createProduct, updateProduct, deleteProduct, createMovement, importProducts, addEquivalentCode, removeEquivalentCode, getProductEquivalentCodes, searchProducts, pingInventory } from "./actions";
+import { createProduct, updateProduct, deleteProduct, createMovement, importProducts, addEquivalentCode, removeEquivalentCode, getProductEquivalentCodes, searchProducts } from "./actions";
 import { prisma } from "@/app/lib/prisma";
 import { getCostingParamByKey } from "@/app/server/queries/costing-params";
 import { getCatalogoOptions } from "@/app/server/services/catalogos";

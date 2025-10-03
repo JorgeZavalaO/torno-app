@@ -4,55 +4,39 @@ import { Suspense } from "react";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getCostingParamsCached } from "@/app/server/queries/costing-params";
+import { getMachineCostingCategoriesWithStats } from "@/app/server/queries/machine-costing-categories";
 import { getCatalogoOptions } from "@/app/server/services/catalogos";
-import ParamsClient from "./params.client";
-import { bulkUpdate, resetDefaults, updateOne, pingCosting } from "./actions";
+import TabsSection from "./TabsSection.client";
+import { bulkUpdate, resetDefaults, updateOne, pingCosting } from "@/server/actions/parametros-actions";
+import { upsertCategoryAction, deleteCategoryAction, syncCategoriesFromMachines } from "@/server/actions/category-actions";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Loading component for better UX
+
+// Minimal loading component
 function ParamsLoading() {
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header skeleton */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-96" />
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-32" />
-          <Skeleton className="h-10 w-40" />
-        </div>
+    <div className="max-w-6xl mx-auto p-6 space-y-8">
+      {/* Simple header skeleton */}
+      <div className="space-y-3">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-96" />
       </div>
 
-      {/* Groups skeleton */}
+      {/* Clean skeleton cards */}
       {[1, 2, 3].map((group) => (
-        <Card key={group} className="overflow-hidden">
-          <div className="px-6 py-4 border-b bg-muted/50">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-8 w-8 rounded" />
-              <div className="space-y-1">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-4 w-48" />
-              </div>
-            </div>
+        <div key={group} className="space-y-4">
+          <Skeleton className="h-5 w-32" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((item) => (
+              <Card key={item} className="p-4 space-y-3 border-0 shadow-sm">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-3 w-16" />
+              </Card>
+            ))}
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((item) => (
-                <div key={item} className="space-y-3">
-                  <Skeleton className="h-4 w-24" />
-                  <div className="flex gap-2">
-                    <Skeleton className="h-10 flex-1" />
-                    <Skeleton className="h-10 w-10" />
-                  </div>
-                  <Skeleton className="h-3 w-20" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
+        </div>
       ))}
     </div>
   );
@@ -76,8 +60,9 @@ async function ParamsContent() {
     // Validate permissions and ensure defaults
     await pingCosting();
 
-    const [params, monedaOptions] = await Promise.all([
+    const [params, categories, monedaOptions] = await Promise.all([
       getCostingParamsCached(),
+      getMachineCostingCategoriesWithStats(),
       getCatalogoOptions('MONEDA')
     ]);
 
@@ -87,13 +72,51 @@ async function ParamsContent() {
       valueNumber: p.valueNumber !== null ? p.valueNumber.toString() : null,
     }));
 
+    const mappedCategories = categories.map((c) => ({
+      ...c,
+      laborCost: c.laborCost.toString(),
+      deprPerHour: c.deprPerHour.toString(),
+    }));
+
+    // Obtener tipo de cambio
+    const usdRateParam = params.find(p => p.key === "usdRate");
+    const tipoCambio = usdRateParam?.valueNumber ? Number(usdRateParam.valueNumber.toString()) : 3.5;
+
     return (
-      <ParamsClient
-        initialItems={mappedParams}
-        canWrite={canWrite}
-        actions={{ bulkUpdate, resetDefaults, updateOne }}
-        monedaOptions={monedaOptions}
-      />
+      <div className="max-w-6xl mx-auto p-6 space-y-8">
+        {/* Minimal header */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-foreground">
+            Parámetros del Sistema
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Configura las tarifas, márgenes y categorías de costeo del taller
+          </p>
+        </div>
+
+        <TabsSection
+          mappedCategories={mappedCategories}
+          mappedParams={mappedParams as unknown as {
+            id: string;
+            key: string;
+            label: string | null;
+            group: string | null;
+            type: "NUMBER" | "PERCENT" | "CURRENCY" | "TEXT";
+            valueNumber: string | null;
+            valueText: string | null;
+            unit: string | null;
+          }[]}
+          canWrite={canWrite}
+          tipoCambio={tipoCambio}
+          categoryActions={{
+            upsert: upsertCategoryAction,
+            delete: deleteCategoryAction,
+            sync: syncCategoriesFromMachines,
+          }}
+          paramActions={{ bulkUpdate, resetDefaults, updateOne }}
+          monedaOptions={monedaOptions as unknown as Array<{ value: string; label: string; color: string | null; icono: string | null; descripcion: string | null }>}
+        />
+      </div>
     );
   } catch (error) {
     console.error("Error loading costing params:", error);

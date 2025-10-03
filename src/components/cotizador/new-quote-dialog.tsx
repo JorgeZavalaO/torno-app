@@ -58,6 +58,7 @@ interface NewQuoteDialogProps {
   onOpenChange: (open: boolean) => void;
   clients: Client[];
   params: CostingParams;
+  machineCategories: Array<{ id: string; categoria: string; laborCost: number; deprPerHour: number }>;
   action: CreateQuoteAction;
 }
 
@@ -65,7 +66,8 @@ export function NewQuoteDialog({
   open, 
   onOpenChange, 
   clients, 
-  params, 
+  params,
+  machineCategories, 
   action 
 }: NewQuoteDialogProps) {
   const currency = String(params.currency || "PEN");
@@ -73,7 +75,8 @@ export function NewQuoteDialog({
   const [qty, setQty] = useState<number>(1);
   const [materials, setMaterials] = useState<number>(0);
   const [hours, setHours] = useState<number>(0);
-  const [kwh, setKwh] = useState<number>(0);
+  const [machineCategory, setMachineCategory] = useState<string>(""); // Nueva categoría
+  // kwh eliminado - ya no es necesario con el nuevo modelo de costeo
   const [validUntil, setValidUntil] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [pedidoReferencia, setPedidoReferencia] = useState<string>("");
@@ -88,16 +91,19 @@ export function NewQuoteDialog({
 
   const gi = Number(params.gi ?? 0);
   const margin = Number(params.margin ?? 0);
-  const hourlyRate = Number(params.hourlyRate ?? 0);
+  
+  // Obtener costos según categoría seleccionada
+  const selectedCategory = machineCategories.find(c => c.categoria === machineCategory);
+  const hourlyRate = selectedCategory?.laborCost ?? Number(params.hourlyRate ?? 0);
+  const depr = selectedCategory?.deprPerHour ?? Number(params.deprPerHour ?? 0);
   const kwhRate = Number(params.kwhRate ?? 0);
-  const depr = Number(params.deprPerHour ?? 0);
   const tooling = Number(params.toolingPerPiece ?? 0);
   const rent = Number(params.rentPerHour ?? 0);
 
   // Cálculo basado siempre en estados (materials / qty) que se sincronizan con líneas si existen
   const calculation = useMemo(() => {
     const labor = hourlyRate * hours;
-    const energy = kwhRate * kwh;
+    const energy = kwhRate * hours; // Cambiado: ahora es por hora de operación
     const depreciation = depr * hours;
     const toolingCost = tooling * qty;
     const rentCost = rent * hours;
@@ -112,7 +118,7 @@ export function NewQuoteDialog({
       labor, energy, depreciation, toolingCost, rentCost, 
       direct, giAmount, subtotal, marginAmount, total, unitPrice 
     };
-  }, [materials, hours, kwh, qty, gi, margin, hourlyRate, kwhRate, depr, tooling, rent]);
+  }, [materials, hours, qty, gi, margin, hourlyRate, kwhRate, depr, tooling, rent]);
 
   const formatCurrency = (amount: number, c: string = currency) =>
     new Intl.NumberFormat(undefined, { 
@@ -125,7 +131,8 @@ export function NewQuoteDialog({
     setQty(1);
     setMaterials(0);
     setHours(0);
-    setKwh(0);
+    setMachineCategory(""); // Reset categoría
+    // kwh eliminado
     setNotes("");
     setPedidoReferencia("");
     setTipoTrabajoId("");
@@ -144,7 +151,8 @@ export function NewQuoteDialog({
   formData.set("qty", String(qty));
   formData.set("materials", String(materials));
     formData.set("hours", String(hours));
-    formData.set("kwh", String(kwh));
+    if (machineCategory) formData.set("machineCategory", machineCategory); // Categoría de máquina
+    // kwh removed - obsolete field, energy cost now based on hours
   formData.set("forceMaterials", String(Boolean(forceMaterials)));
   if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
@@ -305,6 +313,37 @@ export function NewQuoteDialog({
                       </div>
 
                       <div className="space-y-2">
+                        <Label htmlFor="machineCategory" className="text-sm font-medium flex items-center gap-2">
+                          Categoría de Máquina
+                          {machineCategory && selectedCategory && (
+                            <Badge variant="outline" className="text-xs">
+                              Labor: ${selectedCategory.laborCost}/h | Depr: ${selectedCategory.deprPerHour}/h
+                            </Badge>
+                          )}
+                        </Label>
+                        <Select value={machineCategory} onValueChange={setMachineCategory} disabled={pending}>
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Seleccionar categoría..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {machineCategories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.categoria}>
+                                <div className="flex flex-col items-start py-1">
+                                  <div className="font-medium">{cat.categoria}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    MO: ${cat.laborCost}/h • Depr: ${cat.deprPerHour}/h
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Selecciona el tipo de máquina para costos específicos
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
                         <Label htmlFor="pedidoReferencia" className="text-sm font-medium">Pedido de Referencia</Label>
                         <Input
                           id="pedidoReferencia"
@@ -454,19 +493,7 @@ export function NewQuoteDialog({
                         />
                       </div>
 
-                      <div className="space-y-2 md:col-span-2 lg:col-span-3">
-                        <Label htmlFor="kwh" className="text-sm font-medium">Consumo energético (kWh)</Label>
-                        <Input
-                          id="kwh"
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={kwh}
-                          onChange={(e) => setKwh(Number(e.target.value))}
-                          disabled={pending}
-                          className="h-11"
-                        />
-                      </div>
+                      {/* Campo kwh eliminado - el costo de energía ahora se calcula como kwhRate * hours */}
                     </div>
                   </Card>
                 </TabsContent>

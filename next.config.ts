@@ -7,7 +7,22 @@ const nextConfig: NextConfig = {
   experimental: {
     ppr: false, // Deshabilitado hasta que sea estable
     optimizeCss: true,
-  // Configuración antigua de Turbopack (migrada a `turbopack` top-level)
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
+  },
+  
+  // Skip prerendering for error pages
+  generateBuildId: async () => {
+    return 'build-' + Date.now()
+  },
+  
+  // Skip build static generation errors
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: false,
   },
   
   // Optimizaciones de compilación

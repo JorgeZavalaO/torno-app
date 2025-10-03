@@ -32,7 +32,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
     qty: quote.qty,
     materials: toNum(quote.materials),
     hours: toNum(quote.hours),
-    kwh: toNum(quote.kwh),
+    // kwh removed - obsolete field
     validUntil: quote.validUntil ?? null,
     notes: quote.notes ?? null,
     tipoTrabajoId: quote.tipoTrabajoId ?? null,
@@ -64,7 +64,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
         qty: number;
         materials: number;
         hours: number;
-        kwh: number;
+        // kwh: number; // obsolete field
         validUntil?: Date | null;
         notes?: string | null;
         tipoTrabajoId?: string | null;

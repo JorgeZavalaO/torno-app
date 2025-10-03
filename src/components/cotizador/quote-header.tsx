@@ -20,6 +20,7 @@ interface QuoteHeaderProps {
   canWrite: boolean;
   clients: Client[];
   params: CostingParams; // debe incluir currency y opcionalmente usdRate
+  machineCategories: Array<{ id: string; categoria: string; laborCost: number; deprPerHour: number }>;
   action: CreateQuoteAction;
   quotes: Quote[];
 }
@@ -27,7 +28,8 @@ interface QuoteHeaderProps {
 export function QuoteHeader({ 
   canWrite, 
   clients, 
-  params, 
+  params,
+  machineCategories, 
   action, 
   quotes 
 }: QuoteHeaderProps) {
@@ -168,6 +170,7 @@ export function QuoteHeader({
           onOpenChange={setShowNewDialog}
           clients={clients}
           params={params}
+          machineCategories={machineCategories}
           action={action}
         />
       )}
