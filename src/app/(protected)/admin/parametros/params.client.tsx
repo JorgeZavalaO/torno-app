@@ -94,12 +94,14 @@ export default function ParamsClient({
   canWrite, 
   actions,
   monedaOptions = [],
+  currency = "USD", // eslint-disable-line @typescript-eslint/no-unused-vars
   tipoCambio = 3.5
 }: {
   initialItems: Item[];
   canWrite: boolean;
   actions: Actions;
   monedaOptions?: MonedaOption[];
+  currency?: string;
   tipoCambio?: number;
 }) {
   const [items, setItems] = useState<ItemWithUI[]>(() =>

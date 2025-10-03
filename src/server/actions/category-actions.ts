@@ -2,6 +2,8 @@
 
 import { revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
+import { prisma } from "@/app/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   upsertMachineCostingCategory,
   deleteMachineCostingCategory,
@@ -133,6 +135,71 @@ export async function syncCategoriesFromMachines() {
     return {
       ok: false,
       message: "Error al sincronizar categorías",
+    };
+  }
+}
+
+/**
+ * Convierte los precios de todas las categorías cuando cambia la moneda del sistema
+ * Esta función es llamada desde parametros-actions.ts cuando se cambia la moneda
+ */
+export async function convertCategoryCurrency(fromCurrency: string, toCurrency: string, usdRate: number) {
+  try {
+    // Solo convertir entre USD y PEN
+    const validConversion = 
+      (fromCurrency === "USD" && toCurrency === "PEN") || 
+      (fromCurrency === "PEN" && toCurrency === "USD");
+    
+    if (!validConversion) {
+      return { ok: true, message: "No se requiere conversión" };
+    }
+
+    // Obtener todas las categorías activas
+    const categories = await prisma.machineCostingCategory.findMany({
+      where: { activo: true },
+    });
+
+    if (categories.length === 0) {
+      return { ok: true, message: "No hay categorías para convertir" };
+    }
+
+    // Preparar las actualizaciones
+    const updates = categories.map(category => {
+      const currentLaborCost = Number(category.laborCost.toString());
+      const currentDeprPerHour = Number(category.deprPerHour.toString());
+      
+      // Convertir valores según la dirección
+      const newLaborCost = toCurrency === "USD" 
+        ? currentLaborCost / usdRate  // PEN -> USD
+        : currentLaborCost * usdRate; // USD -> PEN
+        
+      const newDeprPerHour = toCurrency === "USD"
+        ? currentDeprPerHour / usdRate  // PEN -> USD  
+        : currentDeprPerHour * usdRate; // USD -> PEN
+
+      return prisma.machineCostingCategory.update({
+        where: { id: category.id },
+        data: {
+          laborCost: new Prisma.Decimal(newLaborCost),
+          deprPerHour: new Prisma.Decimal(newDeprPerHour),
+        },
+      });
+    });
+
+    // Ejecutar todas las actualizaciones en una transacción
+    await prisma.$transaction(updates);
+
+    revalidateTag(cacheTags.costing);
+
+    return {
+      ok: true,
+      message: `${categories.length} categoría(s) convertida(s) de ${fromCurrency} a ${toCurrency}`,
+    };
+  } catch (error) {
+    console.error("Error converting category currency:", error);
+    return {
+      ok: false,
+      message: "Error al convertir categorías",
     };
   }
 }

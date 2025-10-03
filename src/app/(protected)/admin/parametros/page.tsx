@@ -78,7 +78,9 @@ async function ParamsContent() {
       deprPerHour: c.deprPerHour.toString(),
     }));
 
-    // Obtener tipo de cambio
+    // Obtener moneda del sistema y tipo de cambio
+    const currencyParam = params.find(p => p.key === "currency");
+    const currency = String(currencyParam?.valueText ?? "USD").toUpperCase();
     const usdRateParam = params.find(p => p.key === "usdRate");
     const tipoCambio = usdRateParam?.valueNumber ? Number(usdRateParam.valueNumber.toString()) : 3.5;
 
@@ -107,6 +109,7 @@ async function ParamsContent() {
             unit: string | null;
           }[]}
           canWrite={canWrite}
+          currency={currency}
           tipoCambio={tipoCambio}
           categoryActions={{
             upsert: upsertCategoryAction,

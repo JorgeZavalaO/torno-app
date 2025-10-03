@@ -6,6 +6,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanReadCosting, assertCanWriteCosting } from "@/app/lib/guards";
 import { Prisma } from "@prisma/client";
+import { convertCategoryCurrency } from "./category-actions";
 
 type Result = { ok: true; message?: string } | { ok: false; message: string };
 
@@ -91,10 +92,19 @@ export async function updateOne(fd: FormData): Promise<Result> {
             ...txOps 
           ]);
           
+          // También convertir las categorías de máquina
+          const categoryConversionResult = await convertCategoryCurrency(currentCurrency, newCurrency, usdRate);
+          
           bump();
+          
+          const paramMessage = `Moneda cambiada a ${newCurrency} y parámetros convertidos.`;
+          const categoryMessage = categoryConversionResult.ok 
+            ? ` ${categoryConversionResult.message}` 
+            : ` Advertencia: ${categoryConversionResult.message}`;
+          
           return { 
             ok: true, 
-            message: `Moneda cambiada a ${newCurrency} y parámetros convertidos.` 
+            message: paramMessage + categoryMessage
           };
         }
       }

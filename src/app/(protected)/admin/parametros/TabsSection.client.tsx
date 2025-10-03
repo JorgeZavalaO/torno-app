@@ -48,6 +48,7 @@ export default function TabsSection({
   mappedCategories,
   mappedParams,
   canWrite,
+  currency,
   tipoCambio,
   categoryActions,
   paramActions,
@@ -56,6 +57,7 @@ export default function TabsSection({
   mappedCategories: Category[];
   mappedParams: ParamItem[];
   canWrite: boolean;
+  currency: string;
   tipoCambio: number;
   categoryActions: CategoryActions;
   paramActions: ParamActions;
@@ -113,6 +115,7 @@ export default function TabsSection({
             categories={mappedCategories}
             canWrite={canWrite}
             actions={categoryActions}
+            currency={currency}
             tipoCambio={tipoCambio}
           />
         </TabsContent>
@@ -122,6 +125,7 @@ export default function TabsSection({
             canWrite={canWrite}
             actions={paramActions}
             monedaOptions={monedaOptions}
+            currency={currency}
             tipoCambio={tipoCambio}
           />
         </TabsContent>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { formatCurrency } from "@/app/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,11 +64,13 @@ export default function CategoriesClient({
   categories,
   canWrite,
   actions,
-
+  currency,
+  tipoCambio, // eslint-disable-line @typescript-eslint/no-unused-vars
 }: {
   categories: Category[];
   canWrite: boolean;
   actions: Actions;
+  currency: string;
   tipoCambio?: number;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -234,7 +237,7 @@ export default function CategoriesClient({
                       </TooltipContent>
                     </Tooltip>
                     <span className="font-semibold text-blue-700 dark:text-blue-300">
-                      ${Number(category.laborCost).toFixed(2)}/h
+                      {formatCurrency(Number(category.laborCost), currency)}/h
                     </span>
                   </div>
 
@@ -251,7 +254,7 @@ export default function CategoriesClient({
                       </TooltipContent>
                     </Tooltip>
                     <span className="font-semibold text-orange-700 dark:text-orange-300">
-                      ${Number(category.deprPerHour).toFixed(2)}/h
+                      {formatCurrency(Number(category.deprPerHour), currency)}/h
                     </span>
                   </div>
 
@@ -268,7 +271,7 @@ export default function CategoriesClient({
                       </TooltipContent>
                     </Tooltip>
                     <span className="font-bold text-emerald-700 dark:text-emerald-300 text-base">
-                      ${(Number(category.laborCost) + Number(category.deprPerHour)).toFixed(2)}/h
+                      {formatCurrency(Number(category.laborCost) + Number(category.deprPerHour), currency)}/h
                     </span>
                   </div>
 
@@ -366,7 +369,7 @@ export default function CategoriesClient({
                     <div className="flex justify-between items-center">
                       <span>Costo Total por Hora:</span>
                       <span className="font-semibold">
-                        ${((Number(formData.laborCost) || 0) + (Number(formData.deprPerHour) || 0)).toFixed(2)}/h
+                        {formatCurrency((Number(formData.laborCost) || 0) + (Number(formData.deprPerHour) || 0), currency)}/h
                       </span>
                     </div>
                   </div>
