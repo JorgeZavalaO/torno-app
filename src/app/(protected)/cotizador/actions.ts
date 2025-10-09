@@ -117,11 +117,8 @@ export async function createQuote(fd: FormData): Promise<Result> {
     }
   } catch {}
 
-  const forceMaterialsFlag = String(fd.get("forceMaterials") || "").toLowerCase() === "true";
   const aggregatedQty = piezasLines.length ? piezasLines.reduce((s,p)=>s+p.qty,0) : Number(fd.get("qty") || 0);
-  const aggregatedMaterials = forceMaterialsFlag
-    ? Number(fd.get("materials") || 0)
-    : (materialesLines.length ? materialesLines.reduce((s,m)=> s + (m.qty * m.unitCost), 0) : Number(fd.get("materials") || 0));
+  const aggregatedMaterials = (materialesLines.length ? materialesLines.reduce((s,m)=> s + (m.qty * m.unitCost), 0) : Number(fd.get("materials") || 0));
 
   const parsed = InputSchema.safeParse({
     clienteId: fd.get("clienteId"),
@@ -151,7 +148,7 @@ export async function createQuote(fd: FormData): Promise<Result> {
   const margin = D(v.margin ?? 0);         // 0.20
   
   // Obtener costos según categoría de máquina seleccionada
-  const machineCategory = input.machineCategory || null;
+  const machineCategory = fd.get("machineCategory") ? String(fd.get("machineCategory")) : null;
   const categoryCosts = await getCostsByCategory(machineCategory);
   
   const hourlyRate = D(categoryCosts.laborCost);     // De categoría
@@ -213,6 +210,16 @@ export async function createQuote(fd: FormData): Promise<Result> {
     },
   };
 
+  // Obtener machineCategoryId si se proporcionó
+  let machineCategoryId: string | null = null;
+  if (machineCategory) {
+    const categoryRecord = await prisma.machineCostingCategory.findUnique({
+      where: { categoria: machineCategory },
+      select: { id: true },
+    });
+    machineCategoryId = categoryRecord?.id ?? null;
+  }
+
   // Crear cotización
   const created = await prisma.cotizacion.create({
     data: {
@@ -228,6 +235,8 @@ export async function createQuote(fd: FormData): Promise<Result> {
       costDirect: direct,
       giAmount, subtotal, marginAmount, total, unitPrice,
       breakdown,
+
+      machineCategoryId, // Guardar la categoría seleccionada
 
       validUntil: input.validUntil ? new Date(input.validUntil) : null,
       notes: input.notes ?? null,
@@ -313,10 +322,7 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
     }
   } catch {}
   const aggregatedQty = piezasLines.length ? piezasLines.reduce((s,p)=>s+p.qty,0) : Number(fd.get("qty") || 0);
-  const forceMaterialsFlag = String(fd.get("forceMaterials") || "").toLowerCase() === "true";
-  const aggregatedMaterials = forceMaterialsFlag
-    ? Number(fd.get("materials") || 0)
-    : (materialesLines.length ? materialesLines.reduce((s,m)=> s + (m.qty * m.unitCost), 0) : Number(fd.get("materials") || 0));
+  const aggregatedMaterials = (materialesLines.length ? materialesLines.reduce((s,m)=> s + (m.qty * m.unitCost), 0) : Number(fd.get("materials") || 0));
 
   const parsed = InputSchema.safeParse({
     clienteId: fd.get("clienteId"),
@@ -354,20 +360,24 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
 
     const gi = D(v.gi ?? 0);
     const margin = D(v.margin ?? 0);
-    const hourlyRate = D(v.hourlyRate ?? 0);
-    const kwhRate = D(v.kwhRate ?? 0);
-    const depr = D(v.deprPerHour ?? 0);
-    const tooling = D(v.toolingPerPiece ?? 0);
-    const rent = D(v.rentPerHour ?? 0);
+
+    // Obtener costos según categoría de máquina seleccionada
+    const machineCategory = fd.get("machineCategory") ? String(fd.get("machineCategory")) : null;
+    const categoryCosts = await getCostsByCategory(machineCategory);
+    
+    const hourlyRate = D(categoryCosts.laborCost);     // De categoría
+    const depr = D(categoryCosts.deprPerHour);         // De categoría
+    const kwhRate = D(categoryCosts.kwhRate);          // Compartido
+    const tooling = D(categoryCosts.toolingPerPiece);  // Compartido
+    const rent = D(categoryCosts.rentPerHour);         // Compartido
 
     // Recalcular con los nuevos valores
     const qty = D(input.qty);
     const materials = D(input.materials);
     const hours = D(input.hours);
-    const kwh = D(input.kwh);
 
     const laborCost = hourlyRate.mul(hours);
-    const energyCost = kwhRate.mul(kwh);
+    const energyCost = kwhRate.mul(hours); // Ahora es por hora, no por kWh
     const deprCost = depr.mul(hours);
     const toolingCost = tooling.mul(qty);
     const rentCost = rent.mul(hours);
@@ -383,7 +393,8 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
   const breakdown = {
       inputs: {
         qty: input.qty,
-        materials: n2(materials), hours: n2(hours), kwh: n2(kwh),
+        materials: n2(materials), hours: n2(hours),
+        machineCategory, // Guardar categoría
     piezasLines,
     materialesLines,
       },
@@ -411,6 +422,16 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
       },
     };
 
+    // Obtener machineCategoryId si se proporcionó
+    let machineCategoryId: string | null = null;
+    if (machineCategory) {
+      const categoryRecord = await prisma.machineCostingCategory.findUnique({
+        where: { categoria: machineCategory },
+        select: { id: true },
+      });
+      machineCategoryId = categoryRecord?.id ?? null;
+    }
+
     // Actualizar cotización
     await prisma.cotizacion.update({
       where: { id: quoteId },
@@ -421,11 +442,13 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
         hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
 
         qty: input.qty,
-        materials, hours, kwh,
+        materials, hours,
 
         costDirect: direct,
         giAmount, subtotal, marginAmount, total, unitPrice,
         breakdown,
+
+        machineCategoryId, // Actualizar categoría
 
         validUntil: input.validUntil ? new Date(input.validUntil) : null,
         notes: input.notes ?? null,

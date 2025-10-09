@@ -102,6 +102,21 @@ export function SCRowActions({
     []
   );
 
+  // Calcular el total de items pendientes
+  const hasPendingItems = useMemo(() => {
+    if (typeof row.pendingTotal === "number") {
+      return row.pendingTotal > 0;
+    }
+    // Fallback: calcular manualmente
+    const totalPending = row.items.reduce((sum, item) => {
+      const pending = typeof item.pendiente === "number" 
+        ? item.pendiente 
+        : Math.max(0, Number(item.cantidad) - Number(item.cubierto || 0));
+      return sum + pending;
+    }, 0);
+    return totalPending > 0;
+  }, [row.items, row.pendingTotal]);
+
   const [proveedorId, setProveedorId] = useState(hasProviders ? providers[0].id : "");
   const [codigo, setCodigo] = useState(defaultCodigo);
   const [open, setOpen] = useState(false);
@@ -235,8 +250,14 @@ export function SCRowActions({
           <DialogTrigger asChild>
             <Button
               size="sm"
-              disabled={!hasProviders}
-              title={hasProviders ? "" : "Primero registra un proveedor"}
+              disabled={!hasProviders || !hasPendingItems}
+              title={
+                !hasProviders 
+                  ? "Primero registra un proveedor" 
+                  : !hasPendingItems 
+                  ? "No hay items pendientes para crear OC" 
+                  : ""
+              }
             >
               Crear OC
             </Button>

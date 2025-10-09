@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -24,7 +23,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { 
   Calculator, 
@@ -85,7 +83,7 @@ export function NewQuoteDialog({
   const [tiposTrabajo, setTiposTrabajo] = useState<TiposTrabajoResponse | null>(null);
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
-  const [forceMaterials, setForceMaterials] = useState<boolean>(false);
+  // Eliminado forceMaterials: siempre se autocalcula desde líneas de detalle cuando existen
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -153,7 +151,7 @@ export function NewQuoteDialog({
     formData.set("hours", String(hours));
     if (machineCategory) formData.set("machineCategory", machineCategory); // Categoría de máquina
     // kwh removed - obsolete field, energy cost now based on hours
-  formData.set("forceMaterials", String(Boolean(forceMaterials)));
+  // Campo forceMaterials eliminado: ya no se soporta forzado manual cuando existen líneas detalladas
   if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
   if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
@@ -218,6 +216,25 @@ export function NewQuoteDialog({
     }
   }, [tipoTrabajoId, tiposTrabajo?.principales]);
 
+  // Sincronizar estado de materials con las líneas de materiales
+  // Siempre que existan líneas detalladas de materiales, el monto se autocalcula
+  useEffect(() => {
+    if (materialesLines.length > 0) {
+      const totalMaterials = materialesLines.reduce((sum, line) => sum + (line.qty * line.unitCost), 0);
+      setMaterials(totalMaterials);
+    }
+  }, [materialesLines]);
+
+  // Sincronizar cantidad total con las líneas de piezas
+  useEffect(() => {
+    if (piezasLines.length > 0) {
+      const totalQty = piezasLines.reduce((sum, line) => {
+        return sum + line.qty;
+      }, 0);
+      setQty(totalQty);
+    }
+  }, [piezasLines]);
+
   // Obtener subcategorías disponibles para el tipo seleccionado
   const subcategoriasDisponibles = useMemo(() => {
     if (!tiposTrabajo || !tipoTrabajoId) return [];
@@ -233,35 +250,46 @@ export function NewQuoteDialog({
 
   return (
   <Dialog open={open} onOpenChange={handleOpenChange}>
-  <DialogContent className="max-w-[2400px] max-h-[95vh] w-[98vw] min-w-[75vw] sm:w-[1800px] xl:w-[2000px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Nueva cotización
+  <DialogContent className="max-w-[1400px] max-h-[95vh] w-[98vw] min-w-[75vw] sm:w-[1200px] xl:w-[1400px]">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg flex items-center justify-center">
+              <Calculator className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                Nueva Cotización
+              </div>
+              <div className="text-sm font-normal text-slate-500 dark:text-slate-400">
+                Completa la información para generar la cotización
+              </div>
+            </div>
           </DialogTitle>
-          <DialogDescription>
-            Completa los datos para generar una nueva cotización
-          </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[75vh] pr-6">
+        <ScrollArea className="max-h-[75vh] pr-4">
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-6">
-              <TabsTrigger value="general" className="flex items-center gap-2">
+            <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+              <TabsTrigger 
+                value="general" 
+                className="flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm rounded-md transition-all"
+              >
                 <User className="h-4 w-4" />
-                General
+                <span className="font-medium">General</span>
               </TabsTrigger>
-              <TabsTrigger value="production" className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Producción
-              </TabsTrigger>
-              <TabsTrigger value="details" className="flex items-center gap-2">
+              <TabsTrigger 
+                value="details" 
+                className="flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm rounded-md transition-all"
+              >
                 <Package className="h-4 w-4" />
-                Detalles
+                <span className="font-medium">Detalles y Producción</span>
               </TabsTrigger>
-              <TabsTrigger value="notes" className="flex items-center gap-2">
+              <TabsTrigger 
+                value="notes" 
+                className="flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm rounded-md transition-all"
+              >
                 <FileText className="h-4 w-4" />
-                Notas
+                <span className="font-medium">Observaciones</span>
               </TabsTrigger>
             </TabsList>
 
@@ -269,34 +297,34 @@ export function NewQuoteDialog({
               {/* Contenido principal por pestañas */}
               <div className="lg:col-span-2 space-y-6">
                 
-                <TabsContent value="general" className="mt-0">
-                  <Card className="p-6 space-y-6 animate-fade-in">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <User className="h-4 w-4 text-blue-600" />
+                <TabsContent value="general" className="mt-0 space-y-0">
+                  <Card className="p-6 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
+                      <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                        <User className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">Información General</h3>
-                        <p className="text-sm text-muted-foreground">Datos básicos de la cotización</p>
+                        <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Información General</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Datos básicos de la cotización</p>
                       </div>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label htmlFor="cliente" className="text-sm font-medium flex items-center gap-2">
+                        <Label htmlFor="cliente" className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                           Cliente
-                          <Badge variant="destructive" className="text-xs">Requerido</Badge>
+                          <Badge variant="destructive" className="text-xs font-medium">Requerido</Badge>
                         </Label>
                         <Select value={clienteId} onValueChange={setClienteId} disabled={pending}>
-                          <SelectTrigger className="h-11">
+                          <SelectTrigger className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500">
                             <SelectValue placeholder="Seleccionar cliente..." />
                           </SelectTrigger>
                           <SelectContent>
                             {clients.map((client) => (
                               <SelectItem key={client.id} value={client.id}>
                                 <div className="flex flex-col items-start py-1">
-                                  <div className="font-medium">{client.nombre}</div>
-                                  <div className="text-sm text-muted-foreground">
+                                  <div className="font-medium text-slate-900 dark:text-slate-100">{client.nombre}</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     RUC: {client.ruc}
                                   </div>
                                 </div>
@@ -305,7 +333,7 @@ export function NewQuoteDialog({
                           </SelectContent>
                         </Select>
                         {!clienteId && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
                             <AlertTriangle className="h-3 w-3" />
                             Selecciona un cliente para continuar
                           </p>
@@ -313,24 +341,24 @@ export function NewQuoteDialog({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="machineCategory" className="text-sm font-medium flex items-center gap-2">
+                        <Label htmlFor="machineCategory" className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                           Categoría de Máquina
                           {machineCategory && selectedCategory && (
-                            <Badge variant="outline" className="text-xs">
-                              Labor: ${selectedCategory.laborCost}/h | Depr: ${selectedCategory.deprPerHour}/h
+                            <Badge variant="outline" className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600">
+                              Labor: ${selectedCategory.laborCost}/h • Depr: ${selectedCategory.deprPerHour}/h
                             </Badge>
                           )}
                         </Label>
                         <Select value={machineCategory} onValueChange={setMachineCategory} disabled={pending}>
-                          <SelectTrigger className="h-11">
+                          <SelectTrigger className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500">
                             <SelectValue placeholder="Seleccionar categoría..." />
                           </SelectTrigger>
                           <SelectContent>
                             {machineCategories.map((cat) => (
                               <SelectItem key={cat.id} value={cat.categoria}>
                                 <div className="flex flex-col items-start py-1">
-                                  <div className="font-medium">{cat.categoria}</div>
-                                  <div className="text-sm text-muted-foreground">
+                                  <div className="font-medium text-slate-900 dark:text-slate-100">{cat.categoria}</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     MO: ${cat.laborCost}/h • Depr: ${cat.deprPerHour}/h
                                   </div>
                                 </div>
@@ -338,13 +366,13 @@ export function NewQuoteDialog({
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           Selecciona el tipo de máquina para costos específicos
                         </p>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="pedidoReferencia" className="text-sm font-medium">Pedido de Referencia</Label>
+                        <Label htmlFor="pedidoReferencia" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Pedido de Referencia</Label>
                         <Input
                           id="pedidoReferencia"
                           type="text"
@@ -352,26 +380,41 @@ export function NewQuoteDialog({
                           value={pedidoReferencia}
                           onChange={(e) => setPedidoReferencia(e.target.value)}
                           disabled={pending}
-                          className="h-11"
+                          className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           Referencia del pedido en el sistema ERP (opcional)
                         </p>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="tipoTrabajo" className="text-sm font-medium">Tipo de Trabajo</Label>
+                        <Label htmlFor="validUntil" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Válido hasta</Label>
+                        <Input
+                          id="validUntil"
+                          type="date"
+                          value={validUntil}
+                          onChange={(e) => setValidUntil(e.target.value)}
+                          disabled={pending}
+                          className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Fecha de vencimiento de la cotización
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="tipoTrabajo" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Tipo de Trabajo</Label>
                         <Select value={tipoTrabajoId} onValueChange={setTipoTrabajoId} disabled={pending}>
-                          <SelectTrigger className="h-11">
+                          <SelectTrigger className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500">
                             <SelectValue placeholder="Seleccionar tipo de trabajo..." />
                           </SelectTrigger>
                           <SelectContent>
                             {tiposTrabajo?.principales.map((tipo) => (
                               <SelectItem key={tipo.id} value={tipo.id}>
                                 <div className="flex flex-col items-start py-1">
-                                  <div className="font-medium">{tipo.nombre}</div>
+                                  <div className="font-medium text-slate-900 dark:text-slate-100">{tipo.nombre}</div>
                                   {tipo.descripcion && (
-                                    <div className="text-sm text-muted-foreground">
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">
                                       {tipo.descripcion}
                                     </div>
                                   )}
@@ -380,7 +423,7 @@ export function NewQuoteDialog({
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           Tipo de trabajo para la cotización (opcional)
                         </p>
                       </div>
@@ -388,18 +431,18 @@ export function NewQuoteDialog({
                       {/* Subcategoría de servicios - solo visible cuando se selecciona "Servicios" */}
                       {subcategoriasDisponibles.length > 0 && (
                         <div className="space-y-2">
-                          <Label htmlFor="tipoTrabajoSubcategoria" className="text-sm font-medium">Tipo de Servicio</Label>
+                          <Label htmlFor="tipoTrabajoSubcategoria" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Tipo de Servicio</Label>
                           <Select value={tipoTrabajoSubcategoriaId} onValueChange={setTipoTrabajoSubcategoriaId} disabled={pending}>
-                            <SelectTrigger className="h-11">
+                            <SelectTrigger className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500">
                               <SelectValue placeholder="Seleccionar tipo de servicio..." />
                             </SelectTrigger>
                             <SelectContent>
                               {subcategoriasDisponibles.map((subcategoria) => (
                                 <SelectItem key={subcategoria.id} value={subcategoria.id}>
                                   <div className="flex flex-col items-start py-1">
-                                    <div className="font-medium">{subcategoria.nombre}</div>
+                                    <div className="font-medium text-slate-900 dark:text-slate-100">{subcategoria.nombre}</div>
                                     {subcategoria.descripcion && (
-                                      <div className="text-sm text-muted-foreground">
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">
                                         {subcategoria.descripcion}
                                       </div>
                                     )}
@@ -408,7 +451,7 @@ export function NewQuoteDialog({
                               ))}
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
                             Especifica el tipo de servicio requerido
                           </p>
                         </div>
@@ -417,24 +460,27 @@ export function NewQuoteDialog({
                   </Card>
                 </TabsContent>
 
-                <TabsContent value="production" className="mt-0">
-                  <Card className="p-6 space-y-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <Settings className="h-4 w-4 text-green-600" />
+                <TabsContent value="details" className="mt-0 space-y-4">
+                  {/* Tarjeta de parámetros de producción */}
+                  <Card className="p-6 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
+                      <div className="h-10 w-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center shadow-sm">
+                        <Settings className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">Parámetros de Producción</h3>
-                        <p className="text-sm text-muted-foreground">Configura los recursos necesarios</p>
+                        <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Parámetros de Producción</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Configura los recursos necesarios</p>
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                       <div className="space-y-2">
-                        <Label htmlFor="qty" className="text-sm font-medium flex items-center justify-between">
+                        <Label htmlFor="qty" className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                           <span>Cantidad (piezas)</span>
                           {piezasLines.length > 0 && (
-                            <Badge variant="secondary" className="text-xs">Auto-calculado</Badge>
+                            <Badge variant="secondary" className="text-xs bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
+                              Auto-calculado
+                            </Badge>
                           )}
                         </Label>
                         <Input
@@ -444,21 +490,23 @@ export function NewQuoteDialog({
                           value={qty}
                           onChange={(e) => setQty(Number(e.target.value))}
                           disabled={pending || piezasLines.length > 0}
-                          className="h-11"
+                          className="h-11 border-slate-300 dark:border-slate-600 focus:border-emerald-500 focus:ring-emerald-500"
                         />
                         {piezasLines.length > 0 && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3 text-green-500" />
-                            Calculado desde líneas de detalle
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                            <CheckCircle className="h-3 w-3" />
+                            Desde líneas de detalle
                           </p>
                         )}
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="materials" className="text-sm font-medium flex items-center justify-between">
+                        <Label htmlFor="materials" className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                           <span>Materiales ({currency})</span>
                           {materialesLines.length > 0 && (
-                            <Badge variant="secondary" className="text-xs">Auto-calculado</Badge>
+                            <Badge variant="secondary" className="text-xs bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
+                              Auto-calculado
+                            </Badge>
                           )}
                         </Label>
                         <Input
@@ -469,18 +517,18 @@ export function NewQuoteDialog({
                           value={materials}
                           onChange={(e) => setMaterials(Number(e.target.value))}
                           disabled={pending || materialesLines.length > 0}
-                          className="h-11"
+                          className="h-11 border-slate-300 dark:border-slate-600 focus:border-emerald-500 focus:ring-emerald-500"
                         />
                         {materialesLines.length > 0 && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3 text-green-500" />
-                            Calculado desde líneas de detalle
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                            <CheckCircle className="h-3 w-3" />
+                            Desde líneas de detalle
                           </p>
                         )}
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="hours" className="text-sm font-medium">Horas de torno</Label>
+                        <Label htmlFor="hours" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Horas de torno</Label>
                         <Input
                           id="hours"
                           type="number"
@@ -489,16 +537,16 @@ export function NewQuoteDialog({
                           value={hours}
                           onChange={(e) => setHours(Number(e.target.value))}
                           disabled={pending}
-                          className="h-11"
+                          className="h-11 border-slate-300 dark:border-slate-600 focus:border-emerald-500 focus:ring-emerald-500"
                         />
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Tiempo estimado de operación
+                        </p>
                       </div>
-
-                      {/* Campo kwh eliminado - el costo de energía ahora se calcula como kwhRate * hours */}
                     </div>
                   </Card>
-                </TabsContent>
 
-                <TabsContent value="details" className="mt-0">
+                  {/* Editor de líneas de detalle */}
                   <QuoteLinesEditor
                     piezasLines={piezasLines}
                     setPiezasLines={setPiezasLines}
@@ -510,14 +558,14 @@ export function NewQuoteDialog({
                 </TabsContent>
 
                 <TabsContent value="notes" className="mt-0">
-                  <Card className="p-6 space-y-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="h-8 w-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <FileText className="h-4 w-4 text-purple-600" />
+                  <Card className="p-6 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
+                      <div className="h-10 w-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-sm">
+                        <FileText className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">Observaciones</h3>
-                        <p className="text-sm text-muted-foreground">Información adicional sobre la cotización</p>
+                        <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Observaciones</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Información adicional sobre la cotización</p>
                       </div>
                     </div>
                     <Textarea
@@ -525,161 +573,148 @@ export function NewQuoteDialog({
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       disabled={pending}
-                      rows={6}
-                      className="resize-none"
+                      rows={8}
+                      className="resize-none border-slate-300 dark:border-slate-600 focus:border-purple-500 focus:ring-purple-500"
                     />
                   </Card>
                 </TabsContent>
               </div>
 
               {/* Panel de cálculo - Sticky sidebar */}
-              <div className="space-y-4 lg:sticky lg:top-4">
+              <div className="space-y-4 lg:sticky lg:top-4 lg:h-fit">
                 {/* Validación general */}
                 {!clienteId && (
-                  <Alert className="border-amber-200 bg-amber-50">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-800">
+                  <Alert className="border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <AlertDescription className="text-amber-800 dark:text-amber-300 text-sm font-medium">
                       Selecciona un cliente para continuar con la cotización
                     </AlertDescription>
                   </Alert>
                 )}
 
-                <Card className="p-5 bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+                <Card className="p-5 border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 shadow-sm">
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 bg-slate-200 rounded-lg flex items-center justify-center">
-                        <TrendingUp className="h-4 w-4 text-slate-600" />
+                      <div className="h-9 w-9 bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg flex items-center justify-center shadow-sm">
+                        <TrendingUp className="h-4 w-4 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">Parámetros del Sistema</h3>
-                        <p className="text-sm text-muted-foreground">Configuración actual</p>
+                        <h3 className="font-semibold text-base text-slate-900 dark:text-slate-100">Parámetros del Sistema</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Configuración actual</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="flex flex-col space-y-1">
-                        <span className="text-muted-foreground">Gastos indirectos</span>
-                        <span className="font-semibold">{(gi * 100).toFixed(1)}%</span>
+                      <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Gastos indirectos</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{(gi * 100).toFixed(1)}%</span>
                       </div>
-                      <div className="flex flex-col space-y-1">
-                        <span className="text-muted-foreground">Margen de ganancia</span>
-                        <span className="font-semibold">{(margin * 100).toFixed(1)}%</span>
+                      <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Margen de ganancia</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{(margin * 100).toFixed(1)}%</span>
                       </div>
-                      <div className="flex flex-col space-y-1">
-                        <span className="text-muted-foreground">Tarifa/hora</span>
-                        <span className="font-semibold">{formatCurrency(hourlyRate)}</span>
+                      <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Tarifa/hora</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(hourlyRate)}</span>
                       </div>
-                      <div className="flex flex-col space-y-1">
-                        <span className="text-muted-foreground">Tarifa kWh</span>
-                        <span className="font-semibold">{formatCurrency(kwhRate)}</span>
+                      <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Tarifa kWh</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(kwhRate)}</span>
                       </div>
                     </div>
                   </div>
                 </Card>
 
-                <Card className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+                <Card className="p-5 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 shadow-sm">
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 bg-blue-200 rounded-lg flex items-center justify-center">
-                        <Calculator className="h-4 w-4 text-blue-600" />
+                      <div className="h-9 w-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
+                        <Calculator className="h-4 w-4 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">Desglose de Costos</h3>
-                        <p className="text-sm text-muted-foreground">Cálculo en tiempo real</p>
+                        <h3 className="font-semibold text-base text-blue-900 dark:text-blue-100">Desglose de Costos</h3>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">Cálculo en tiempo real</p>
                       </div>
                     </div>
                     
                     <div className="space-y-3">
                       {/* Materiales con opciones de forzado */}
-                      <div className="p-3 bg-white rounded-lg border">
+                      <div className="p-3 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">Materiales</span>
+                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Materiales</span>
                             {materialesLines.length > 0 && (
-                              <Badge variant="secondary" className="text-xs">Detallado</Badge>
-                            )}
-                            {forceMaterials && (
-                              <Badge variant="outline" className="text-xs border-yellow-400 text-yellow-700">
-                                Forzado
+                              <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                                Detallado
                               </Badge>
                             )}
+                            {/* Badge 'Forzado' eliminado: ya no existe modo forzado */}
                           </div>
-                          <span className="font-semibold">{formatCurrency(materials)}</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">{formatCurrency(materials)}</span>
                         </div>
-                        {materialesLines.length > 0 && (
-                          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={forceMaterials} 
-                              onChange={(e) => setForceMaterials(e.target.checked)} 
-                              disabled={pending}
-                              className="rounded border-gray-300" 
-                            />
-                            Usar monto manual en lugar del detalle
-                          </label>
-                        )}
+                        {/* Checkbox de forzado eliminado */}
                       </div>
 
                       <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span>Mano de obra</span>
-                          <span className="font-medium">{formatCurrency(calculation.labor)}</span>
+                        <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-600 dark:text-slate-400">Mano de obra</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.labor)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Energía</span>
-                          <span className="font-medium">{formatCurrency(calculation.energy)}</span>
+                        <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-600 dark:text-slate-400">Energía</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.energy)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Depreciación</span>
-                          <span className="font-medium">{formatCurrency(calculation.depreciation)}</span>
+                        <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-600 dark:text-slate-400">Depreciación</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.depreciation)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Herramientas</span>
-                          <span className="font-medium">{formatCurrency(calculation.toolingCost)}</span>
+                        <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-600 dark:text-slate-400">Herramientas</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.toolingCost)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Alquiler</span>
-                          <span className="font-medium">{formatCurrency(calculation.rentCost)}</span>
+                        <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-600 dark:text-slate-400">Alquiler</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.rentCost)}</span>
                         </div>
                       </div>
                       
-                      <Separator />
+                      <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
                       
                       <div className="space-y-2 text-sm">
-                        <div className="flex justify-between font-medium">
-                          <span>Costo directo</span>
-                          <span>{formatCurrency(calculation.direct)}</span>
+                        <div className="flex justify-between p-3 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg border border-blue-300 dark:border-blue-700 font-semibold shadow-sm">
+                          <span className="text-blue-900 dark:text-blue-100">Costo directo</span>
+                          <span className="text-blue-900 dark:text-blue-100">{formatCurrency(calculation.direct)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Gastos indirectos</span>
-                          <span>{formatCurrency(calculation.giAmount)}</span>
+                        <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-600 dark:text-slate-400">Gastos indirectos</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.giAmount)}</span>
                         </div>
-                        <div className="flex justify-between font-medium">
-                          <span>Subtotal</span>
-                          <span>{formatCurrency(calculation.subtotal)}</span>
+                        <div className="flex justify-between p-3 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg border border-blue-300 dark:border-blue-700 font-semibold shadow-sm">
+                          <span className="text-blue-900 dark:text-blue-100">Subtotal</span>
+                          <span className="text-blue-900 dark:text-blue-100">{formatCurrency(calculation.subtotal)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Margen</span>
-                          <span>{formatCurrency(calculation.marginAmount)}</span>
+                        <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-600 dark:text-slate-400">Margen</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.marginAmount)}</span>
                         </div>
                       </div>
                       
-                      <Separator />
+                      <div className="h-px bg-gradient-to-r from-transparent via-blue-400 dark:via-blue-600 to-transparent" />
                       
-                      <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-semibold text-green-800">Total</span>
-                          <span className="font-bold text-lg text-green-800">{formatCurrency(calculation.total)}</span>
+                      <div className="p-4 bg-gradient-to-br from-emerald-600 to-emerald-700 dark:from-emerald-700 dark:to-emerald-800 rounded-lg shadow-lg border-2 border-emerald-500 dark:border-emerald-600">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-bold text-white text-base">Total</span>
+                          <span className="font-bold text-2xl text-white drop-shadow-sm">{formatCurrency(calculation.total)}</span>
                         </div>
-                        <div className="flex justify-between text-sm text-green-600">
+                        <div className="flex justify-between text-sm text-emerald-100">
                           <span>Precio unitario</span>
-                          <span className="font-medium">{formatCurrency(calculation.unitPrice)}</span>
+                          <span className="font-semibold">{formatCurrency(calculation.unitPrice)}</span>
                         </div>
                         
                         {/* Indicador de moneda y conversión */}
-                        <div className="mt-3 pt-3 border-t border-green-200">
+                        <div className="mt-3 pt-3 border-t border-emerald-500/30">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-muted-foreground">Moneda del sistema:</span>
-                            <Badge variant="outline" className="text-green-700 border-green-300">
+                            <span className="text-xs text-emerald-100">Moneda del sistema:</span>
+                            <Badge variant="outline" className="text-white border-emerald-400 bg-emerald-500/20">
                               <DollarSign className="h-3 w-3 mr-1" />
                               {currency}
                             </Badge>
@@ -687,13 +722,13 @@ export function NewQuoteDialog({
                           
                           {/* Información adicional de conversión */}
                           {currency === "USD" && (
-                            <div className="text-xs text-center text-muted-foreground">
+                            <div className="text-xs text-center text-emerald-100">
                               Tasa de cambio: 1 USD = {Number(params.usdRate || 3.5).toFixed(2)} PEN
                             </div>
                           )}
                           
                           {currency === "PEN" && (
-                            <div className="text-xs text-center text-muted-foreground">
+                            <div className="text-xs text-center text-emerald-100">
                               Tasa de cambio: 1 USD = {Number(params.usdRate || 3.5).toFixed(2)} PEN
                             </div>
                           )}
@@ -707,15 +742,20 @@ export function NewQuoteDialog({
           </Tabs>
         </ScrollArea>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 -mx-6 -mb-6 px-6 pb-6 mt-6">
           <Button 
             variant="outline" 
             onClick={() => handleOpenChange(false)}
             disabled={pending}
+            className="h-11 px-6 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={pending}>
+          <Button 
+            onClick={handleSubmit} 
+            disabled={pending}
+            className="h-11 px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-md hover:shadow-lg transition-all"
+          >
             {pending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
