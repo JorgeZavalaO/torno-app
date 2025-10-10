@@ -11,7 +11,6 @@ export async function GET(req: NextRequest) {
 
   const q = req.nextUrl.searchParams.get("q") ?? undefined;
 
-  // Evita usar la versión cacheada cuando hay término de búsqueda (el cache original no parametriza la key)
   const products = q
     ? await getProductsWithStockUncached(q)
     : await getProductsWithStock();
@@ -22,6 +21,7 @@ export async function GET(req: NextRequest) {
     categoria: p.categoria,
     uom: p.uom,
     lastCost: p.lastCost,
+    refCost: p.refCost,
     stock: p.stock,
   }));
 

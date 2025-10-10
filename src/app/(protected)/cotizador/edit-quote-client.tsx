@@ -1,3 +1,0 @@
-// Eliminado el uso de forceMaterials para mantener consistencia
-
-// ...resto del código...

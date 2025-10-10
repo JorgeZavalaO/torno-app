@@ -67,7 +67,7 @@ export function QuoteLinesEditor({
   const totalQty = piezasLines.reduce((s, p) => s + p.qty, 0);
 
   // inventory options (sku, nombre, uom, lastCost, stock)
-  const [inventory, setInventory] = useState<{ sku: string; nombre: string; categoria?: string; uom: string; lastCost: number; stock?: number }[]>([]);
+  const [inventory, setInventory] = useState<{ sku: string; nombre: string; categoria?: string; uom: string; lastCost: number; refCost?: number; stock?: number }[]>([]);
   const [searchPieza, setSearchPieza] = useState("");
   const [searchMaterial, setSearchMaterial] = useState("");
 
@@ -99,7 +99,8 @@ export function QuoteLinesEditor({
         if (intendedQty > stock) toast.warning(`Stock insuficiente para ${sku}. Stock: ${stock}, requerido: ${intendedQty}`);
       }
     } catch {}
-    updateMaterial(idx, { productoId: sku, descripcion: prod.nombre, unitCost: prod.lastCost });
+  const cost = prod.refCost ?? prod.lastCost ?? 0;
+  updateMaterial(idx, { productoId: sku, descripcion: prod.nombre, unitCost: cost });
   };
 
   const onSelectProductForPieza = (idx: number, sku?: string) => {

@@ -35,11 +35,13 @@ import {
   AlertTriangle,
   CheckCircle,
   Package,
-  DollarSign
+  DollarSign,
+  Info
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QuoteLinesEditor, PiezaLine, MaterialLine } from "./quote-lines-editor";
 import { getTiposTrabajo } from "@/app/(protected)/cotizador/actions";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Client = { id: string; nombre: string; ruc: string };
 type CostingParams = Record<string, string | number>;
@@ -101,7 +103,7 @@ export function NewQuoteDialog({
   // Cálculo basado siempre en estados (materials / qty) que se sincronizan con líneas si existen
   const calculation = useMemo(() => {
     const labor = hourlyRate * hours;
-    const energy = kwhRate * hours; // Cambiado: ahora es por hora de operación
+    const energy = kwhRate * hours; 
     const depreciation = depr * hours;
     const toolingCost = tooling * qty;
     const rentCost = rent * hours;
@@ -129,15 +131,13 @@ export function NewQuoteDialog({
     setQty(1);
     setMaterials(0);
     setHours(0);
-    setMachineCategory(""); // Reset categoría
-    // kwh eliminado
+    setMachineCategory(""); 
     setNotes("");
     setPedidoReferencia("");
     setTipoTrabajoId("");
     setTipoTrabajoSubcategoriaId("");
     setPiezasLines([]);
     setMaterialesLines([]);
-    // Mantener la fecha de vigencia
   };
 
   const handleSubmit = () => {
@@ -149,9 +149,7 @@ export function NewQuoteDialog({
   formData.set("qty", String(qty));
   formData.set("materials", String(materials));
     formData.set("hours", String(hours));
-    if (machineCategory) formData.set("machineCategory", machineCategory); // Categoría de máquina
-    // kwh removed - obsolete field, energy cost now based on hours
-  // Campo forceMaterials eliminado: ya no se soporta forzado manual cuando existen líneas detalladas
+    if (machineCategory) formData.set("machineCategory", machineCategory);
   if (validUntil) formData.set("validUntil", validUntil);
     if (notes) formData.set("notes", notes);
   if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
@@ -292,7 +290,6 @@ export function NewQuoteDialog({
                 <span className="font-medium">Observaciones</span>
               </TabsTrigger>
             </TabsList>
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Contenido principal por pestañas */}
               <div className="lg:col-span-2 space-y-6">
@@ -637,11 +634,52 @@ export function NewQuoteDialog({
                     </div>
                     
                     <div className="space-y-3">
-                      {/* Materiales con opciones de forzado */}
+                      {/* Materiales con tooltip de detalle */}
                       <div className="p-3 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Materiales</span>
+                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                              Materiales
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                                    <Info className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-[320px] text-left break-words">
+                                  <div className="space-y-1">
+                                    {materialesLines.length > 0 ? (
+                                      <>
+                                        <div className="font-semibold">Detalle de materiales ({materialesLines.length}):</div>
+                                        <div className="space-y-0.5">
+                                          {materialesLines.slice(0, 6).map((m, i) => (
+                                            <div key={i} className="flex justify-between gap-2">
+                                              <span className="text-xs text-primary-foreground/90 truncate">
+                                                {(m.descripcion || m.productoId || "Material").toString()}
+                                                {" · "}{m.qty} x {formatCurrency(m.unitCost)}
+                                              </span>
+                                              <span className="text-xs font-semibold">{formatCurrency(m.qty * m.unitCost)}</span>
+                                            </div>
+                                          ))}
+                                          {materialesLines.length > 6 && (
+                                            <div className="text-[11px] opacity-90">… y {materialesLines.length - 6} más</div>
+                                          )}
+                                        </div>
+                                        <div className="pt-1 mt-1 border-t border-white/30 text-xs flex justify-between">
+                                          <span>Total materiales</span>
+                                          <span className="font-semibold">{formatCurrency(materials)}</span>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="text-xs">Monto manual o sin detalle.</div>
+                                        <div className="text-xs flex justify-between"><span>Total</span><span className="font-semibold">{formatCurrency(materials)}</span></div>
+                                      </>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </span>
                             {materialesLines.length > 0 && (
                               <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
                                 Detallado
@@ -656,7 +694,33 @@ export function NewQuoteDialog({
 
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
-                          <span className="text-slate-600 dark:text-slate-400">Mano de obra</span>
+                          <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                            Mano de obra
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                                  <Info className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[280px] text-left">
+                                <div className="text-xs space-y-1">
+                                  <div>
+                                    Tarifa: <span className="font-semibold">{formatCurrency(hourlyRate)}</span> / h
+                                  </div>
+                                  <div>
+                                    Horas: <span className="font-semibold">{hours.toFixed(2)}</span> h
+                                  </div>
+                                  <div className="pt-1 mt-1 border-t border-white/30 flex justify-between">
+                                    <span>Total mano de obra</span>
+                                    <span className="font-semibold">{formatCurrency(calculation.labor)}</span>
+                                  </div>
+                                  {selectedCategory && (
+                                    <div className="opacity-90">Categoría: <span className="font-medium">{selectedCategory.categoria}</span></div>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </span>
                           <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.labor)}</span>
                         </div>
                         <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -685,7 +749,40 @@ export function NewQuoteDialog({
                           <span className="text-blue-900 dark:text-blue-100">{formatCurrency(calculation.direct)}</span>
                         </div>
                         <div className="flex justify-between p-2 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
-                          <span className="text-slate-600 dark:text-slate-400">Gastos indirectos</span>
+                          <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                            Gastos indirectos
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                                  <Info className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[320px] text-left">
+                                <div className="text-xs space-y-1">
+                                  <div>
+                                    Tasa GI: <span className="font-semibold">{(gi * 100).toFixed(1)}%</span>
+                                  </div>
+                                  <div>Base (costo directo):</div>
+                                  <div className="space-y-0.5">
+                                    <div className="flex justify-between"><span>Materiales</span><span className="font-medium">{formatCurrency(materials)}</span></div>
+                                    <div className="flex justify-between"><span>Mano de obra</span><span className="font-medium">{formatCurrency(calculation.labor)}</span></div>
+                                    <div className="flex justify-between"><span>Energía</span><span className="font-medium">{formatCurrency(calculation.energy)}</span></div>
+                                    <div className="flex justify-between"><span>Depreciación</span><span className="font-medium">{formatCurrency(calculation.depreciation)}</span></div>
+                                    <div className="flex justify-between"><span>Herramientas</span><span className="font-medium">{formatCurrency(calculation.toolingCost)}</span></div>
+                                    <div className="flex justify-between"><span>Alquiler</span><span className="font-medium">{formatCurrency(calculation.rentCost)}</span></div>
+                                  </div>
+                                  <div className="pt-1 mt-1 border-t border-white/30 flex justify-between">
+                                    <span>Total directo</span>
+                                    <span className="font-semibold">{formatCurrency(calculation.direct)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>GI calculado</span>
+                                    <span className="font-semibold">{formatCurrency(calculation.giAmount)}</span>
+                                  </div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </span>
                           <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(calculation.giAmount)}</span>
                         </div>
                         <div className="flex justify-between p-3 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg border border-blue-300 dark:border-blue-700 font-semibold shadow-sm">

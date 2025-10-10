@@ -24,8 +24,10 @@ import {
   TrendingUp,
   BarChart3,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Info
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusBadge, EstadoOT } from "@/components/ot/status-badge";
 import { PriorityBadge, Prioridad } from "@/components/ot/priority-badge";
 import { AcabadoDisplay } from "@/components/ot/acabado-badge";
@@ -103,6 +105,24 @@ export default function OTDetailClient(props: {
     hecha: Number(p.qtyHecha || 0),
     pend: Math.max(Number(p.qtyPlan || 0) - Number(p.qtyHecha || 0), 0),
   })), [ot.piezas]);
+
+  // Datos auxiliares para tooltips de costos
+  const totalHoras = useMemo(() => (ot.partesProduccion || []).reduce((s, pp) => s + Number(pp.horas || 0), 0), [ot.partesProduccion]);
+  const totalPiezasHechas = useMemo(() => piezasRows.reduce((s, r) => s + Number(r.hecha || 0), 0), [piezasRows]);
+  const cp = (ot.costParams ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => Number(v ?? 0) || 0;
+  const hourlyRate = num(cp.hourlyRate);
+  const kwhRate = num(cp.kwhRate);
+  const deprPerHour = num(cp.deprPerHour);
+  const rentPerHour = num(cp.rentPerHour);
+  const toolingPerPiece = num(cp.toolingPerPiece);
+  const giRate = num(cp.gi);
+  const energyCost = kwhRate * totalHoras;
+  const depreciationCost = deprPerHour * totalHoras;
+  const rentCost = rentPerHour * totalHoras;
+  const toolingCost = toolingPerPiece * totalPiezasHechas;
+  const directBase = num(ot.costMaterials) + num(ot.costLabor) + energyCost + depreciationCost + toolingCost + rentCost;
+  const giCalc = directBase * giRate;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -335,7 +355,51 @@ export default function OTDetailClient(props: {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Package className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm font-medium text-slate-600">Materiales</span>
+                  <span className="text-sm font-medium text-slate-600 flex items-center gap-1">
+                    Materiales
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-slate-500 hover:text-slate-700">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[340px] text-left">
+                        <div className="text-xs space-y-1">
+                          {matsPlan.length > 0 ? (
+                            <>
+                              <div className="font-semibold">Materiales planificados ({matsPlan.length})</div>
+                              <div className="space-y-0.5">
+                                {matsPlan.slice(0,6).map((m) => (
+                                  <div key={m.sku} className="flex justify-between gap-2">
+                                    <span className="truncate">{m.nombre}</span>
+                                    <span className="font-medium">Plan {m.plan} · Emit {m.emit}</span>
+                                  </div>
+                                ))}
+                                {matsPlan.length > 6 && (
+                                  <div className="opacity-80">… y {matsPlan.length - 6} más</div>
+                                )}
+                              </div>
+                              <div className="pt-1 mt-1 border-t border-white/30 flex justify-between">
+                                <span>Total (real)</span>
+                                <span className="font-semibold">{ot.costMaterials ? `${currency} ${ot.costMaterials.toFixed(2)}` : '—'}</span>
+                              </div>
+                              {ot.costQuoteMaterials && (
+                                <div className="flex justify-between">
+                                  <span>Estimado</span>
+                                  <span className="font-semibold">{currency} {ot.costQuoteMaterials.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div className="opacity-90">Sin detalle de líneas. Se muestra total acumulado.</div>
+                              <div className="flex justify-between"><span>Total</span><span className="font-semibold">{ot.costMaterials ? `${currency} ${ot.costMaterials.toFixed(2)}` : '—'}</span></div>
+                            </>
+                          )}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
                 </div>
                 <p className="text-2xl font-bold text-blue-600">
                   {ot.costMaterials ? `${currency} ${ot.costMaterials.toFixed(2)}` : '—'}
@@ -350,7 +414,32 @@ export default function OTDetailClient(props: {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-green-600" />
-                  <span className="text-sm font-medium text-slate-600">Mano de obra</span>
+                  <span className="text-sm font-medium text-slate-600 flex items-center gap-1">
+                    Mano de obra
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-slate-500 hover:text-slate-700">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[300px] text-left">
+                        <div className="text-xs space-y-1">
+                          <div>Horas registradas: <span className="font-semibold">{totalHoras.toFixed(2)}</span> h</div>
+                          <div>Tarifa por hora: <span className="font-semibold">{hourlyRate > 0 ? `${currency} ${hourlyRate.toFixed(2)}` : '—'}</span></div>
+                          <div className="pt-1 mt-1 border-t border-white/30 flex justify-between">
+                            <span>Total MO (real)</span>
+                            <span className="font-semibold">{ot.costLabor ? `${currency} ${ot.costLabor.toFixed(2)}` : '—'}</span>
+                          </div>
+                          {ot.costQuoteLabor && (
+                            <div className="flex justify-between">
+                              <span>Estimado</span>
+                              <span className="font-semibold">{currency} {ot.costQuoteLabor.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
                 </div>
                 <p className="text-2xl font-bold text-green-600">
                   {ot.costLabor ? `${currency} ${ot.costLabor.toFixed(2)}` : '—'}
@@ -365,7 +454,38 @@ export default function OTDetailClient(props: {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-orange-600" />
-                  <span className="text-sm font-medium text-slate-600">Overheads</span>
+                  <span className="text-sm font-medium text-slate-600 flex items-center gap-1">
+                    Overheads
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-slate-500 hover:text-slate-700">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[340px] text-left">
+                        <div className="text-xs space-y-1">
+                          <div>Tasa GI: <span className="font-semibold">{(giRate * 100).toFixed(1)}%</span></div>
+                          <div>Base (costo directo):</div>
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between"><span>Materiales</span><span className="font-medium">{ot.costMaterials ? `${currency} ${ot.costMaterials.toFixed(2)}` : '—'}</span></div>
+                            <div className="flex justify-between"><span>Mano de obra</span><span className="font-medium">{ot.costLabor ? `${currency} ${ot.costLabor.toFixed(2)}` : '—'}</span></div>
+                            <div className="flex justify-between"><span>Energía</span><span className="font-medium">{energyCost > 0 ? `${currency} ${energyCost.toFixed(2)}` : '—'}</span></div>
+                            <div className="flex justify-between"><span>Depreciación</span><span className="font-medium">{depreciationCost > 0 ? `${currency} ${depreciationCost.toFixed(2)}` : '—'}</span></div>
+                            <div className="flex justify-between"><span>Herramientas</span><span className="font-medium">{toolingCost > 0 ? `${currency} ${toolingCost.toFixed(2)}` : '—'}</span></div>
+                            <div className="flex justify-between"><span>Alquiler</span><span className="font-medium">{rentCost > 0 ? `${currency} ${rentCost.toFixed(2)}` : '—'}</span></div>
+                          </div>
+                          <div className="pt-1 mt-1 border-t border-white/30 flex justify-between">
+                            <span>Total directo</span>
+                            <span className="font-semibold">{`${currency} ${directBase.toFixed(2)}`}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>GI calculado</span>
+                            <span className="font-semibold">{`${currency} ${giCalc.toFixed(2)}`}</span>
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
                 </div>
                 <p className="text-2xl font-bold text-orange-600">
                   {ot.costOverheads ? `${currency} ${ot.costOverheads.toFixed(2)}` : '—'}
