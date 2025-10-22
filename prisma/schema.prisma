@@ -90,6 +90,7 @@ model Cliente {
 
   cotizaciones     Cotizacion[]
   ordenesTrabajo   OrdenTrabajo[]
+  reclamos         Reclamo[]
 }
 
 enum ParamType {
@@ -412,6 +413,8 @@ model OrdenTrabajo {
   partesProduccion ParteProduccion[]
   solicitudesCompra SolicitudCompra[]
   maquinaEventos   MaquinaEvento[]
+  reclamo          Reclamo?
+  reclamosReferencia Reclamo[]   @relation("ReclamoOTReferencia")
 
   @@index([estado, creadaEn])
   @@index([creadaEn])
@@ -645,4 +648,67 @@ model MaquinaMantenimiento {
 
   @@index([maquinaId])
   @@index([estado])
+}
+
+enum TipoReclamo {
+  OT_ATENDIDA     // Reclamo sobre una OT ya atendida
+  NUEVO_RECLAMO   // Nuevo reclamo por otros motivos
+}
+
+enum TipoResolucion {
+  OT_PENDIENTE    // Regresar la OT a pendiente para rectificación
+  OT_NUEVA        // Crear nueva OT
+  REEMBOLSO       // Reembolso al cliente
+  AJUSTE_STOCK    // Ajuste en inventario
+  OTRO            // Otra resolución
+}
+
+enum EstadoReclamo {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CONVERTED_TO_OT
+}
+
+enum PrioridadReclamo {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+model Reclamo {
+  id            String          @id @default(uuid())
+  codigo        String?         @unique // Código único automático REC-2024-001
+  clienteId     String
+  titulo        String
+  descripcion   String
+  prioridad     PrioridadReclamo @default(MEDIA)
+  estado        EstadoReclamo    @default(PENDING)
+  categoria     String?
+  archivos      String[]        // URLs de archivos adjuntos
+  
+  // Tipo de reclamo
+  tipoReclamo   TipoReclamo
+  
+  // Si es reclamo sobre OT atendida
+  otReferenciaId String?        // ID de la OT original
+  
+  // Resolución cuando se aprueba
+  tipoResolucion TipoResolucion?
+  
+  // Si se convierte en OT (para rectificación o nueva)
+  otId          String?         @unique
+  
+  cliente       Cliente         @relation(fields: [clienteId], references: [id])
+  ot            OrdenTrabajo?   @relation(fields: [otId], references: [id])
+  otReferencia  OrdenTrabajo?   @relation("ReclamoOTReferencia", fields: [otReferenciaId], references: [id])
+  
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  @@index([clienteId])
+  @@index([estado])
+  @@index([otReferenciaId])
 }

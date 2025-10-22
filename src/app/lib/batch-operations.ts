@@ -190,7 +190,6 @@ export async function performMaintenanceTasks() {
     // Actualizar estadísticas de la base de datos (PostgreSQL)
     await prisma.$executeRaw`ANALYZE`;
     
-    console.log('Mantenimiento completado:', cleanupResult);
     return cleanupResult;
   } catch (error) {
     console.error('Error en mantenimiento:', error);

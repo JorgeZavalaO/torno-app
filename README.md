@@ -495,8 +495,44 @@ Notas importantes
 
 ## Pruebas
 
-- Ejemplo inicial en `__tests__/machines/queries.test.ts` (Jest).
-- Si no hay script `test`, puedes ejecutar con `npx jest` previa configuración (ts-jest o transpilar). Pendiente completar configuración según necesidades del proyecto.
+La base de pruebas usa Jest 30 con TypeScript y React 19.
+
+- Transformación: `@swc/jest` para `ts/tsx` (runtime automático de React).
+- Entorno: `node` por defecto; tests de UI/Hooks usan `@jest-environment jsdom` por archivo.
+- Match: ejecuta `**/*.test.(ts|tsx)` dentro de `__tests__` y en el repo.
+- Setup global: `jest.setup.ts` añade `@testing-library/jest-dom` y mocks de Next (`next/cache`, `next/headers`) y un alias para `server-only`.
+- Aliases: `@/*` mapea a `src/*` (ver `jest.config.ts`).
+
+Comandos:
+
+```powershell
+pnpm test           # ejecutar toda la suite
+pnpm test:watch     # modo watch
+pnpm test:coverage  # cobertura
+```
+
+Documentación ampliada:
+- Guía completa de testing: `docs/TESTING.md`
+
+## Documentación
+
+Consolidada y simplificada:
+- Parámetros del sistema: `docs/PARAMETROS.md`
+- Catálogos del sistema: `docs/CATALOGOS.md`
+- Arquitectura de costos (promedio ponderado, OT): `docs/ARQUITECTURA-COSTOS.md`
+
+Historial de cambios: `CHANGELOG.md`
+
+Cobertura actual (referencial) incluye:
+- Utilidades puras (`src/lib`, `src/app/lib`): formateo, enums, RBAC, guards, auth.
+- Queries/acciones: compras (pendientes/OC), categorías de máquinas.
+- Hooks: `use-debounced`, `use-mobile` (con mocks de `matchMedia`).
+- Componentes UI puros: `Button`, `Input`, `Pagination`, `LoadingSpinner/LoadingButton`, `NotificationBubble`.
+
+Notas:
+- En tests que importan íconos de `lucide-react`, se mockean para evitar dependencias ESM en Jest.
+- Para cálculos dependientes de fechas (p.ej. últimas 4 semanas), los tests congelan el tiempo con `jest.setSystemTime`.
+- Si agregas componentes nuevos en `src/components/ui`, crea un `.test.tsx` en `__tests__/components/ui` con `@jest-environment jsdom`.
 
 ## Despliegue
 

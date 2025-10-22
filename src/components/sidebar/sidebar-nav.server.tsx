@@ -9,10 +9,11 @@ const allNavItems: (NavItem & { requiredPerm?: string; group?: string })[] = [
   { href: "/dashboard", label: "Inicio", icon: "Home", group: "dashboard", description: "Panel principal de control" },
   { href: "/ot", label: "Órdenes de Trabajo", icon: "ClipboardList", requiredPerm: "workorders.read", group: "production", description: "Gestión de órdenes de trabajo" },
   { href: "/programacion", label: "Programación", icon: "CalendarDays", requiredPerm: "workorders.read", group: "production", description: "Calendario de OTs" },
-  { href: "/control", label: "Operaciones (Control)", icon: "Activity", requiredPerm: "production.read", group: "production", description: "Monitoreo operativo en tiempo real" },
+  { href: "/control", label: "Operaciones (Control)", icon: "Activity", requiredPerm: "workorders.read", group: "production", description: "Monitoreo operativo en tiempo real" },
   { href: "/maquinas", label: "Máquinas", icon: "Cpu", requiredPerm: "machines.read", group: "production", description: "Estado y configuración de máquinas" },
   { href: "/cotizador", label: "Cotizador", icon: "Calculator", requiredPerm: "quotes.read", group: "sales", description: "Herramienta de cotización", isNew: true },
   { href: "/clientes", label: "Clientes", icon: "Users", requiredPerm: "clients.read", group: "sales", description: "Base de datos de clientes" },
+  { href: "/reclamos", label: "Reclamos", icon: "MessageSquareWarning", requiredPerm: "reclamos.read", group: "sales", description: "Gestión de reclamos de clientes" },
   { href: "/inventario", label: "Almacén", icon: "Archive", requiredPerm: "inventory.read", group: "purchases", description: "Control de stock y materiales" },
   { href: "/compras", label: "Compras", icon: "ShoppingCart", requiredPerm: "purchases.read", group: "purchases", description: "Gestión de proveedores y compras" },
   // Consolidamos en un único dashboard de administración

@@ -41,8 +41,15 @@ const mockPrisma = {
 };
 
 describe('Machines Queries', () => {
+  const fixedNow = new Date('2025-09-12T00:00:00Z');
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(fixedNow);
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe('getMachinesCached', () => {

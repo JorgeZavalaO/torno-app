@@ -63,9 +63,6 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
     userId: fd.get("userId"),
     items: fd.get("items"),
   };
-  if (process.env.NODE_ENV !== "production") {
-    console.debug("Raw FormData:", rawData);
-  }
 
   // Validación básica primero
   const basicParsed = SimpleSchema.safeParse(rawData);
@@ -123,8 +120,8 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
           horas: Number(m.horas)
         }));
       }
-    } catch (e) {
-      console.warn("Error parsing maquinas:", e);
+    } catch {
+      // Error parsing maquinas - continue without maquinas
     }
   }
 
@@ -194,13 +191,9 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
           cantidad: Number(item.cantidad)
         }));
       }
-    } catch (e) {
-      console.warn("Error parsing items:", e);
+    } catch {
+      // Error parsing items - continue without items
     }
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    console.debug("Processed data:", { otId, horas, maquina, maquinaId, maquinas, nota, userId, userId2, items });
   }
 
   // Verificar que hay algo que registrar
@@ -294,8 +287,8 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
         // Invalida también vistas de máquinas
         revalidatePath("/maquinas", "page");
       }
-    } catch (err) {
-      console.warn("No se pudo crear MaquinaEvento:", err);
+    } catch {
+      // No se pudo crear MaquinaEvento - continue
     }
   }
   if (items.length) {

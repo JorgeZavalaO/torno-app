@@ -89,7 +89,6 @@ async function ensureDefaults() {
     const missing = DEFAULTS.filter(d => !existingKeys.has(d.key));
     
     if (missing.length > 0) {
-      console.log(`Creating ${missing.length} missing costing parameters`);
       
       await prisma.costingParam.createMany({
         data: missing.map(m => ({

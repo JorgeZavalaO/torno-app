@@ -109,13 +109,6 @@ export const getCatalogoItem = async (tipo: TipoCatalogo, codigo: string): Promi
  */
 export const getCatalogoOptions = async (tipo: TipoCatalogo) => {
   const items = await getCatalogoByTipo(tipo);
-  // Debug logging to verify items returned from DB
-  try {
-    console.log(`[getCatalogoOptions] tipo=${tipo} -> count=${items.length} items:`, items.map(i => ({ codigo: i.codigo, nombre: i.nombre })));
-  } catch (e) {
-    // ignore logging errors
-    console.log('[getCatalogoOptions] logging error', e);
-  }
   return items.map(item => ({
     value: item.codigo,
     label: item.nombre,

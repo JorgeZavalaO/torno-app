@@ -102,6 +102,23 @@ export async function assertCanWriteProduction() {
   return u;
 }
 
+// Reclamos
+export async function assertCanReadReclamos() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "reclamos.read")) throw new Error("No autorizado");
+  return u;
+}
+export async function assertCanWriteReclamos() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "reclamos.write")) throw new Error("No autorizado");
+  return u;
+}
+export async function assertCanApproveReclamos() {
+  const u = await assertAuthenticated();
+  if (!await userHasPermission(u.email, "reclamos.approve")) throw new Error("No autorizado");
+  return u;
+}
+
 // Perfil de usuario (lectura/escritura propia)
 export async function assertCanReadProfile() {
   const u = await assertAuthenticated();

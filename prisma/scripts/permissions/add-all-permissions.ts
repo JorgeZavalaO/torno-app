@@ -51,6 +51,11 @@ async function main() {
     // Producción
     { code: "production.read", description: "Leer producción" },
     { code: "production.write", description: "Crear, editar y eliminar registros de producción" },
+
+    // Reclamos
+    { code: "reclamos.read", description: "Leer reclamos" },
+    { code: "reclamos.write", description: "Crear, editar y eliminar reclamos" },
+    { code: "reclamos.approve", description: "Aprobar o rechazar reclamos" },
   ];
 
   // Crear o actualizar permisos

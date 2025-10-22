@@ -518,7 +518,6 @@ export async function createOTFromQuote(quoteId: string): Promise<Result> {
     rp(`/ot/${existingOt.id}`);
     rp(`/cotizador/${quoteId}`);
     bumpQuotesCache();
-  console.log(`[createOTFromQuote] OT ya existente para cotizacion ${quoteId}: ${existingOt.id} / ${existingOt.codigo}`);
     return { ok: true, id: existingOt.id, message: `OT ${existingOt.codigo} ya existente` };
   }
 
@@ -626,7 +625,6 @@ export async function createOTFromQuote(quoteId: string): Promise<Result> {
         await tx.oTMaterial.createMany({ data: matToCreate });
       }
 
-  console.log(`[createOTFromQuote] OT creada: ${ot.id} / ${ot.codigo} para cotizacion ${quoteId}`);
   return ot;
   });
 

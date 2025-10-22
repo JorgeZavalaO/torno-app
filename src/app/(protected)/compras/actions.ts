@@ -488,8 +488,6 @@ export async function receiveOC(fd: FormData): Promise<Result> {
   // Permitir recepción mientras la OC esté OPEN o PARTIAL (puede haber recepciones sucesivas)
   if (!(oc.estado === "OPEN" || oc.estado === "PARTIAL")) return { ok: false, message: "La OC no está abierta para recepción" };
 
-  console.log("[receiveOC] inicio", { ocId, estado: oc.estado, facturaUrl, rawItems: items });
-
   // Calcular cantidades pedidas por producto y recibidas previas por producto
   const orderedBySku = oc.items.reduce<Record<string, number>>((acc, it) => {
     acc[it.productoId] = (acc[it.productoId] ?? 0) + Number(it.cantidad);
@@ -507,7 +505,6 @@ export async function receiveOC(fd: FormData): Promise<Result> {
   const pendingBySku = Object.fromEntries(
     Object.entries(orderedBySku).map(([sku, total]) => [sku, Number(total) - Number(receivedBySku[sku] ?? 0)])
   );
-  console.log("[receiveOC] computed", { orderedBySku, receivedBySku, pendingBySku });
 
   // Resolver recepción total vs parcial
   const isPartialPayload = Array.isArray(items) && items.length > 0;
@@ -590,7 +587,6 @@ export async function receiveOC(fd: FormData): Promise<Result> {
           data: { costo: new Prisma.Decimal(avgCost) } 
         });
         pendingBySku[sku] = pending - qty;
-    console.log("[receiveOC] parcial item", { sku, qty, pendingAfter: pendingBySku[sku] });
       }
     }
 
@@ -609,7 +605,6 @@ export async function receiveOC(fd: FormData): Promise<Result> {
         fecha: new Date(),
       },
     });
-  console.log("[receiveOC] final", { finalEstado, totalPendiente, totalPedido });
   });
 
   bump();

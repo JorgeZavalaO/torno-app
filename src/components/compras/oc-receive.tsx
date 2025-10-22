@@ -120,7 +120,7 @@ export function OCReceive({ order, onReceive }: { order: OCRow; onReceive: (payl
               try {
                 if (!hasAnyQty) {
                   toast.message("Recepción total (pendiente) enviada", { description: `OC ${order.codigo}` });
-                  console.log('[OCReceive] submit total', { ocId: order.id, codigo: order.codigo });
+
                   const r = await onReceive({});
                   if (r.ok) {
                     toast.success(r.message || "Recepción registrada");
@@ -132,7 +132,7 @@ export function OCReceive({ order, onReceive }: { order: OCRow; onReceive: (payl
                     .filter(([, v]) => Number(v) > 0)
                     .map(([productoId, cantidad]) => ({ productoId, cantidad: Number(cantidad) }));
                   toast.message("Recepción parcial enviada", { description: `${items.length} items` });
-                  console.log('[OCReceive] submit parcial', { ocId: order.id, codigo: order.codigo, items });
+
                   const r = await onReceive({ items });
                   if (r.ok) {
                     toast.success(r.message || "Recepción registrada");

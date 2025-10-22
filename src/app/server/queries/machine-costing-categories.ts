@@ -43,7 +43,6 @@ async function ensureDefaultCategories() {
     );
 
     if (missing.length > 0) {
-      console.log(`Creating ${missing.length} default machine costing categories`);
       await prisma.machineCostingCategory.createMany({
         data: missing,
         skipDuplicates: true,
