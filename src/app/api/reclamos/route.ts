@@ -68,6 +68,9 @@ export async function POST(request: Request) {
         descripcion: validated.descripcion,
         prioridad: validated.prioridad,
         categoria: validated.categoria,
+        // 'archivos' es un campo obligatorio (String[]) en el modelo Prisma.
+        // Si no se proporcionan archivos, crear con arreglo vacío para evitar errores de BD.
+        archivos: [],
         tipoReclamo: validated.tipoReclamo,
         otReferenciaId: validated.otReferenciaId,
         estado: 'PENDING',

@@ -4,6 +4,31 @@ Formato basado en Keep a Changelog y SemVer.
 
 ## [Unreleased]
 
+### Added
+- Endpoint `/api/uploads/reclamos` para cargar archivos adjuntos con integración a Vercel Blob Storage.
+- Validación de archivos en cliente (2MB máximo) y servidor (MIME types: JPEG, PNG, WebP, PDF).
+- Mejoras en UX/UI del diálogo "Crear Nuevo Reclamo":
+  - Área de arrastrar y soltar (drag-and-drop) para archivos.
+  - Lista de archivos con iconos y tamaño en MB.
+  - Botones para eliminar archivos individuales (X icon).
+  - Mensajes de validación inline para archivos.
+  - Character counters para título (200) y descripción (1000).
+  - Spinner y botones deshabilitados durante envío.
+  - Mejor organización visual con secciones claras.
+- **Refactorización completa del módulo de reclamos**: Separación del componente monolítico `reclamos.client.tsx` (1100+ líneas) en componentes modulares reutilizables.
+- **Componentes nuevos creados**:
+  - `CreateReclamoDialog`: Diálogo de creación con validación, subida de archivos y selects con búsqueda.
+  - `ApproveReclamoDialog`: Diálogo de aprobación con tipos de resolución.
+  - `ReclamoDetailDialog`: Vista detallada con exportación a PDF.
+  - `ReclamosFilters`: Filtros y búsqueda con selects mejorados.
+  - `ReclamosList`: Lista de reclamos con acciones de aprobación/rechazo.
+  - `RecentOTs`: Panel de órdenes de trabajo recientes.
+- **Funcionalidad de búsqueda añadida**: Selects de cliente y OT ahora incluyen búsqueda con Command component (filtrado en tiempo real).
+
+### Fixed
+- Creación de reclamo fallaba por campo `archivos` requerido en el modelo Prisma; ahora se crea con arreglo vacío por defecto para evitar error 500.
+
+
 ## [0.9.1] - 2025-10-22
 ### Changed
 - Documentación de pruebas unificada: `docs/TESTING.md` ahora incluye configuración de integración, matriz de requisitos, casos por módulo y datos de prueba.
