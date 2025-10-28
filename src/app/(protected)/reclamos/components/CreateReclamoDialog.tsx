@@ -22,7 +22,10 @@ interface OT {
   codigo: string;
   estado: string;
   prioridad: string;
+  // Backend puede enviar estas dos variantes de cliente
   cliente?: { nombre: string } | null;
+  clienteId?: string | null;
+  clienteNombre?: string | null;
   createdAt: string;
 }
 
@@ -68,6 +71,8 @@ export default function CreateReclamoDialog({
   const [errors, setErrors] = useState<{ clienteId?: string; titulo?: string; descripcion?: string; otReferenciaId?: string }>({});
   const [clienteOpen, setClienteOpen] = useState(false);
   const [otOpen, setOtOpen] = useState(false);
+  const [filteredOts, setFilteredOts] = useState<OT[]>([]);
+  const [loadingOts, setLoadingOts] = useState(false);
 
   const TITLE_MAX = 200;
   const DESC_MAX = 1000;
@@ -90,6 +95,33 @@ export default function CreateReclamoDialog({
       setSubmitting(false);
     }
   }, [open]);
+
+  // Cargar OTs por cliente cuando se seleccione uno
+  useEffect(() => {
+    const loadByClient = async (clienteId: string) => {
+      try {
+        setLoadingOts(true);
+        const params = new URLSearchParams({ page: '1', pageSize: '50', clienteId });
+        const res = await fetch(`/api/ots?${params.toString()}`);
+        if (!res.ok) throw new Error('Error al cargar OTs del cliente');
+        const data = await res.json();
+        const rows: OT[] = (data?.rows || []).filter((ot: OT) => ot.id && ot.codigo);
+        setFilteredOts(rows);
+      } catch {
+        setFilteredOts([]);
+      } finally {
+        setLoadingOts(false);
+      }
+    };
+
+    if (open && createForm.clienteId) {
+      // Al cambiar cliente, limpiar OT seleccionada y cargar listado
+      setCreateForm(prev => ({ ...prev, otReferenciaId: '' }));
+      loadByClient(createForm.clienteId);
+    } else {
+      setFilteredOts([]);
+    }
+  }, [open, createForm.clienteId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -142,7 +174,7 @@ export default function CreateReclamoDialog({
   };
 
   const selectedCliente = clientes.find(c => c.id === createForm.clienteId);
-  const selectedOT = ots.find(ot => ot.id === createForm.otReferenciaId);
+  const selectedOT = (filteredOts.length ? filteredOts : ots).find(ot => ot.id === createForm.otReferenciaId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -224,21 +256,28 @@ export default function CreateReclamoDialog({
                     role="combobox"
                     aria-expanded={otOpen}
                     className="w-full justify-between"
+                    disabled={!createForm.clienteId}
                   >
-                    {selectedOT ? `${selectedOT.codigo} - ${selectedOT.cliente?.nombre}` : "Selecciona OT..."}
+                    {selectedOT
+                      ? `${selectedOT.codigo} - ${selectedOT.cliente?.nombre || selectedOT.clienteNombre || ''}`
+                      : createForm.clienteId ? (loadingOts ? 'Cargando OTs…' : 'Selecciona OT...') : 'Selecciona cliente primero'}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                   <Command>
                     <CommandInput placeholder="Buscar OT..." />
-                    <CommandEmpty>No se encontraron OTs.</CommandEmpty>
+                    <CommandEmpty>
+                      {createForm.clienteId ? (loadingOts ? 'Cargando OTs…' : 'No se encontraron OTs para el cliente') : 'Selecciona un cliente primero'}
+                    </CommandEmpty>
                     <CommandGroup>
                       <CommandList className="max-h-60">
-                        {ots.filter(ot => ot.id && ot.codigo && ot.cliente?.nombre).map((ot) => (
+                        {(createForm.clienteId ? filteredOts : ots)
+                          .filter(ot => ot.id && ot.codigo)
+                          .map((ot) => (
                           <CommandItem
                             key={ot.id}
-                            value={`${ot.codigo} ${ot.cliente?.nombre}`}
+                            value={`${ot.codigo} ${(ot.cliente?.nombre || ot.clienteNombre || '')}`}
                             onSelect={() => {
                               setCreateForm(prev => ({ ...prev, otReferenciaId: ot.id }));
                               setOtOpen(false);
@@ -250,7 +289,7 @@ export default function CreateReclamoDialog({
                                 createForm.otReferenciaId === ot.id ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            {ot.codigo} - {ot.cliente?.nombre}
+                            {ot.codigo} - {(ot.cliente?.nombre || ot.clienteNombre || '')}
                           </CommandItem>
                         ))}
                       </CommandList>
