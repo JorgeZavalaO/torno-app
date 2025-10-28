@@ -293,3 +293,86 @@ async function resetTiposTrabajo() {
 
   revalidatePath("/admin/catalogos");
 }
+export async function clearTestData(): Promise<Result> {
+  try {
+    await assertCanWriteCosting();
+
+    console.log("🧹 Iniciando limpieza de datos de prueba...");
+
+    // Eliminar datos en orden inverso de dependencias para evitar errores de foreign key
+
+    // 1. Reclamos (depende de OT y Cliente)
+    console.log("Eliminando reclamos...");
+    await prisma.reclamo.deleteMany();
+
+    // 2. Partes de producción (depende de OT, Usuario, Pieza)
+    console.log("Eliminando partes de producción...");
+    await prisma.parteProduccion.deleteMany();
+
+    // 3. Eventos de máquina (depende de OT, Usuario, Máquina)
+    console.log("Eliminando eventos de máquina...");
+    await prisma.maquinaEvento.deleteMany();
+
+    // 4. Solicitudes de compra y órdenes de compra (depende de OT, Usuario, Proveedor)
+    console.log("Eliminando solicitudes y órdenes de compra...");
+    await prisma.oCItem.deleteMany();
+    await prisma.sCItem.deleteMany();
+    await prisma.ordenCompra.deleteMany();
+    await prisma.solicitudCompra.deleteMany();
+
+    // 5. Órdenes de trabajo y relacionados (depende de Cliente, Cotización, Usuario)
+    console.log("Eliminando órdenes de trabajo...");
+    await prisma.oTMaterial.deleteMany();
+    await prisma.oTPieza.deleteMany();
+    await prisma.ordenTrabajo.deleteMany();
+
+    // 6. Cotizaciones (depende de Cliente)
+    console.log("Eliminando cotizaciones...");
+    await prisma.cotizacion.deleteMany();
+
+    // 7. Clientes
+    console.log("Eliminando clientes...");
+    await prisma.cliente.deleteMany();
+
+    // 8. Productos y movimientos (depende de Proveedor)
+    console.log("Eliminando productos y movimientos...");
+    await prisma.movimiento.deleteMany();
+    await prisma.productoCodigoEquivalente.deleteMany();
+    await prisma.producto.deleteMany();
+
+    // 9. Proveedores
+    console.log("Eliminando proveedores...");
+    await prisma.proveedor.deleteMany();
+
+    // 10. Máquinas y mantenimiento
+    console.log("Eliminando máquinas...");
+    await prisma.maquinaMantenimiento.deleteMany();
+    await prisma.maquina.deleteMany();
+
+    // 11. Usuarios y autenticación (depende de Roles)
+    console.log("Eliminando usuarios y autenticación...");
+    await prisma.userRole.deleteMany();
+    await prisma.userProfile.deleteMany();
+    await prisma.account.deleteMany();
+    await prisma.session.deleteMany();
+    await prisma.verificationToken.deleteMany();
+    await prisma.user.deleteMany();
+
+    // 12. Roles y permisos
+    console.log("Eliminando roles y permisos...");
+    await prisma.rolePermission.deleteMany();
+    await prisma.role.deleteMany();
+    await prisma.permission.deleteMany();
+
+    // NOTA: NO eliminamos:
+    // - ConfiguracionCatalogo (datos del seed)
+    // - CostingParam (parámetros de costeo)
+
+    console.log("✅ Limpieza de datos de prueba completada");
+    revalidatePath("/admin/catalogos");
+    return { ok: true, message: "Todos los datos de prueba han sido eliminados. Los catálogos y parámetros de costeo se mantienen intactos." };
+  } catch (error) {
+    console.error("Error en clearTestData:", error);
+    return { ok: false, message: "Error interno del servidor durante la limpieza" };
+  }
+}

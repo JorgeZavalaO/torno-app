@@ -23,6 +23,7 @@ interface Actions {
   deleteCatalogoItem: (id: string) => Promise<{ ok: boolean; message?: string }>;
   reorderCatalogo: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   resetCatalogoTipo: (tipo: TipoCatalogo) => Promise<{ ok: boolean; message?: string }>;
+  clearTestData: () => Promise<{ ok: boolean; message?: string }>;
 }
 
 // Mapeo de tipos a nombres amigables y organizados por categoría
@@ -235,6 +236,43 @@ export function CatalogosClient({ catalogosByTipo, canWrite, actions }: Catalogo
 
   return (
     <div className="space-y-6">
+      {/* Botón para limpiar datos de prueba */}
+      {canWrite && (
+        <div className="flex justify-end">
+          <Button
+            variant="destructive"
+            onClick={async () => {
+              if (!actions?.clearTestData) {
+                toast.error('Acción de limpieza no disponible');
+                return;
+              }
+              if (!confirm("¿Estás seguro de que quieres eliminar TODOS los datos de prueba? Esta acción no se puede deshacer y eliminará usuarios, clientes, productos, órdenes de trabajo, cotizaciones, etc. Solo mantendrá la configuración de catálogos.")) {
+                return;
+              }
+              startTransition(async () => {
+                const clearFn = actions?.clearTestData;
+                if (!clearFn) {
+                  toast.error('Acción de limpieza no disponible');
+                  return;
+                }
+                const result = await clearFn();
+                if (result.ok) {
+                  toast.success(result.message || "Datos de prueba eliminados correctamente");
+                  // Recargar la página para reflejar los cambios
+                  window.location.reload();
+                } else {
+                  toast.error(result.message || "Error al eliminar datos de prueba");
+                }
+              });
+            }}
+            disabled={pending}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            🧹 Limpiar Datos de Prueba
+          </Button>
+        </div>
+      )}
+
       <Tabs defaultValue={Object.keys(categorias)[0]} className="w-full">
         <TabsList className="grid w-full grid-cols-5">
           {Object.keys(categorias).map((categoria) => (

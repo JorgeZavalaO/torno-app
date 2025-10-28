@@ -1,7 +1,7 @@
 import { getCatalogosByTipoAdmin } from "@/app/server/services/catalogos";
 import { assertCanReadCatalogos, assertCanWriteCatalogos } from "@/app/lib/guards";
 import { CatalogosClient } from "./catalogos.client";
-import { upsertCatalogoItem, deleteCatalogoItem, reorderCatalogo, resetCatalogoTipo } from "./actions";
+import { upsertCatalogoItem, deleteCatalogoItem, reorderCatalogo, resetCatalogoTipo, clearTestData } from "./actions";
 
 export default async function CatalogosPage() {
   await assertCanReadCatalogos();
@@ -28,7 +28,7 @@ export default async function CatalogosPage() {
       <CatalogosClient 
         catalogosByTipo={catalogosByTipo} 
         canWrite={canWrite}
-        actions={{ upsertCatalogoItem, deleteCatalogoItem, reorderCatalogo, resetCatalogoTipo }}
+        actions={{ upsertCatalogoItem, deleteCatalogoItem, reorderCatalogo, resetCatalogoTipo, clearTestData }}
       />
     </div>
   );
