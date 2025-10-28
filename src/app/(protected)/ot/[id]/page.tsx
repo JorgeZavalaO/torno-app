@@ -9,7 +9,7 @@ import {
   emitOTMaterials,
   startOTManually,
   createManualSCForOT,
-  recomputeOTState
+  recomputeOT
 } from "../actions";
 import { getCatalogoOptions } from "@/app/server/services/catalogos";
 import type { TipoCatalogo } from "@prisma/client";
@@ -46,7 +46,7 @@ export default async function OTDetailPage({ params }: { params: Promise<{ id: s
         emitOTMaterials,
         startOTManually,
         createManualSCForOT,
-        recompute: recomputeOTState,
+        recompute: recomputeOT,
       }}
       prioridadOptions={prioridadOptions}
       acabadoOptions={acabadoOptions}

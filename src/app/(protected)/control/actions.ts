@@ -23,6 +23,9 @@ function bumpControl(otIds: string[] = []) {
     revalidateTag(cacheTags.worklogs(id));
   }
   revalidatePath("/control", "page");
+  // Invalida el cache de detalle de OT para que se recalcule costLabor y otros costos
+  revalidateTag("ot:detail");
+  revalidatePath("/ot", "page");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -91,7 +94,7 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
   }
 
   // Procesar múltiples máquinas
-  let maquinas: Array<{ id?: string; nombre?: string; horas: number }> | undefined;
+  let maquinas: Array<{ id?: string; nombre?: string; horas: number; userId?: string }> | undefined;
   if (data.maquinas) {
     try {
       if (typeof data.maquinas === "string") {
@@ -105,7 +108,8 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
           ).map(m => ({
             id: m.id && typeof m.id === "string" && m.id.trim() ? String(m.id).trim() : undefined,
             nombre: m.nombre ? String(m.nombre).trim() : undefined,
-            horas: Number(m.horas)
+            horas: Number(m.horas),
+            userId: m.userId && typeof m.userId === "string" && m.userId.trim() ? String(m.userId).trim() : undefined,
           }));
         }
       } else if (Array.isArray(data.maquinas)) {
@@ -116,8 +120,9 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
           m.horas > 0
         ).map(m => ({
           id: (m as { id?: unknown })?.id && typeof (m as { id?: unknown }).id === "string" && ((m as { id?: string }).id as string).trim() ? String((m as { id?: string }).id).trim() : undefined,
-          nombre: m.nombre ? String(m.nombre).trim() : undefined,
-          horas: Number(m.horas)
+          nombre: (m as { nombre?: unknown }).nombre ? String((m as { nombre?: unknown }).nombre as string).trim() : undefined,
+          horas: Number((m as { horas: number }).horas),
+          userId: (m as { userId?: unknown }).userId && typeof (m as { userId?: unknown }).userId === "string" && ((m as { userId?: string }).userId as string).trim() ? String((m as { userId?: string }).userId).trim() : undefined,
         }));
       }
     } catch {
@@ -252,8 +257,8 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
 
     // Registrar eventos de máquina (USO) para reflejar en módulo de máquinas
     try {
-      const eventos: Array<{ maquinaId: string; horas: number; nota?: string }> = [];
-      type Mx = { nombre?: string; horas: number; id?: string };
+      const eventos: Array<{ maquinaId: string; horas: number; nota?: string; userId?: string }> = [];
+      type Mx = { nombre?: string; horas: number; id?: string; userId?: string };
       if (Array.isArray(maquinas) && maquinas.length) {
         for (const m of maquinas as Mx[]) {
           // Priorizar id explícito si viene en el payload; si no, intentar buscar por nombre
@@ -262,7 +267,7 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
             const mm = await prisma.maquina.findFirst({ where: { nombre: m.nombre }, select: { id: true } });
             if (mm) mId = mm.id;
           }
-          if (mId) eventos.push({ maquinaId: mId, horas: m.horas, nota });
+          if (mId) eventos.push({ maquinaId: mId, horas: m.horas, nota, userId: m.userId || userId || userId2 || undefined });
         }
       } else if (horas && (maquinaId || maquina)) {
         let mId = maquinaId;
@@ -270,11 +275,11 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
           const mm = await prisma.maquina.findFirst({ where: { nombre: maquina }, select: { id: true } });
           if (mm) mId = mm.id;
         }
-        if (mId) eventos.push({ maquinaId: mId, horas, nota });
+        if (mId) eventos.push({ maquinaId: mId, horas, nota, userId: userId || userId2 || undefined });
       }
 
       if (eventos.length) {
-        const client = prisma as unknown as { maquinaEvento: { createMany: (args: { data: Array<{ maquinaId: string; tipo: string; horas: Prisma.Decimal; otId: string; nota: string|null }> }) => Promise<unknown> } };
+        const client = prisma as unknown as { maquinaEvento: { createMany: (args: { data: Array<{ maquinaId: string; tipo: string; horas: Prisma.Decimal; otId: string; nota: string|null; userId: string|null }> }) => Promise<unknown> } };
         await client.maquinaEvento.createMany({
           data: eventos.map(e => ({
             maquinaId: e.maquinaId,
@@ -282,10 +287,17 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
             horas: new Prisma.Decimal(e.horas),
             otId,
             nota: e.nota ?? null,
+            userId: e.userId ?? null,
           })),
         });
-        // Invalida también vistas de máquinas
+        // Invalida también vistas de máquinas (listado y detalles específicos)
         revalidatePath("/maquinas", "page");
+        try {
+          const uniqueMs = Array.from(new Set(eventos.map(e => e.maquinaId)));
+          for (const mid of uniqueMs) {
+            revalidatePath(`/maquinas/${mid}`, "page");
+          }
+        } catch {}
       }
     } catch {
       // No se pudo crear MaquinaEvento - continue

@@ -404,7 +404,7 @@ export default function OTDetailClient(props: {
                 <p className="text-2xl font-bold text-blue-600">
                   {ot.costMaterials ? `${currency} ${ot.costMaterials.toFixed(2)}` : '—'}
                 </p>
-                {ot.costQuoteMaterials && ot.costMaterials && (
+                {ot.costQuoteMaterials > 0 && (
                   <p className="text-xs text-slate-500">
                     Est: {currency} {ot.costQuoteMaterials.toFixed(2)}
                   </p>
@@ -444,7 +444,7 @@ export default function OTDetailClient(props: {
                 <p className="text-2xl font-bold text-green-600">
                   {ot.costLabor ? `${currency} ${ot.costLabor.toFixed(2)}` : '—'}
                 </p>
-                {ot.costQuoteLabor && ot.costLabor && (
+                {ot.costQuoteLabor > 0 && (
                   <p className="text-xs text-slate-500">
                     Est: {currency} {ot.costQuoteLabor.toFixed(2)}
                   </p>
@@ -490,7 +490,7 @@ export default function OTDetailClient(props: {
                 <p className="text-2xl font-bold text-orange-600">
                   {ot.costOverheads ? `${currency} ${ot.costOverheads.toFixed(2)}` : '—'}
                 </p>
-                {ot.costQuoteOverheads && ot.costOverheads && (
+                {ot.costQuoteOverheads > 0 && (
                   <p className="text-xs text-slate-500">
                     Est: {currency} {ot.costQuoteOverheads.toFixed(2)}
                   </p>
@@ -505,7 +505,7 @@ export default function OTDetailClient(props: {
                 <p className="text-3xl font-bold text-purple-600">
                   {ot.costTotal ? `${currency} ${ot.costTotal.toFixed(2)}` : '—'}
                 </p>
-                {ot.costQuoteTotal && ot.costTotal && (
+                {ot.costQuoteTotal > 0 && (
                   <p className="text-xs text-slate-500">
                     Est: {currency} {ot.costQuoteTotal.toFixed(2)}
                   </p>

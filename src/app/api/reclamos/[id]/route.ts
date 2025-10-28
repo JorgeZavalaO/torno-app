@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { assertCanApproveReclamos } from '@/app/lib/guards';
+import { assertCanApproveReclamos, assertCanReadReclamos } from '@/app/lib/guards';
 import { prisma } from '@/app/lib/prisma';
 import { z } from 'zod';
 import { EstadoReclamo, TipoResolucion, EstadoOT } from '@prisma/client';
@@ -69,6 +69,54 @@ export async function PUT(
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: "Datos inválidos", details: err.issues }, { status: 400 });
     }
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await assertCanReadReclamos();
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  try {
+    const reclamo = await prisma.reclamo.findUnique({
+      where: { id },
+      include: {
+        cliente: { select: { id: true, nombre: true } },
+        otReferencia: { select: { id: true, codigo: true } },
+      },
+    });
+
+    if (!reclamo) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Normalizar salida
+    const out = {
+      id: reclamo.id,
+      codigo: reclamo.codigo || undefined,
+      titulo: reclamo.titulo,
+      descripcion: reclamo.descripcion,
+      prioridad: reclamo.prioridad,
+      estado: reclamo.estado,
+      categoria: reclamo.categoria || undefined,
+      tipoReclamo: reclamo.tipoReclamo,
+      otReferenciaId: reclamo.otReferenciaId || undefined,
+      tipoResolucion: reclamo.tipoResolucion || undefined,
+      createdAt: reclamo.createdAt.toISOString(),
+      cliente: reclamo.cliente || undefined,
+      otReferencia: reclamo.otReferencia || undefined,
+      archivos: reclamo.archivos || [],
+    };
+
+    return NextResponse.json(out);
+  } catch (err) {
+    console.error('Error fetching reclamo:', err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

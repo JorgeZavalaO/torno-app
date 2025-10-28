@@ -83,30 +83,91 @@ export async function recomputeOTCosts(otId: string) {
     return s + qty * cu;
   }, 0);
 
-  // 2) Mano de obra: horas * tarifa
+  // 2) Horas trabajadas
   const aggHoras = await prisma.parteProduccion.aggregate({
     where: { otId },
     _sum: { horas: true },
   });
   const horas = Number(aggHoras._sum.horas || 0);
 
-  // 3) Parámetros de costeo (mismos del cotizador)
-  const v = await getCostingValues();
-  const hourlyRate = Number(v.hourlyRate || 0);
-  const depr       = Number(v.deprPerHour || 0);
-  const rent       = Number(v.rentPerHour || 0);
-  const toolingPc  = Number(v.toolingPerPiece || 0);
+  // 3) Determinar tarifas (labor y depreciación) según categoría de máquina utilizada
+  //    Se calcula un promedio ponderado por horas en base a MaquinaEvento (si existe),
+  //    y se cae a valores compartidos en ausencia de eventos con máquina.
+  let hourlyRate = 0;
+  let depr = 0;
 
-  // 4) Piezas terminadas para costear tooling por pieza (si aplica)
+  // Intentar leer horas por categoría desde eventos de máquina
+  const eventos = await prisma.maquinaEvento.findMany({
+    where: { otId },
+    select: { maquinaId: true, horas: true },
+  });
+  if (eventos.length > 0) {
+    const maquinaIds = Array.from(new Set(eventos.map(e => e.maquinaId).filter(Boolean))) as string[];
+    if (maquinaIds.length) {
+      const maquinas = await prisma.maquina.findMany({
+        where: { id: { in: maquinaIds } },
+        select: { id: true, categoria: true },
+      });
+      const catById = new Map(maquinas.map(m => [m.id, m.categoria ?? null]));
+      // Agregar horas por categoría
+      const horasPorCat = new Map<string, number>();
+      for (const e of eventos) {
+        const cat = catById.get(e.maquinaId!) ?? null;
+        const key = String(cat ?? "");
+        const h = Number(e.horas || 0);
+        if (!horasPorCat.has(key)) horasPorCat.set(key, 0);
+        horasPorCat.set(key, (horasPorCat.get(key) || 0) + h);
+      }
+
+      // Obtener costos por categoría y calcular promedio ponderado
+      let sumH = 0; let sumLabor = 0; let sumDepr = 0;
+      for (const [key, h] of horasPorCat.entries()) {
+        sumH += h;
+        const cat = key || null;
+        // Import dinámico para evitar ciclo de dependencias
+        const { getCostsByCategory } = await import("@/app/server/queries/machine-costing-categories");
+        const costs = await getCostsByCategory(cat);
+        sumLabor += (costs.laborCost || 0) * h;
+        sumDepr  += (costs.deprPerHour || 0) * h;
+      }
+      if (sumH > 0) {
+        hourlyRate = sumLabor / sumH;
+        depr       = sumDepr  / sumH;
+      }
+    }
+  }
+
+  // 4) Parámetros compartidos (renta, tooling, energía, GI, margen)
+  const v = await getCostingValues();
+  const rent      = Number(v.rentPerHour || 0);
+  const toolingPc = Number(v.toolingPerPiece || 0);
+
+  // Fallback si no hubo eventos de máquina o categorías
+  if (hourlyRate <= 0 && depr <= 0) {
+    // Intentar con categorías registradas y promediar
+    try {
+      const { getMachineCostingCategories } = await import("@/app/server/queries/machine-costing-categories");
+      const cats = await getMachineCostingCategories();
+      if (cats.length) {
+        const avgLabor = cats.reduce((s, c) => s + Number(c.laborCost || 0), 0) / cats.length;
+        const avgDepr  = cats.reduce((s, c) => s + Number(c.deprPerHour || 0), 0) / cats.length;
+        hourlyRate = hourlyRate || avgLabor || 0;
+        depr       = depr || avgDepr || 0;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 5) Piezas terminadas para costear tooling por pieza (si aplica)
   const piezas = await prisma.oTPieza.findMany({ where: { otId }, select: { qtyHecha: true } });
   const piezasHechas = piezas.reduce((s, p) => s + Number(p.qtyHecha || 0), 0);
 
-  // 5) Cálculos
-  const costLabor      = hourlyRate * horas;
+  // 6) Cálculos
+  const costLabor      = (hourlyRate || 0) * horas;
   const costOverByHour = (depr + rent) * horas;
-  // Nota: energía (kWh) no la estás registrando por ahora en el control; queda 0
-  const costEnergy     = 0; // o estima si luego registras kWh
-  const costTooling    = toolingPc * piezasHechas;
+  const costEnergy     = 0; // kWh no registrado aún
+  const costTooling    = (toolingPc || 0) * piezasHechas;
   const costOverheads  = costOverByHour + costEnergy + costTooling;
 
   const costTotal = matsCost + costLabor + costOverheads;
@@ -121,6 +182,13 @@ export async function recomputeOTCosts(otId: string) {
       costParams:    v as unknown as Prisma.JsonObject,
     },
   });
+}
+
+// Wrapper que recalcula tanto estado como costos
+export async function recomputeOT(otId: string) {
+  await recomputeOTState(otId);
+  await recomputeOTCosts(otId);
+  bumpAll(otId);
 }
 
 /* --------------------------- Schemas --------------------------- */

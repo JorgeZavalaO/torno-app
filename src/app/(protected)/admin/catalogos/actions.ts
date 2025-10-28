@@ -349,28 +349,19 @@ export async function clearTestData(): Promise<Result> {
     await prisma.maquinaMantenimiento.deleteMany();
     await prisma.maquina.deleteMany();
 
-    // 11. Usuarios y autenticación (depende de Roles)
-    console.log("Eliminando usuarios y autenticación...");
-    await prisma.userRole.deleteMany();
-    await prisma.userProfile.deleteMany();
-    await prisma.account.deleteMany();
-    await prisma.session.deleteMany();
-    await prisma.verificationToken.deleteMany();
-    await prisma.user.deleteMany();
-
-    // 12. Roles y permisos
-    console.log("Eliminando roles y permisos...");
-    await prisma.rolePermission.deleteMany();
-    await prisma.role.deleteMany();
-    await prisma.permission.deleteMany();
+  // 11. Usuarios y autenticación (PRESERVADOS)
+  // Seguridad: No eliminamos usuarios ni autenticación para evitar dejar el sistema sin acceso.
+  // Si necesitas limpiar usuarios de prueba, hazlo desde el módulo de Administración → Usuarios.
+  console.log("Preservando usuarios, roles y permisos (no se eliminan)");
 
     // NOTA: NO eliminamos:
-    // - ConfiguracionCatalogo (datos del seed)
-    // - CostingParam (parámetros de costeo)
+  // - ConfiguracionCatalogo (datos del seed)
+  // - CostingParam (parámetros de costeo)
+  // - Usuarios/Autenticación/Roles/Permisos (para no perder accesos)
 
     console.log("✅ Limpieza de datos de prueba completada");
     revalidatePath("/admin/catalogos");
-    return { ok: true, message: "Todos los datos de prueba han sido eliminados. Los catálogos y parámetros de costeo se mantienen intactos." };
+    return { ok: true, message: "Datos de prueba eliminados. Se preservaron catálogos, parámetros de costeo y accesos (usuarios/roles/permisos)." };
   } catch (error) {
     console.error("Error en clearTestData:", error);
     return { ok: false, message: "Error interno del servidor durante la limpieza" };

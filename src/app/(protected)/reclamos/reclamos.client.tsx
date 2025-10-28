@@ -65,6 +65,17 @@ interface CreateReclamoForm {
   archivos: string[];
 }
 
+type CreateReclamoPayload = {
+  clienteId: string;
+  titulo: string;
+  descripcion: string;
+  prioridad: string;
+  categoria: string;
+  tipoReclamo: string;
+  otReferenciaId?: string;
+  archivos: string[];
+};
+
 export default function ReclamosClient({ canWrite, canApprove }: ReclamosClientProps) {
   const [search, setSearch] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
@@ -220,7 +231,19 @@ export default function ReclamosClient({ canWrite, canApprove }: ReclamosClientP
         uploadedUrls = upData.files || [];
       }
 
-      const payload = { ...formData, archivos: uploadedUrls };
+      const payload: CreateReclamoPayload = {
+        clienteId: formData.clienteId,
+        titulo: formData.titulo,
+        descripcion: formData.descripcion,
+        prioridad: formData.prioridad,
+        categoria: formData.categoria,
+        tipoReclamo: formData.tipoReclamo,
+        archivos: uploadedUrls,
+      };
+      // No enviar otReferenciaId vacío
+      if (formData.otReferenciaId && formData.otReferenciaId.trim() !== '') {
+        payload.otReferenciaId = formData.otReferenciaId.trim();
+      }
       const res = await fetch('/api/reclamos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

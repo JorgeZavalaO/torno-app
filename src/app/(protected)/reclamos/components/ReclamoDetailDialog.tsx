@@ -3,8 +3,9 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download } from 'lucide-react';
+import { Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { useEffect, useState } from 'react';
 
 interface Reclamo {
   id: string;
@@ -26,6 +27,7 @@ interface Reclamo {
     id: string;
     codigo: string;
   };
+  archivos?: string[];
 }
 
 interface ReclamoDetailDialogProps {
@@ -43,6 +45,42 @@ export default function ReclamoDetailDialog({
   canApprove,
   onApprove
 }: ReclamoDetailDialogProps) {
+  const [full, setFull] = useState<Reclamo | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      if (!open || !reclamo?.id) return setFull(null);
+      // inicio carga
+      try {
+        const res = await fetch(`/api/reclamos/${reclamo.id}`);
+        if (!res.ok) throw new Error('No se pudo cargar el reclamo');
+        const data = await res.json();
+        if (!mounted) return;
+        setFull(data);
+      } catch (err) {
+        console.error('Error fetching reclamo detail', err);
+      } finally {
+        // fin carga
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [open, reclamo]);
+
+  // Lightbox keyboard navigation
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLightboxOpen(false);
+      if (e.key === 'ArrowRight') setLightboxIndex(i => (full?.archivos ? Math.min((full.archivos.length || 1) - 1, i + 1) : i));
+      if (e.key === 'ArrowLeft') setLightboxIndex(i => Math.max(0, i - 1));
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxOpen, full]);
   const getEstadoBadge = (estado: string) => {
     const variants = {
       PENDING: 'bg-yellow-100 text-yellow-800',
@@ -228,7 +266,7 @@ export default function ReclamoDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[80vh] overflow-y-auto">
+    <DialogContent className="!w-[90vw] !max-w-6xl !max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Detalles del Reclamo</DialogTitle>
         </DialogHeader>
@@ -277,8 +315,77 @@ export default function ReclamoDetailDialog({
 
             <div>
               <label className="text-sm font-medium text-gray-600">Descripción</label>
-              <p className="text-sm mt-2 p-3 bg-gray-50 rounded border">{reclamo.descripcion}</p>
+              <p className="text-sm mt-2 p-3 bg-gray-50 rounded border">{full?.descripcion ?? reclamo.descripcion}</p>
             </div>
+
+            {/* Adjuntos */}
+            {full?.archivos && full.archivos.length > 0 && (
+              <div>
+                <label className="text-sm font-medium text-gray-600">Adjuntos</label>
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {full.archivos.map((url, idx) => {
+                    const isImage = /\.(jpe?g|png|webp)(\?.*)?$/i.test(url);
+                    const isPDF = /\.pdf(\?.*)?$/i.test(url);
+                    return (
+                      <div key={idx} className="border rounded overflow-hidden bg-white">
+                        {isImage ? (
+                          <button
+                            className="w-full h-36 bg-gray-100 hover:opacity-90"
+                            onClick={() => { setLightboxIndex(idx); setLightboxOpen(true); }}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`Adjunto ${idx + 1}`} className="w-full h-36 object-cover" />
+                          </button>
+                        ) : isPDF ? (
+                          <div className="p-3 flex flex-col items-center justify-center h-36">
+                            <div className="text-4xl">📄</div>
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline mt-2">Ver PDF</a>
+                          </div>
+                        ) : (
+                          <div className="p-3 h-36 flex items-center justify-center">Adjunto</div>
+                        )}
+
+                        <div className="p-2 border-t flex items-center justify-between">
+                          <a href={url} target="_blank" rel="noopener noreferrer" download className="text-sm text-gray-700 hover:text-gray-900">Abrir / Descargar</a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Lightbox overlay */}
+            {lightboxOpen && full?.archivos && full.archivos.length > 0 ? (
+              (() => {
+                const archivos = full.archivos || [];
+                const url = archivos[lightboxIndex];
+                const prev = () => setLightboxIndex(i => Math.max(0, i - 1));
+                const next = () => setLightboxIndex(i => Math.min(archivos.length - 1, i + 1));
+                return (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                    <div className="relative max-w-5xl w-full max-h-[90vh]">
+                      <button onClick={() => setLightboxOpen(false)} className="absolute top-2 right-2 bg-white rounded-full p-2 shadow">
+                        <X className="h-5 w-5" />
+                      </button>
+                      <button onClick={prev} disabled={lightboxIndex === 0} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow">
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button onClick={next} disabled={lightboxIndex >= (archivos.length - 1)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow">
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                      <div className="w-full h-full flex items-center justify-center bg-black">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Adjunto ${lightboxIndex + 1}`} className="max-h-[90vh] max-w-full object-contain" />
+                      </div>
+                      <div className="mt-2 text-center text-sm text-white">
+                        {lightboxIndex + 1} / {archivos.length}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : null}
 
             {reclamo.categoria && (
               <div>

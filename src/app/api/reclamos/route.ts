@@ -4,6 +4,9 @@ import { assertCanReadReclamos, assertCanWriteReclamos } from '@/app/lib/guards'
 import { prisma } from '@/app/lib/prisma';
 import { z } from 'zod';
 
+// Permitir que strings vacíos lleguen como undefined en campos opcionales
+const emptyToUndefined = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
+
 const CreateReclamoSchema = z.object({
   clienteId: z.string().uuid(),
   titulo: z.string().min(1).max(200),
@@ -11,7 +14,17 @@ const CreateReclamoSchema = z.object({
   prioridad: z.enum(['BAJA', 'MEDIA', 'ALTA', 'URGENTE']).default('MEDIA'),
   categoria: z.string().optional(),
   tipoReclamo: z.enum(['OT_ATENDIDA', 'NUEVO_RECLAMO']).default('NUEVO_RECLAMO'),
-  otReferenciaId: z.string().uuid().optional(),
+  otReferenciaId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
+  archivos: z.array(z.string().url()).optional().default([]),
+}).refine((data) => {
+  // Si es reclamo sobre OT atendida, otReferenciaId debe venir
+  if (data.tipoReclamo === 'OT_ATENDIDA') {
+    return typeof data.otReferenciaId === 'string' && data.otReferenciaId.length > 0;
+  }
+  return true;
+}, {
+  message: 'otReferenciaId es requerido para reclamos sobre OT atendida',
+  path: ['otReferenciaId'],
 });
 
 export async function GET(request: Request) {
@@ -44,8 +57,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
-    const validated = CreateReclamoSchema.parse(body);
+  const body = await request.json();
+  const validated = CreateReclamoSchema.parse(body);
 
     // Generar código único para el reclamo
     const year = new Date().getFullYear();
@@ -68,9 +81,8 @@ export async function POST(request: Request) {
         descripcion: validated.descripcion,
         prioridad: validated.prioridad,
         categoria: validated.categoria,
-        // 'archivos' es un campo obligatorio (String[]) en el modelo Prisma.
-        // Si no se proporcionan archivos, crear con arreglo vacío para evitar errores de BD.
-        archivos: [],
+        // Guardar archivos si llegaron, caso contrario arreglo vacío
+        archivos: validated.archivos ?? [],
         tipoReclamo: validated.tipoReclamo,
         otReferenciaId: validated.otReferenciaId,
         estado: 'PENDING',
