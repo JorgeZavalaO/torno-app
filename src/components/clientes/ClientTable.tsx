@@ -13,6 +13,8 @@ interface ClientTableProps {
   canWrite: boolean;
   actions: ClientActions;
   onDeleted: (id: string) => void;
+  onClientCreated: (client: Client) => void;
+  onClientUpdated: (client: Client) => void;
   onOpenQuotes: (client: Client) => void;
 }
 
@@ -21,6 +23,8 @@ export default function ClientTable({
   canWrite,
   actions,
   onDeleted,
+  onClientCreated,
+  onClientUpdated,
   onOpenQuotes,
 }: ClientTableProps) {
   return (
@@ -43,6 +47,8 @@ export default function ClientTable({
             canWrite={canWrite}
             actions={actions}
             onDeleted={onDeleted}
+            onClientCreated={onClientCreated}
+            onClientUpdated={onClientUpdated}
             onOpenQuotes={onOpenQuotes}
           />
         ))}
@@ -63,12 +69,16 @@ const ClientRow = memo(function ClientRow({
   canWrite,
   actions,
   onDeleted,
+  onClientCreated,
+  onClientUpdated,
   onOpenQuotes,
 }: {
   client: Client;
   canWrite: boolean;
   actions: ClientActions;
   onDeleted: (id: string) => void;
+  onClientCreated: (client: Client) => void;
+  onClientUpdated: (client: Client) => void;
   onOpenQuotes: (client: Client) => void;
 }) {
   const [isPending, start] = useTransition();
@@ -129,6 +139,7 @@ const ClientRow = memo(function ClientRow({
                   contactoNombre: client.contactoNombre ?? undefined,
                   contactoTelefono: client.contactoTelefono ?? undefined,
                 }}
+                onClientUpdated={onClientUpdated}
               />
               <Button
                 variant="ghost"

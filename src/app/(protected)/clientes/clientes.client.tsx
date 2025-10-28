@@ -60,6 +60,14 @@ export default function ClientesClient({
     setItems((prev) => prev.filter((client) => client.id !== id));
   };
 
+  const handleClientCreated = (client: Client) => {
+    setItems((prev) => [client, ...prev]);
+  };
+
+  const handleClientUpdated = (client: Client) => {
+    setItems((prev) => prev.map((c) => (c.id === client.id ? client : c)));
+  };
+
   const handleOpenQuotes = async (client: Client) => {
     setQuotesState({ open: true, client });
     setLoadingQuotes(true);
@@ -94,7 +102,7 @@ export default function ClientesClient({
                 importAction={actions.importClients}
                 onImported={handleImported}
               />
-              <ClientModal mode="create" action={actions.createClient} />
+              <ClientModal mode="create" action={actions.createClient} onClientCreated={handleClientCreated} />
             </>
           )}
         </div>
@@ -130,6 +138,8 @@ export default function ClientesClient({
           canWrite={canWrite}
           actions={actions}
           onDeleted={handleClientDeleted}
+          onClientCreated={handleClientCreated}
+          onClientUpdated={handleClientUpdated}
           onOpenQuotes={handleOpenQuotes}
         />
       </Card>
