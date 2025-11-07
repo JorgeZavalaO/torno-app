@@ -29,6 +29,8 @@ model UserProfile {
   solicitudesCompra SolicitudCompra[]
   partesProduccion  ParteProduccion[]
   maquinaEventos    MaquinaEvento[]
+  reclamosAprobados Reclamo[] @relation("ReclamoAprobadoPor")
+  reclamosRechazados Reclamo[] @relation("ReclamoRechazadoPor")
 
   authUserId  String?  @unique
   authUser    User?    @relation(fields: [authUserId], references: [id], onDelete: SetNull)
@@ -697,6 +699,16 @@ model Reclamo {
   
   // Resolución cuando se aprueba
   tipoResolucion TipoResolucion?
+  notasResolucion String?
+  
+  // Auditoría de aprobación/rechazo
+  aprobadoPorId  String?
+  aprobadoPor    UserProfile?   @relation("ReclamoAprobadoPor", fields: [aprobadoPorId], references: [id], onDelete: SetNull)
+  aprobadoEn     DateTime?
+
+  rechazadoPorId String?
+  rechazadoPor   UserProfile?   @relation("ReclamoRechazadoPor", fields: [rechazadoPorId], references: [id], onDelete: SetNull)
+  rechazadoEn    DateTime?
   
   // Si se convierte en OT (para rectificación o nueva)
   otId          String?         @unique

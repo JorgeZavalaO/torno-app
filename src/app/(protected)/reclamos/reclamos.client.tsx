@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import CreateReclamoDialog from './components/CreateReclamoDialog';
 import ApproveReclamoDialog from './components/ApproveReclamoDialog';
+import RejectReclamoDialog from './components/RejectReclamoDialog';
 import ReclamoDetailDialog from './components/ReclamoDetailDialog';
 import ReclamosFilters from './components/ReclamosFilters';
 import ReclamosList from './components/ReclamosList';
@@ -83,6 +84,7 @@ export default function ReclamosClient({ canWrite, canApprove }: ReclamosClientP
   const [page] = useState(1);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedReclamo, setSelectedReclamo] = useState<Reclamo | null>(null);
   const [ots, setOts] = useState<OT[]>([]);
@@ -306,11 +308,14 @@ export default function ReclamosClient({ canWrite, canApprove }: ReclamosClientP
           setSelectedReclamo(reclamo);
           setShowDetailDialog(true);
         }}
-        onEstadoChange={handleEstadoChange}
         onConvertToOT={handleConvertToOT}
         onApprove={(reclamo: Reclamo) => {
           setSelectedReclamo(reclamo);
           setShowApproveDialog(true);
+        }}
+        onReject={(reclamo: Reclamo) => {
+          setSelectedReclamo(reclamo);
+          setShowRejectDialog(true);
         }}
       />
 
@@ -337,6 +342,17 @@ export default function ReclamosClient({ canWrite, canApprove }: ReclamosClientP
           if (selectedReclamo) {
             handleEstadoChange(selectedReclamo.id, 'APPROVED', tipo, notas);
             setShowApproveDialog(false);
+          }
+        }}
+      />
+
+      <RejectReclamoDialog
+        open={showRejectDialog}
+        onOpenChange={setShowRejectDialog}
+        reclamo={selectedReclamo}
+        onRejectConfirm={(motivo: string) => {
+          if (selectedReclamo) {
+            handleEstadoChange(selectedReclamo.id, 'REJECTED', undefined, motivo);
           }
         }}
       />

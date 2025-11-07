@@ -28,6 +28,11 @@ interface Reclamo {
     codigo: string;
   };
   archivos?: string[];
+  notasResolucion?: string;
+  aprobadoPorId?: string;
+  aprobadoEn?: string;
+  rechazadoPorId?: string;
+  rechazadoEn?: string;
 }
 
 interface ReclamoDetailDialogProps {
@@ -413,10 +418,38 @@ export default function ReclamoDetailDialog({
               )}
             </div>
 
-            {reclamo.tipoResolucion && (
-              <div className="bg-green-50 border border-green-200 p-3 rounded">
-                <label className="text-sm font-medium text-green-900">Tipo de Resolución</label>
-                <p className="text-sm mt-1 text-green-900">{reclamo.tipoResolucion.replace('_', ' ')}</p>
+            {(reclamo.tipoResolucion || full?.notasResolucion || full?.aprobadoEn || full?.rechazadoEn) && (
+              <div className="space-y-3">
+                {reclamo.tipoResolucion && (
+                  <div className="bg-green-50 border border-green-200 p-3 rounded">
+                    <label className="text-sm font-medium text-green-900">Tipo de Resolución</label>
+                    <p className="text-sm mt-1 text-green-900">{reclamo.tipoResolucion.replace('_', ' ')}</p>
+                  </div>
+                )}
+                {full?.notasResolucion && (
+                  <div className="bg-gray-50 border border-gray-200 p-3 rounded">
+                    <label className="text-sm font-medium text-gray-700">Notas de Resolución</label>
+                    <p className="text-sm mt-1 whitespace-pre-line">{full.notasResolucion}</p>
+                  </div>
+                )}
+                {(full?.aprobadoEn || full?.rechazadoEn) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {full?.aprobadoEn && (
+                      <div className="bg-emerald-50 border border-emerald-200 p-3 rounded">
+                        <label className="text-xs font-medium text-emerald-900">Aprobado</label>
+                        <p className="text-xs mt-1 text-emerald-800">{new Date(full.aprobadoEn).toLocaleString('es-ES')}</p>
+                        {full.aprobadoPorId && <p className="text-[10px] text-emerald-700 mt-1">ID Usuario: {full.aprobadoPorId}</p>}
+                      </div>
+                    )}
+                    {full?.rechazadoEn && (
+                      <div className="bg-red-50 border border-red-200 p-3 rounded">
+                        <label className="text-xs font-medium text-red-900">Rechazado</label>
+                        <p className="text-xs mt-1 text-red-800">{new Date(full.rechazadoEn).toLocaleString('es-ES')}</p>
+                        {full.rechazadoPorId && <p className="text-[10px] text-red-700 mt-1">ID Usuario: {full.rechazadoPorId}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

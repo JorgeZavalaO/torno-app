@@ -32,9 +32,10 @@ interface ReclamosListProps {
   loading: boolean;
   canApprove: boolean;
   onViewDetail: (reclamo: Reclamo) => void;
-  onEstadoChange: (reclamoId: string, nuevoEstado: string, tipoResolucion?: string, notasResolucion?: string) => void;
+  onEstadoChange?: (reclamoId: string, nuevoEstado: string, tipoResolucion?: string, notasResolucion?: string) => void;
   onConvertToOT: (reclamoId: string) => void;
   onApprove: (reclamo: Reclamo) => void;
+  onReject: (reclamo: Reclamo) => void;
 }
 
 export default function ReclamosList({
@@ -42,9 +43,9 @@ export default function ReclamosList({
   loading,
   canApprove,
   onViewDetail,
-  onEstadoChange,
   onConvertToOT,
-  onApprove
+  onApprove,
+  onReject
 }: ReclamosListProps) {
   const getEstadoBadge = (estado: string) => {
     const variants = {
@@ -143,7 +144,7 @@ export default function ReclamosList({
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => onEstadoChange(reclamo.id, 'REJECTED')}
+                        onClick={() => onReject(reclamo)}
                       >
                         <XCircle className="h-4 w-4 mr-1" />
                         Rechazar

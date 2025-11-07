@@ -3,6 +3,7 @@ import { assertCanApproveReclamos, assertCanReadReclamos } from '@/app/lib/guard
 import { prisma } from '@/app/lib/prisma';
 import { z } from 'zod';
 import { EstadoReclamo, TipoResolucion, EstadoOT } from '@prisma/client';
+import { getCurrentUser } from '@/app/lib/auth';
 
 const UpdateEstadoSchema = z.object({
   estado: z.enum(['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED']),
@@ -31,20 +32,28 @@ export async function PUT(
       return NextResponse.json({ error: "Debe especificar el tipo de resolución para reclamos aprobados" }, { status: 400 });
     }
 
-    const updateData: {
-      estado: EstadoReclamo;
-      tipoResolucion?: TipoResolucion;
-      notasResolucion?: string;
-    } = {
+    const updateData: Record<string, unknown> = {
       estado: validated.estado as EstadoReclamo,
     };
 
     if (validated.tipoResolucion) {
-      updateData.tipoResolucion = validated.tipoResolucion as TipoResolucion;
+      (updateData as { tipoResolucion?: TipoResolucion }).tipoResolucion = validated.tipoResolucion as TipoResolucion;
     }
 
-    if (validated.notasResolucion) {
-      updateData.notasResolucion = validated.notasResolucion;
+    if (typeof validated.notasResolucion === 'string') {
+      (updateData as { notasResolucion?: string }).notasResolucion = validated.notasResolucion;
+    }
+
+    // Auditoría: quién y cuándo aprobó/rechazó
+    const user = await getCurrentUser();
+    if (validated.estado === 'APPROVED') {
+      (updateData as { aprobadoPorId?: string | null }).aprobadoPorId = user?.id ?? null;
+      (updateData as { aprobadoEn?: Date | null }).aprobadoEn = new Date();
+      // Si no vino una nota específica, conservar la existente (no la sobreescribimos con undefined)
+    }
+    if (validated.estado === 'REJECTED') {
+      (updateData as { rechazadoPorId?: string | null }).rechazadoPorId = user?.id ?? null;
+      (updateData as { rechazadoEn?: Date | null }).rechazadoEn = new Date();
     }
 
     const reclamo = await prisma.reclamo.update({
@@ -108,6 +117,11 @@ export async function GET(
       tipoReclamo: reclamo.tipoReclamo,
       otReferenciaId: reclamo.otReferenciaId || undefined,
       tipoResolucion: reclamo.tipoResolucion || undefined,
+      notasResolucion: (reclamo as { notasResolucion?: string | null }).notasResolucion || undefined,
+      aprobadoPorId: (reclamo as { aprobadoPorId?: string | null }).aprobadoPorId || undefined,
+      aprobadoEn: (reclamo as { aprobadoEn?: Date | null }).aprobadoEn?.toISOString() || undefined,
+      rechazadoPorId: (reclamo as { rechazadoPorId?: string | null }).rechazadoPorId || undefined,
+      rechazadoEn: (reclamo as { rechazadoEn?: Date | null }).rechazadoEn?.toISOString() || undefined,
       createdAt: reclamo.createdAt.toISOString(),
       cliente: reclamo.cliente || undefined,
       otReferencia: reclamo.otReferencia || undefined,
