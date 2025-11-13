@@ -11,7 +11,7 @@ import { revalidatePath as rp } from "next/cache";
 import { getCostingValues } from "@/app/server/queries/costing-params";
 import { getCostsByCategory } from "@/app/server/queries/machine-costing-categories";
 
-type Result = { ok: true; message?: string; id?: string } | { ok: false; message: string };
+type Result = { ok: true; message?: string; id?: string; codigo?: string } | { ok: false; message: string };
 
 const InputSchema = z.object({
   clienteId: z.string().uuid(),
@@ -240,35 +240,89 @@ export async function createQuote(fd: FormData): Promise<Result> {
   }
 
   // Crear cotización
-  const created = await prisma.cotizacion.create({
-    data: {
-      clienteId: input.clienteId,
-      currency,
-      giPct: gi, marginPct: margin,
-      hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
+  // Generar código anual incremental: CO-YYYY-0001
+  const year = new Date().getFullYear();
+  const prefix = `CO-${year}-`;
+  async function nextCOCode(): Promise<string> {
+    const last = await prisma.cotizacion.findFirst({
+      where: { codigo: { startsWith: prefix } },
+      select: { codigo: true },
+      orderBy: { codigo: "desc" },
+    });
+    const lastNum = last?.codigo ? parseInt(String(last.codigo).split("-")[2] || "0", 10) : 0;
+    const num = String((lastNum || 0) + 1).padStart(4, "0");
+    return `${prefix}${num}`;
+  }
 
-      qty: input.qty,
-      materials, hours,
-      // kwh: 0, // Campo obsoleto - se puede eliminar de la base de datos en el futuro
+  let created: { id: string; codigo?: string | null } | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const codigo = await nextCOCode();
+    try {
+      created = await prisma.cotizacion.create({
+        data: {
+          codigo,
+          clienteId: input.clienteId,
+          currency,
+          giPct: gi, marginPct: margin,
+          hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
 
-      costDirect: direct,
-      giAmount, subtotal, marginAmount, total, unitPrice,
-      breakdown,
+          qty: input.qty,
+          materials, hours,
+          // kwh: 0, // Campo obsoleto - se puede eliminar de la base de datos en el futuro
 
-      machineCategoryId, // Guardar la categoría seleccionada
+          costDirect: direct,
+          giAmount, subtotal, marginAmount, total, unitPrice,
+          breakdown,
 
-      validUntil: input.validUntil ? new Date(input.validUntil) : null,
-      notes: input.notes ?? null,
-      pedidoReferencia: input.pedidoReferencia ?? null,
-      tipoTrabajoId: input.tipoTrabajoId ?? null,
-      acabadoId: input.acabadoId ?? null,
-      status: "DRAFT",
-    },
-    select: { id: true },
-  });
+          machineCategoryId, // Guardar la categoría seleccionada
+
+          validUntil: input.validUntil ? new Date(input.validUntil) : null,
+          notes: input.notes ?? null,
+          pedidoReferencia: input.pedidoReferencia ?? null,
+          tipoTrabajoId: input.tipoTrabajoId ?? null,
+          acabadoId: input.acabadoId ?? null,
+          status: "DRAFT",
+        },
+        select: { id: true, codigo: true },
+      });
+      break;
+    } catch (e: unknown) {
+      if ((e as { code?: string })?.code === "P2002") continue; // retry on unique violation
+      throw e;
+    }
+  }
+  if (!created) {
+    // Fallback: crear sin código si la base aún no fue migrada
+    const createdFallback = await prisma.cotizacion.create({
+      data: {
+        clienteId: input.clienteId,
+        currency,
+        giPct: gi, marginPct: margin,
+        hourlyRate, kwhRate, deprPerHour: depr, toolingPerPc: tooling, rentPerHour: rent,
+
+        qty: input.qty,
+        materials, hours,
+
+        costDirect: direct,
+        giAmount, subtotal, marginAmount, total, unitPrice,
+        breakdown,
+
+        machineCategoryId,
+        validUntil: input.validUntil ? new Date(input.validUntil) : null,
+        notes: input.notes ?? null,
+        pedidoReferencia: input.pedidoReferencia ?? null,
+        tipoTrabajoId: input.tipoTrabajoId ?? null,
+        acabadoId: input.acabadoId ?? null,
+        status: "DRAFT",
+      },
+      select: { id: true },
+    });
+    bumpQuotesCache();
+    return { ok: true, id: createdFallback.id, message: "Cotización creada (sin código — aplicar migración Prisma)" };
+  }
 
   bumpQuotesCache();
-  return { ok: true, id: created.id, message: "Cotización creada" };
+  return { ok: true, id: created.id, codigo: created.codigo ?? undefined, message: `Cotización creada${created.codigo ? ` (${created.codigo})` : ""}` };
 }
 
 export async function updateQuoteStatus(

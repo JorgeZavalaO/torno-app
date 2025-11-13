@@ -237,27 +237,81 @@ export async function createSC(fd: FormData): Promise<Result> {
   }
 
   const scCurrency = await validateCurrency(currency);
-  const sc = await prisma.solicitudCompra.create({
-    data: {
-      solicitanteId: solicitante.id,
-      otId: resolvedOtId || null,
-      estado: "PENDING_ADMIN",
-      totalEstimado: D(totalEstimado),
-      notas: notas || null,
-      currency: scCurrency,
-      items: {
-        create: items.map((it) => ({
-          productoId: it.productoId,
-          cantidad: D(it.cantidad),
-          costoEstimado: it.costoEstimado != null ? D(it.costoEstimado) : null,
-        })),
+  // Generar código anual incremental: SC-YYYY-0001
+  const year = new Date().getFullYear();
+  const prefix = `SC-${year}-`;
+
+  async function nextSCCode(): Promise<string> {
+    const last = await prisma.solicitudCompra.findFirst({
+      where: { codigo: { startsWith: prefix } },
+      select: { codigo: true },
+      orderBy: { codigo: "desc" },
+    });
+    const lastNum = last?.codigo ? parseInt(String(last.codigo).split("-")[2] || "0", 10) : 0;
+    const num = String((lastNum || 0) + 1).padStart(4, "0");
+    return `${prefix}${num}`;
+  }
+
+  let created: { id: string; codigo: string | null } | null = null;
+  let createdCodigo: string | undefined;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const codigo = await nextSCCode();
+    try {
+      created = await prisma.solicitudCompra.create({
+        data: {
+          codigo,
+          solicitanteId: solicitante.id,
+          otId: resolvedOtId || null,
+          estado: "PENDING_ADMIN",
+          totalEstimado: D(totalEstimado),
+          notas: notas || null,
+          currency: scCurrency,
+          items: {
+            create: items.map((it) => ({
+              productoId: it.productoId,
+              cantidad: D(it.cantidad),
+              costoEstimado: it.costoEstimado != null ? D(it.costoEstimado) : null,
+            })),
+          },
+        },
+        select: { id: true, codigo: true },
+      });
+      createdCodigo = codigo;
+      break; // éxito
+    } catch (e: unknown) {
+      // Si colisiona por unique (carrera), reintentar con el siguiente código
+      if ((e as { code?: string })?.code === "P2002") {
+        continue;
+      }
+      throw e;
+    }
+  }
+  if (!created) {
+    // Fallback: crear sin código si la base aún no fue migrada
+    const sc = await prisma.solicitudCompra.create({
+      data: {
+        solicitanteId: solicitante.id,
+        otId: resolvedOtId || null,
+        estado: "PENDING_ADMIN",
+        totalEstimado: D(totalEstimado),
+        notas: notas || null,
+        currency: scCurrency,
+        items: {
+          create: items.map((it) => ({
+            productoId: it.productoId,
+            cantidad: D(it.cantidad),
+            costoEstimado: it.costoEstimado != null ? D(it.costoEstimado) : null,
+          })),
+        },
       },
-    },
-    select: { id: true },
-  });
+      select: { id: true },
+    });
+    bump();
+    return { ok: true, id: sc.id, message: "Solicitud de compra creada (sin código — aplicar migración Prisma)" };
+  }
 
   bump();
-  return { ok: true, id: sc.id, message: "Solicitud de compra creada" };
+  return { ok: true, id: created.id, codigo: createdCodigo, message: `Solicitud de compra creada${createdCodigo ? ` (${createdCodigo})` : ""}` };
 }
 
 export async function setSCState(scId: string, estado: "PENDING_ADMIN"|"PENDING_GERENCIA"|"APPROVED"|"REJECTED"|"CANCELLED", nota?: string): Promise<Result> {

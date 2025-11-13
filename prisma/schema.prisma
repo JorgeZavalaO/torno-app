@@ -142,6 +142,8 @@ enum QuoteStatus {
 
 model Cotizacion {
   id           String      @id @default(uuid())
+  // Código humano legible (ej: CO-2025-0001). Único por sistema. Opcional para no romper datos existentes.
+  codigo       String?     @unique
   clienteId    String
   solicitudId  String?     // para integrar luego con módulo de Solicitudes (opcional)
   version      Int         @default(1)
@@ -300,6 +302,8 @@ model Proveedor {
 
 model SolicitudCompra {
   id            String      @id @default(uuid())
+  // Código humano legible (ej: SC-2025-0001). Único por sistema. Opcional para no romper datos existentes.
+  codigo        String?     @unique
   solicitanteId String
   otId          String?
   estado        EstadoSC    @default(PENDING_ADMIN)
