@@ -18,11 +18,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
-  Check, ChevronsUpDown, Plus, Trash2,
+  Check, ChevronsUpDown, Plus, Trash2, AlertTriangle,
 } from "lucide-react";
 
 type MatRow = { sku: string; nombre: string; uom?: string; plan: number; emit: number; pend: number };
-type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>> & { categoria?: string }[];
+type ProductsMini = Awaited<ReturnType<typeof import("@/app/server/queries/ot").getProductsMini>> & { categoria?: string; stock?: number }[];
 
 // --- Mini Combobox (shadcn) para materiales ---
 function MaterialCombobox({
@@ -141,6 +141,9 @@ export default function EmitMaterialsDialog({
   onEmit: (items: { sku: string; qty: number }[])=>Promise<void>;
 }) {
   const [rows, setRows] = useState<{ sku: string; qty: number }[]>([]);
+  const [pendingEmit, setPendingEmit] = useState<{ sku: string; qty: number }[] | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Opciones derivadas
   const planOptions = useMemo(() => {
@@ -151,6 +154,14 @@ export default function EmitMaterialsDialog({
       pend: m.pend,
     }));
   }, [materials]);
+
+  const stockMap = useMemo(() => {
+    const map = new Map<string, number>();
+    products.forEach(p => {
+      if (p.stock !== undefined) map.set(p.sku, p.stock);
+    });
+    return map;
+  }, [products]);
 
   const allOptions = useMemo(() => {
     const notFab = products.filter((p) =>
@@ -179,8 +190,80 @@ export default function EmitMaterialsDialog({
   const valid = useMemo(() => rows.filter((r) => r.sku && r.qty > 0), [rows]);
   const totalQty = useMemo(() => valid.reduce((s, r) => s + Number(r.qty || 0), 0), [valid]);
 
+  // Función para validar emisión
+  const validateEmission = (items: { sku: string; qty: number }[]) => {
+    const errors: string[] = [];
+    const warnings: { sku: string; nombre: string; qty: number; required: number; stock: number }[] = [];
+
+    for (const item of items) {
+      const stock = stockMap.get(item.sku) ?? 0;
+      const matInfo = materials.find(m => m.sku === item.sku);
+      const required = matInfo?.pend ?? 0;
+      const productInfo = products.find(p => p.sku === item.sku);
+      const nombre = productInfo?.nombre ?? item.sku;
+
+      // ERROR: Intentar emitir más de lo disponible en almacén
+      if (item.qty > stock) {
+        errors.push(
+          `${nombre}: Stock insuficiente. Solicitado: ${item.qty}, Disponible: ${stock}`
+        );
+      }
+      // WARNING: Intentar emitir más de lo requerido pero hay stock
+      else if (required > 0 && item.qty > required) {
+        warnings.push({
+          sku: item.sku,
+          nombre,
+          qty: item.qty,
+          required,
+          stock
+        });
+      }
+    }
+
+    return { errors, warnings };
+  };
+
+  // Handler para emisión con validaciones
+  const handleEmit = async () => {
+    const { errors, warnings } = validateEmission(valid);
+    
+    // Si hay errores críticos (stock insuficiente), mostrar y bloquear
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    // Si hay warnings (excede requerido pero hay stock), solicitar confirmación
+    if (warnings.length > 0) {
+      setPendingEmit(valid);
+      setShowConfirmDialog(true);
+      return;
+    }
+
+    // Si no hay problemas, emitir directamente
+    await onEmit(valid);
+    onOpenChange(false);
+  };
+
+  // Handler para confirmar emisión después de warning
+  const handleConfirmEmit = async () => {
+    if (pendingEmit) {
+      await onEmit(pendingEmit);
+      setPendingEmit(null);
+      setShowConfirmDialog(false);
+      onOpenChange(false);
+    }
+  };
+
   // Limpia líneas al cerrar
-  useEffect(() => { if (!open) setRows([]); }, [open]);
+  useEffect(() => { 
+    if (!open) {
+      setRows([]);
+      setValidationErrors([]);
+      setPendingEmit(null);
+      setShowConfirmDialog(false);
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -217,26 +300,74 @@ export default function EmitMaterialsDialog({
             <ScrollArea className="max-h-[340px]">
               <Table>
                 <TableBody>
-                  {rows.map((r, i) => (
+                  {rows.map((r, i) => {
+                    const stock = stockMap.get(r.sku) ?? 0;
+                    const matInfo = materials.find(m => m.sku === r.sku);
+                    const required = matInfo?.pend ?? 0;
+                    const hasStockIssue = r.qty > stock;
+                    const exceedsRequired = required > 0 && r.qty > required;
+                    
+                    return (
                     <TableRow key={i} className="align-middle">
                       <TableCell>
-                        <MaterialCombobox
-                          value={r.sku}
-                          onChange={(v) => setRow(i, { sku: v })}
-                          planOptions={planOptions}
-                          allOptions={allOptions}
-                          placeholder="Producto…"
-                        />
+                        <div className="space-y-1">
+                          <MaterialCombobox
+                            value={r.sku}
+                            onChange={(v) => setRow(i, { sku: v })}
+                            planOptions={planOptions}
+                            allOptions={allOptions}
+                            placeholder="Producto…"
+                          />
+                          {r.sku && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-muted-foreground">
+                                Stock disponible: 
+                              </span>
+                              <Badge 
+                                variant={stock > 0 ? "secondary" : "destructive"}
+                                className="text-xs"
+                              >
+                                {stock}
+                              </Badge>
+                              {required > 0 && (
+                                <>
+                                  <span className="text-muted-foreground">·</span>
+                                  <span className="text-muted-foreground">Requerido:</span>
+                                  <Badge variant="outline" className="text-xs">
+                                    {required}
+                                  </Badge>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Input
-                          type="number"
-                          min={0.001}
-                          step="0.001"
-                          value={r.qty}
-                          onChange={(e) => setRow(i, { qty: Number(e.target.value) })}
-                          className="w-full h-10 text-right tabular-nums"
-                        />
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            min={0.001}
+                            step="0.001"
+                            value={r.qty}
+                            onChange={(e) => setRow(i, { qty: Number(e.target.value) })}
+                            className={`w-full h-10 text-right tabular-nums ${
+                              hasStockIssue ? 'border-red-500 focus:border-red-500' : 
+                              exceedsRequired ? 'border-amber-500 focus:border-amber-500' : ''
+                            }`}
+                          />
+                          {hasStockIssue && (
+                            <p className="text-xs text-red-600 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Excede stock disponible
+                            </p>
+                          )}
+                          {!hasStockIssue && exceedsRequired && (
+                            <p className="text-xs text-amber-600 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Excede cantidad requerida
+                            </p>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
@@ -250,7 +381,7 @@ export default function EmitMaterialsDialog({
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                   {rows.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
@@ -262,6 +393,26 @@ export default function EmitMaterialsDialog({
               </Table>
             </ScrollArea>
           </div>
+
+          {/* Errores de validación */}
+          {validationErrors.length > 0 && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-2 flex-1">
+                  <h4 className="font-semibold text-red-900">No se puede emitir</h4>
+                  <ul className="space-y-1 text-sm text-red-800">
+                    {validationErrors.map((err, idx) => (
+                      <li key={idx}>• {err}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-red-700 mt-2">
+                    Ajusta las cantidades para no exceder el stock disponible.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Nota + Resumen */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
@@ -282,16 +433,70 @@ export default function EmitMaterialsDialog({
             Cancelar
           </Button>
           <Button
-            onClick={async () => {
-              await onEmit(valid);
-              onOpenChange(false);
-            }}
+            onClick={handleEmit}
             disabled={valid.length === 0}
           >
             Emitir
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Diálogo de confirmación para cantidades que exceden lo requerido */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Confirmar emisión
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Estás emitiendo más cantidad de la requerida para algunos materiales.
+            </p>
+            {pendingEmit && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm font-medium text-amber-900 mb-2">
+                  Materiales con exceso:
+                </p>
+                <ul className="space-y-1 text-xs text-amber-800">
+                  {pendingEmit.map((item) => {
+                    const matInfo = materials.find(m => m.sku === item.sku);
+                    const required = matInfo?.pend ?? 0;
+                    if (required > 0 && item.qty > required) {
+                      const productInfo = products.find(p => p.sku === item.sku);
+                      const nombre = productInfo?.nombre ?? item.sku;
+                      return (
+                        <li key={item.sku}>
+                          • {nombre}: Emitiendo {item.qty}, requerido {required}
+                        </li>
+                      );
+                    }
+                    return null;
+                  })}
+                </ul>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground">
+              ¿Deseas continuar con la emisión?
+            </p>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowConfirmDialog(false);
+                setPendingEmit(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmEmit}>
+              Confirmar emisión
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

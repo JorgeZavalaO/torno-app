@@ -207,11 +207,26 @@ export const getOTDetail = cache(
 export const getProductsMini = cache(
   async () => {
     const rows = await prisma.producto.findMany({
-  select: { sku: true, nombre: true, uom: true, categoria: true },
+      select: { sku: true, nombre: true, uom: true, categoria: true },
       orderBy: { nombre: "asc" },
       take: 2000,
     });
-    return rows;
+    
+    // Obtener stock disponible por SKU
+    const stocks = await prisma.movimiento.groupBy({
+      by: ["productoId"],
+      where: { productoId: { in: rows.map(r => r.sku) } },
+      _sum: { cantidad: true },
+    });
+    
+    const stockMap = new Map(
+      stocks.map(s => [s.productoId, Number(s._sum.cantidad || 0)])
+    );
+    
+    return rows.map(r => ({
+      ...r,
+      stock: stockMap.get(r.sku) ?? 0,
+    }));
   },
   ["ot:products:mini"],
   { revalidate: 60 }
