@@ -59,6 +59,7 @@ export const getSCsCached = cache(
 
       return {
         id: r.id,
+        codigo: r.codigo ?? undefined,
         estado: r.estado,
         createdAt: r.createdAt,
         solicitante: r.solicitante,

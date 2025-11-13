@@ -26,6 +26,7 @@ export type SCItem = {
 
 export type SCRow = {
   id: string;
+  codigo?: string | null;
   estado: "PENDING_ADMIN" | "PENDING_GERENCIA" | "APPROVED" | "REJECTED" | "CANCELLED";
   createdAt: string | Date;
   solicitante: { id: string; email: string; displayName?: string | null };

@@ -26,6 +26,7 @@ import { updateQuoteStatus, createOTFromQuote } from "@/app/(protected)/cotizado
 
 type QuoteDetail = {
   id: string;
+  codigo?: string | null;
   createdAt: Date;
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   currency: string;
@@ -141,7 +142,9 @@ export function QuoteDetailView({ quote, canWrite, systemCurrency = "PEN" }: Quo
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Cotización #{quote.id.slice(0, 8)}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Cotización {quote.codigo || `#${quote.id.slice(0, 8)}`}
+          </h1>
           <div className="flex items-center gap-2 text-xs">
             <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{quote.currency}</span>
             {quote.currency !== systemCurrency && (
@@ -197,7 +200,20 @@ export function QuoteDetailView({ quote, canWrite, systemCurrency = "PEN" }: Quo
                   </Button>
                 </>
               )}
-              <Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  try {
+                    const url = `/api/cotizaciones/${quote.id}/pdf?print=true`;
+                    window.open(url, "_blank", "noopener,noreferrer");
+                    toast.success("Abriendo vista previa para imprimir PDF...");
+                  } catch (err) {
+                    console.error("Error al abrir PDF:", err);
+                    toast.error("No se pudo abrir la ventana para generar el PDF");
+                  }
+                }}
+              >
                 <FileText className="h-4 w-4 mr-2" />
                 Generar PDF
               </Button>

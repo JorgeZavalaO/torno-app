@@ -32,6 +32,7 @@ export default async function QuotesPage() {
   // Mapear a tipos serializables para el cliente (Date -> string, Decimal -> number)
   const items = quotes.map((q: {
     id: string;
+    codigo?: string | null;
     createdAt: Date | string;
     status: string;
     currency: string;
@@ -41,6 +42,7 @@ export default async function QuotesPage() {
     cliente: { id: string; nombre: string; ruc: string };
   }) => ({
     id: q.id,
+    codigo: q.codigo ?? null,
     createdAt: q.createdAt instanceof Date ? q.createdAt.toISOString() : String(q.createdAt),
     status: q.status as "APPROVED" | "REJECTED" | "DRAFT" | "SENT",
     currency: q.currency,

@@ -26,6 +26,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
   const toNum = (v: unknown) => (v == null ? 0 : Number(v?.toString?.() ?? v));
   const plainQuote = {
     id: quote.id,
+    codigo: quote.codigo ?? null,
     createdAt: quote.createdAt,
     status: quote.status,
     currency: quote.currency,
@@ -57,6 +58,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
     <div className="p-6">
   <QuoteDetailView systemCurrency={String(params.currency || 'PEN')} quote={plainQuote as unknown as {
         id: string;
+        codigo?: string | null;
         createdAt: Date;
         status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
         currency: string;

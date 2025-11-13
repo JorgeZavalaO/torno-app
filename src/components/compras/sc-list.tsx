@@ -55,6 +55,7 @@ export function SCList({
     return rows.filter((r) =>
       r.items.some((i) => i.nombre?.toLowerCase().includes(s) || i.productoId.toLowerCase().includes(s)) ||
       r.solicitante.email.toLowerCase().includes(s) ||
+      (r.codigo && r.codigo.toLowerCase().includes(s)) ||
       r.id.toLowerCase().includes(s)
     );
   }, [q, rows]);
@@ -78,7 +79,7 @@ export function SCList({
       <Card className="p-4 flex items-center gap-3 max-w-lg">
         <Package className="h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por producto, SKU, solicitante o ID..."
+          placeholder="Buscar por producto, SKU, solicitante o código..."
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -91,7 +92,7 @@ export function SCList({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">
-              <TableHead>ID</TableHead>
+              <TableHead>Código</TableHead>
               <TableHead>Solicitante</TableHead>
               <TableHead>OT</TableHead>
               <TableHead>Items</TableHead>
@@ -112,7 +113,7 @@ export function SCList({
                     className="font-mono cursor-pointer hover:underline"
                     onClick={() => setSelected(r)}
                   >
-                    #{r.id.slice(0, 8)}
+                    {r.codigo || `#${r.id.slice(0, 8)}`}
                   </TableCell>
 
                   <TableCell>
@@ -235,7 +236,7 @@ export function SCList({
           {selected && (
             <>
               <DialogHeader>
-                <DialogTitle>SC #{selected.id.slice(0, 8)}</DialogTitle>
+                <DialogTitle>{selected.codigo || `SC #${selected.id.slice(0, 8)}`}</DialogTitle>
                 <DialogDescription>
                   Detalle de la solicitud de compra.
                 </DialogDescription>

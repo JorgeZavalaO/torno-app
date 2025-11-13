@@ -1,5 +1,6 @@
 export type PlainQuote = {
   id: string;
+    codigo: string | null;
   clienteId: string;
   version: number;
   currency: string;
@@ -36,6 +37,7 @@ const hasToString = (x: unknown): x is { toString: () => string } =>
 export const toNum = (v: unknown) => (v == null ? 0 : Number(hasToString(v) ? v.toString() : (v as number)));
 
 type PrismaLikeQuote = {
+    codigo?: string | null;
   id: string;
   clienteId: string;
   version: number;
@@ -55,6 +57,7 @@ type PrismaLikeQuote = {
 export function serializeQuote(q: PrismaLikeQuote, withClient = true): PlainQuote {
   return {
     id: q.id,
+      codigo: q.codigo ?? null,
     clienteId: q.clienteId,
     version: q.version,
     currency: q.currency,

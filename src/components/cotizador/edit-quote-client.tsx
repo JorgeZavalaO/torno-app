@@ -34,6 +34,7 @@ type TiposTrabajoResponse = {
 
 type QuoteDetail = {
   id: string;
+  codigo?: string | null;
   createdAt: Date;
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   currency: string;
@@ -260,7 +261,7 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              Editar Cotización #{quote.id.slice(0, 8)}
+              Editar Cotización {quote.codigo || `#${quote.id.slice(0, 8)}`}
             </h1>
             <div className="flex items-center gap-2 mt-1">
               <QuoteStatusBadge status={quote.status} />

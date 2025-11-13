@@ -9,7 +9,7 @@ export const getQuotesCached = cache(
     prisma.cotizacion.findMany({
       orderBy: { createdAt: "desc" },
       select: {
-        id: true, createdAt: true, status: true, currency: true,
+        id: true, codigo: true, createdAt: true, status: true, currency: true,
         qty: true, total: true, unitPrice: true,
         cliente: { select: { id: true, nombre: true, ruc: true } },
       },

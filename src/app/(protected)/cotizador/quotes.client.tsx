@@ -5,6 +5,7 @@ import { QuoteHeader } from "@/components/cotizador/quote-header";
 
 type Quote = {
   id: string;
+  codigo: string | null;
   createdAt: string;
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   currency: string;

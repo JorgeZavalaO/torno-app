@@ -12,6 +12,7 @@ import { QuoteStatusBadge } from "./quote-status-badge";
 
 type Quote = {
   id: string;
+  codigo: string | null;
   createdAt: string;
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   currency: string;
@@ -37,6 +38,7 @@ export function QuoteList({ quotes, canWrite, systemCurrency = "PEN" }: QuoteLis
     return quotes.filter((quote) =>
       quote.cliente.nombre.toLowerCase().includes(query) ||
       quote.cliente.ruc.toLowerCase().includes(query) ||
+      (quote.codigo && quote.codigo.toLowerCase().includes(query)) ||
       quote.id.toLowerCase().includes(query)
     );
   }, [searchQuery, quotes]);
@@ -64,7 +66,7 @@ export function QuoteList({ quotes, canWrite, systemCurrency = "PEN" }: QuoteLis
           <div className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por cliente, RUC o ID de cotización..."
+              placeholder="Buscar por cliente, RUC o código de cotización..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -86,7 +88,7 @@ export function QuoteList({ quotes, canWrite, systemCurrency = "PEN" }: QuoteLis
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">
-              <TableHead>ID</TableHead>
+              <TableHead>Código</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead className="text-center">Cantidad</TableHead>
@@ -107,7 +109,7 @@ export function QuoteList({ quotes, canWrite, systemCurrency = "PEN" }: QuoteLis
                   className={`hover:bg-muted/20 ${hasCurrencyMismatch ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                 >
                   <TableCell className="font-mono text-sm">
-                    #{quote.id.slice(0, 8)}
+                    {quote.codigo || `#${quote.id.slice(0, 8)}`}
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">

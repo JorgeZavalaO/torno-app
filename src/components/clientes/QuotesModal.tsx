@@ -46,7 +46,7 @@ export default function QuotesModal({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
+                    <TableHead>Código</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Total</TableHead>
@@ -62,7 +62,7 @@ export default function QuotesModal({
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          {quote.id.slice(0, 8)}...
+                          {quote.codigo || `#${quote.id.slice(0, 8)}`}
                         </a>
                       </TableCell>
                       <TableCell>

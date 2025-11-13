@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 type Quote = {
   id: string;
+  codigo?: string | null;
   createdAt: string;
   status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED";
   currency: string;
@@ -35,14 +36,15 @@ export function QuoteActions({ quote, canWrite }: QuoteActionsProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
 
-  const copyQuoteId = () => {
-    navigator.clipboard.writeText(quote.id);
-    toast.success("ID de cotización copiado");
+  const copyQuoteCodigo = () => {
+    const text = quote.codigo || quote.id;
+    navigator.clipboard.writeText(text);
+    toast.success(quote.codigo ? "Código copiado" : "ID copiado");
   };
 
   const generatePDF = () => {
-    // Implementar generación de PDF
-    toast.info("Funcionalidad de PDF próximamente");
+    // Abrir la URL del PDF en nueva ventana
+    window.open(`/api/cotizaciones/${quote.id}/pdf?print=true`, '_blank');
   };
 
   return (
@@ -63,9 +65,9 @@ export function QuoteActions({ quote, canWrite }: QuoteActionsProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={copyQuoteId}>
+            <DropdownMenuItem onClick={copyQuoteCodigo}>
               <Copy className="h-4 w-4 mr-2" />
-              Copiar ID
+              Copiar {quote.codigo ? "código" : "ID"}
             </DropdownMenuItem>
             
             <DropdownMenuItem onClick={generatePDF}>

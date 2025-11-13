@@ -19,6 +19,7 @@ export type ClientActions = {
 
 export type QuoteData = {
   id: string;
+  codigo?: string | null;
   createdAt: string;
   status: string;
   total: number;
