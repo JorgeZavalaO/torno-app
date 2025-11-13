@@ -72,7 +72,22 @@ const ProviderSchema = z.object({
   email: z.string().email().optional(),
   telefono: z.string().optional(),
   direccion: z.string().optional(),
+  currency: z.string().min(3).max(4).optional(), // ISO code (PEN, USD, EUR)
 });
+
+async function validateCurrency(code: string | undefined | null): Promise<string> {
+  const fallback = "PEN";
+  if (!code) return fallback;
+  const normalized = code.toUpperCase();
+  // Validar contra catálogo MONEDA si existe
+  try {
+    const exists = await prisma.configuracionCatalogo.findFirst({
+      where: { tipo: "MONEDA", codigo: normalized, activo: true },
+      select: { id: true },
+    });
+    return exists ? normalized : fallback;
+  } catch { return fallback; }
+}
 
 export async function createProvider(fd: FormData): Promise<Result> {
   await assertCanWritePurchases();
@@ -83,10 +98,13 @@ export async function createProvider(fd: FormData): Promise<Result> {
     email: fd.get("email") || undefined,
     telefono: fd.get("telefono") || undefined,
     direccion: fd.get("direccion") || undefined,
+    currency: fd.get("currency") || undefined,
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos del proveedor" };
   try {
-    const p = await prisma.proveedor.create({ data: parsed.data, select: { id: true } });
+    const currency = await validateCurrency(parsed.data.currency);
+    const { currency: _cIgnored, ...rest } = parsed.data;
+    const p = await prisma.proveedor.create({ data: { ...rest, currency }, select: { id: true } });
     bump();
     return { ok: true, message: "Proveedor creado", id: p.id };
   } catch (e: unknown) {
@@ -105,6 +123,7 @@ const ProviderUpdateSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   telefono: z.string().optional().or(z.literal("")),
   direccion: z.string().optional().or(z.literal("")),
+  currency: z.string().min(3).max(4).optional().or(z.literal("")),
 });
 
 export async function updateProvider(fd: FormData): Promise<Result> {
@@ -117,6 +136,7 @@ export async function updateProvider(fd: FormData): Promise<Result> {
     email: (fd.get("email") || undefined) as string | undefined,
     telefono: (fd.get("telefono") || undefined) as string | undefined,
     direccion: (fd.get("direccion") || undefined) as string | undefined,
+    currency: (fd.get("currency") || undefined) as string | undefined,
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos del proveedor" };
 
@@ -125,7 +145,11 @@ export async function updateProvider(fd: FormData): Promise<Result> {
   for (const [k, v] of Object.entries(rest)) {
     if (v !== undefined) {
       // convertir cadenas vacías a null para campos opcionales
-      data[k] = v === "" ? null : v;
+      if (k === "currency") {
+        data[k] = v === "" ? null : await validateCurrency(v);
+      } else {
+        data[k] = v === "" ? null : v;
+      }
     }
   }
 
@@ -166,6 +190,7 @@ const SCItemSchema = z.object({
 const SCSchema = z.object({
   otId: z.string().optional(),
   notas: z.string().max(500).optional(),
+  currency: z.string().min(3).max(4).optional(),
   items: z.array(SCItemSchema).min(1),
 });
 
@@ -179,11 +204,12 @@ export async function createSC(fd: FormData): Promise<Result> {
   const parsed = SCSchema.safeParse({
     otId: (fd.get("otId") || undefined) as string | undefined,
     notas: (fd.get("notas") || undefined) as string | undefined,
+    currency: (fd.get("currency") || undefined) as string | undefined,
     items: json ? JSON.parse(json) : [],
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos de solicitud" };
 
-  const { otId, notas, items } = parsed.data;
+  const { otId, notas, items, currency } = parsed.data;
   const totalEstimado = items.reduce(
     (acc, it) => acc + (Number(it.costoEstimado ?? 0) * Number(it.cantidad)),
     0
@@ -210,6 +236,7 @@ export async function createSC(fd: FormData): Promise<Result> {
     }
   }
 
+  const scCurrency = await validateCurrency(currency);
   const sc = await prisma.solicitudCompra.create({
     data: {
       solicitanteId: solicitante.id,
@@ -217,6 +244,7 @@ export async function createSC(fd: FormData): Promise<Result> {
       estado: "PENDING_ADMIN",
       totalEstimado: D(totalEstimado),
       notas: notas || null,
+      currency: scCurrency,
       items: {
         create: items.map((it) => ({
           productoId: it.productoId,
@@ -317,6 +345,7 @@ const OCCreateSchema = z.object({
   scId: z.string().uuid(),
   proveedorId: z.string().uuid(),
   codigo: z.string().min(3),
+  currency: z.string().min(3).max(4).optional(),
   items: z.array(z.object({
     productoId: z.string().min(1),
     cantidad: z.coerce.number().positive(),
@@ -331,11 +360,12 @@ export async function createOC(fd: FormData): Promise<Result> {
     scId: fd.get("scId"),
     proveedorId: fd.get("proveedorId"),
     codigo: fd.get("codigo"),
+    currency: (fd.get("currency") || undefined) as string | undefined,
     items: JSON.parse(String(fd.get("items") || "[]")),
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos de OC" };
 
-  const { scId, proveedorId, codigo, items } = parsed.data;
+  const { scId, proveedorId, codigo, items, currency } = parsed.data;
 
   // 1) SC aprobada
   const sc = await prisma.solicitudCompra.findUnique({
@@ -346,7 +376,7 @@ export async function createOC(fd: FormData): Promise<Result> {
   if (sc.estado !== "APPROVED") return { ok: false, message: "SC debe estar APROBADA" };
 
   // 2) Proveedor válido
-  const prov = await prisma.proveedor.findUnique({ where: { id: proveedorId }, select: { id: true } });
+  const prov = await prisma.proveedor.findUnique({ where: { id: proveedorId }, select: { id: true, currency: true } });
   if (!prov) return { ok: false, message: "Proveedor inválido" };
 
   // 3) Calcular ASIGNADO previo por SCItem
@@ -398,6 +428,7 @@ export async function createOC(fd: FormData): Promise<Result> {
   }
 
   const total = splits.reduce((acc, s) => acc + s.costoUnitario * s.cantidad, 0);
+  const ocCurrency = await validateCurrency(currency || prov.currency || undefined);
 
   try {
     const oc = await prisma.$transaction(async (tx) => {
@@ -408,6 +439,7 @@ export async function createOC(fd: FormData): Promise<Result> {
           codigo,
           estado: "OPEN",
           total: D(total),
+          currency: ocCurrency,
           items: {
             create: splits.map(s => ({
               productoId: s.productoId,

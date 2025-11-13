@@ -23,6 +23,7 @@ const InputSchema = z.object({
   notes: z.string().max(500).optional(),
   pedidoReferencia: z.string().max(100).optional(), // Referencia de pedido ERP
   tipoTrabajoId: z.string().uuid().optional(), // Tipo de trabajo seleccionado
+  acabadoId: z.string().uuid().optional(), // Acabado de fabricación seleccionado
   machineCategory: z.string().optional(), // Categoría de máquina para costos
 });
 
@@ -79,6 +80,23 @@ export async function getTiposTrabajo() {
   };
 }
 
+export async function getAcabados() {
+  await assertCanReadQuotes();
+  const acabados = await prisma.configuracionCatalogo.findMany({
+    where: {
+      tipo: TipoCatalogo.TIPO_ACABADO,
+      activo: true,
+    },
+    orderBy: { orden: "asc" },
+    select: {
+      id: true,
+      nombre: true,
+      descripcion: true,
+    },
+  });
+  return acabados;
+}
+
 export async function createQuote(fd: FormData): Promise<Result> {
   await assertCanWriteQuotes();
 
@@ -130,6 +148,7 @@ export async function createQuote(fd: FormData): Promise<Result> {
     notes: fd.get("notes") || undefined,
     pedidoReferencia: fd.get("pedidoReferencia") || undefined,
     tipoTrabajoId: fd.get("tipoTrabajoId") || undefined,
+    acabadoId: fd.get("acabadoId") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
@@ -242,6 +261,7 @@ export async function createQuote(fd: FormData): Promise<Result> {
       notes: input.notes ?? null,
       pedidoReferencia: input.pedidoReferencia ?? null,
       tipoTrabajoId: input.tipoTrabajoId ?? null,
+      acabadoId: input.acabadoId ?? null,
       status: "DRAFT",
     },
     select: { id: true },
@@ -334,6 +354,7 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
     notes: fd.get("notes") || undefined,
     pedidoReferencia: fd.get("pedidoReferencia") || undefined,
     tipoTrabajoId: fd.get("tipoTrabajoId") || undefined,
+    acabadoId: fd.get("acabadoId") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
   const input = parsed.data;
@@ -454,6 +475,7 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
         notes: input.notes ?? null,
         pedidoReferencia: input.pedidoReferencia ?? null,
         tipoTrabajoId: input.tipoTrabajoId ?? null,
+        acabadoId: input.acabadoId ?? null,
         updatedAt: new Date(),
       },
     });

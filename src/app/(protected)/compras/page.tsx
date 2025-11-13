@@ -21,13 +21,14 @@ export default async function PurchasesPage() {
   if (!canRead) redirect("/");
 
   // datos
-  const [providers, scs, ocs, products, estadoSCOptions, estadoOCOptions] = await Promise.all([
+  const [providers, scs, ocs, products, estadoSCOptions, estadoOCOptions, monedaOptions] = await Promise.all([
     getProvidersCached(),
     getSCsCached(),
     getOCsCached(),
     prisma.producto.findMany({ orderBy: { nombre: "asc" }, select: { sku: true, nombre: true, uom: true } }),
     getCatalogoOptions("ESTADO_SC" as TipoCatalogo),
     getCatalogoOptions("ESTADO_OC" as TipoCatalogo),
+    getCatalogoOptions("MONEDA" as TipoCatalogo),
   ]);
 
   const currencyParam = await getCostingParamByKey("currency");
@@ -35,13 +36,15 @@ export default async function PurchasesPage() {
 
   return (
     <ComprasClient
-  currency={currency}
+      currency={currency}
+      monedaOptions={monedaOptions}
       canWrite={canWrite}
       providers={providers.map(p => ({
         ...p,
         email: p.email ?? undefined,
         telefono: p.telefono ?? undefined,
         direccion: p.direccion ?? undefined,
+        currency: p.currency ?? undefined,
       }))}
       scs={scs}
       ocs={ocs}

@@ -46,7 +46,13 @@ type QuoteDetail = {
   notes?: string | null;
   pedidoReferencia?: string | null;
   tipoTrabajoId?: string | null;
+  acabadoId?: string | null;
   tipoTrabajo?: {
+    id: string;
+    nombre: string;
+    descripcion: string | null;
+  } | null;
+  acabado?: {
     id: string;
     nombre: string;
     descripcion: string | null;
@@ -77,7 +83,9 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
   const [pedidoReferencia, setPedidoReferencia] = useState<string>(quote.pedidoReferencia || "");
   const [tipoTrabajoId, setTipoTrabajoId] = useState<string>(quote.tipoTrabajoId || "");
   const [tipoTrabajoSubcategoriaId, setTipoTrabajoSubcategoriaId] = useState<string>("");
+  const [acabadoId, setAcabadoId] = useState<string>(quote.acabadoId || "");
   const [tiposTrabajo, setTiposTrabajo] = useState<TiposTrabajoResponse | null>(null);
+  const [acabados, setAcabados] = useState<Array<{ id: string; nombre: string; descripcion: string | null }>>([]);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
@@ -139,6 +147,7 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
     if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
     if (tipoTrabajoSubcategoriaId) formData.set("tipoTrabajoId", tipoTrabajoSubcategoriaId);
     else if (tipoTrabajoId) formData.set("tipoTrabajoId", tipoTrabajoId);
+  if (acabadoId) formData.set("acabadoId", acabadoId);
   if (piezasLines.length) formData.set("piezas", JSON.stringify(piezasLines));
   if (materialesLines.length) formData.set("materialesDetalle", JSON.stringify(materialesLines));
 
@@ -227,8 +236,13 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
       try {
         const tipos = await getTiposTrabajo();
         setTiposTrabajo(tipos as TiposTrabajoResponse);
+        
+        // Cargar acabados desde el catálogo
+        const { getAcabados } = await import("@/app/(protected)/cotizador/actions");
+        const acabadosData = await getAcabados();
+        setAcabados(acabadosData);
       } catch (error) {
-        console.error("Error loading tipos de trabajo:", error);
+        console.error("Error loading catalog data:", error);
       }
     });
   }, []);
@@ -326,6 +340,37 @@ export function EditQuoteClient({ quote, clients, params, action }: EditQuoteCli
 
                 <div>
                   <div className="grid grid-cols-1 gap-4">
+                    {/* Acabado de Fabricación */}
+                    <div className="space-y-2">
+                      <Label htmlFor="acabado">Acabado de Fabricación</Label>
+                      <Select 
+                        value={acabadoId} 
+                        onValueChange={setAcabadoId} 
+                        disabled={pending || !canEdit}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar acabado..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {acabados.map((acabado) => (
+                            <SelectItem key={acabado.id} value={acabado.id}>
+                              <div>
+                                <div className="font-medium">{acabado.nombre}</div>
+                                {acabado.descripcion && (
+                                  <div className="text-sm text-muted-foreground">
+                                    {acabado.descripcion}
+                                  </div>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Tipo de acabado requerido para las piezas (opcional)
+                      </p>
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="tipoTrabajo">Tipo de Trabajo</Label>
                       <Select 

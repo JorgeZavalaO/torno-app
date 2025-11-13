@@ -33,6 +33,7 @@ export function SCList({
   actions,
   estadoOptions,
   currency = "USD",
+  monedaOptions,
 }: {
   rows: SCRow[];
   providers: Provider[];
@@ -40,6 +41,7 @@ export function SCList({
   actions: Actions;
   estadoOptions?: { value: string; label: string; color?: string | null }[];
   currency?: string;
+  monedaOptions?: { value: string; label: string; color?: string | null }[];
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -168,7 +170,7 @@ export function SCList({
                     </div>
                   </TableCell>
 
-                  <TableCell className="text-right">{fmtCurrency(r.totalEstimado, currency)}</TableCell>
+                  <TableCell className="text-right">{fmtCurrency(r.totalEstimado, r.currency || currency)}</TableCell>
 
                   <TableCell className="text-center">
                     <SCBadge estado={r.estado} options={estadoOptions} />
@@ -192,6 +194,7 @@ export function SCList({
                         fd.set("proveedorId", payload.proveedorId);
                         fd.set("codigo", payload.codigo);
                         fd.set("items", JSON.stringify(payload.items));
+                        if (payload.currency) fd.set("currency", payload.currency);
                         const rr = await actions.createOC(fd);
                         if (rr.ok) {
                           toast.success(rr.message || "OC creada");
@@ -206,6 +209,7 @@ export function SCList({
                       if (rr.ok) { toast.success(rr.message || "Costos actualizados"); startTransition(() => router.refresh()); }
                       else toast.error(rr.message);
                     }}
+                      monedaOptions={monedaOptions}
                     />
                   </TableCell>
                 </TableRow>
@@ -309,7 +313,7 @@ export function SCList({
 
                 <div className="flex items-center justify-between pt-2">
                   <div className="text-sm text-muted-foreground">Total estimado</div>
-                  <div className="font-semibold">{fmtCurrency(selected.totalEstimado, currency)}</div>
+                  <div className="font-semibold">{fmtCurrency(selected.totalEstimado, selected.currency || currency)}</div>
                 </div>
 
                 {/* Resumen de OCs asociadas */}

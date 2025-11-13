@@ -62,7 +62,7 @@ export function OCList({ rows, canWrite, actions, currency = "USD", estadoOption
                   <div className="text-xs text-muted-foreground">{o.proveedor.ruc}</div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{new Date(o.fecha).toLocaleDateString()}</TableCell>
-                <TableCell className="text-right font-medium">{fmtCurrency(o.total, currency)}</TableCell>
+                <TableCell className="text-right font-medium">{fmtCurrency(o.total, o.currency || currency)}</TableCell>
                 <TableCell className="text-center">
                   <OCBadge estado={o.estado} options={estadoOptions} />
                 </TableCell>
@@ -154,8 +154,8 @@ export function OCList({ rows, canWrite, actions, currency = "USD", estadoOption
                         <TableRow key={i.id}>
                           <TableCell>{i.nombre}</TableCell>
                           <TableCell>{i.cantidad} {i.uom}</TableCell>
-                          <TableCell className="text-right">{fmtCurrency(i.costoUnitario, currency)}</TableCell>
-                          <TableCell className="text-right">{fmtCurrency(i.importe, currency)}</TableCell>
+                          <TableCell className="text-right">{fmtCurrency(i.costoUnitario, selected.currency || currency)}</TableCell>
+                          <TableCell className="text-right">{fmtCurrency(i.importe, selected.currency || currency)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -164,7 +164,7 @@ export function OCList({ rows, canWrite, actions, currency = "USD", estadoOption
               </div>
               <div className="flex items-center justify-between pt-2">
                 <div className="text-sm text-muted-foreground">Total</div>
-                <div className="font-semibold">{fmtCurrency(selected.total, currency)}</div>
+                <div className="font-semibold">{fmtCurrency(selected.total, selected.currency || currency)}</div>
               </div>
             </div>
           )}

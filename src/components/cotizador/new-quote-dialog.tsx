@@ -82,7 +82,9 @@ export function NewQuoteDialog({
   const [pedidoReferencia, setPedidoReferencia] = useState<string>("");
   const [tipoTrabajoId, setTipoTrabajoId] = useState<string>("");
   const [tipoTrabajoSubcategoriaId, setTipoTrabajoSubcategoriaId] = useState<string>("");
+  const [acabadoId, setAcabadoId] = useState<string>("");
   const [tiposTrabajo, setTiposTrabajo] = useState<TiposTrabajoResponse | null>(null);
+  const [acabados, setAcabados] = useState<Array<{ id: string; nombre: string; descripcion: string | null }>>([]);
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
   // Eliminado forceMaterials: siempre se autocalcula desde líneas de detalle cuando existen
@@ -136,6 +138,7 @@ export function NewQuoteDialog({
     setPedidoReferencia("");
     setTipoTrabajoId("");
     setTipoTrabajoSubcategoriaId("");
+    setAcabadoId("");
     setPiezasLines([]);
     setMaterialesLines([]);
   };
@@ -155,6 +158,7 @@ export function NewQuoteDialog({
   if (pedidoReferencia) formData.set("pedidoReferencia", pedidoReferencia);
   if (tipoTrabajoSubcategoriaId) formData.set("tipoTrabajoId", tipoTrabajoSubcategoriaId);
   else if (tipoTrabajoId) formData.set("tipoTrabajoId", tipoTrabajoId);
+  if (acabadoId) formData.set("acabadoId", acabadoId);
   if (piezasLines.length) formData.set("piezas", JSON.stringify(piezasLines));
   if (materialesLines.length) formData.set("materialesDetalle", JSON.stringify(materialesLines));
 
@@ -190,15 +194,20 @@ export function NewQuoteDialog({
     }
   }, [open, validUntil]);
 
-  // Cargar tipos de trabajo
+  // Cargar tipos de trabajo y acabados
   useEffect(() => {
     if (open) {
       startTransition(async () => {
         try {
           const tipos = await getTiposTrabajo();
           setTiposTrabajo(tipos as TiposTrabajoResponse);
+          
+          // Cargar acabados desde el catálogo
+          const { getAcabados } = await import("@/app/(protected)/cotizador/actions");
+          const acabadosData = await getAcabados();
+          setAcabados(acabadosData);
         } catch (error) {
-          console.error("Error loading tipos de trabajo:", error);
+          console.error("Error loading catalog data:", error);
         }
       });
     }
@@ -453,6 +462,33 @@ export function NewQuoteDialog({
                           </p>
                         </div>
                       )}
+
+                      {/* Acabado de Fabricación */}
+                      <div className="space-y-2">
+                        <Label htmlFor="acabado" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Acabado de Fabricación</Label>
+                        <Select value={acabadoId} onValueChange={setAcabadoId} disabled={pending}>
+                          <SelectTrigger className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500">
+                            <SelectValue placeholder="Seleccionar acabado..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {acabados.map((acabado) => (
+                              <SelectItem key={acabado.id} value={acabado.id}>
+                                <div className="flex flex-col items-start py-1">
+                                  <div className="font-medium text-slate-900 dark:text-slate-100">{acabado.nombre}</div>
+                                  {acabado.descripcion && (
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                                      {acabado.descripcion}
+                                    </div>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Tipo de acabado requerido para las piezas (opcional)
+                        </p>
+                      </div>
                     </div>
                   </Card>
                 </TabsContent>

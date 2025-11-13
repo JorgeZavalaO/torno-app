@@ -2,8 +2,9 @@ export type Provider = { id: string;
   nombre: string;
   ruc: string;
   email?: string;
-  telefono?: string
+  telefono?: string;
   direccion?: string;
+  currency?: string; // Moneda preferida
 };
 
 export type Product = { 
@@ -33,6 +34,7 @@ export type SCRow = {
   items: SCItem[];
   ocs: { id: string; codigo: string; estado: string }[];
   ot?: { id: string; codigo: string; estado?: string } | null;
+  currency?: string; // moneda usada para costos estimados
 
   orderedTotal?: number;
   pendingTotal?: number;
@@ -45,10 +47,11 @@ export type OCRow = {
   estado: "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED" | "CANCELLED";
   fecha: string | Date;
   total: number;
-  proveedor: { id: string; nombre: string; ruc: string };
+  proveedor: { id: string; nombre: string; ruc: string; currency?: string };
   scId: string;
   items: OCItem[];
   pendienteTotal?: number;
+  currency?: string; // moneda de la OC
 };
 
 export type Actions = {

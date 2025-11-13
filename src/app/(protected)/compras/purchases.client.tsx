@@ -11,8 +11,9 @@ import { ProvidersList } from "@/components/compras/providers-list";
 import { CreateProviderDialog } from "@/components/compras/create-provider-dialog";
 import { RecalculateCostsButton } from "@/components/compras/recalculate-costs-button";
 
-export default function ComprasClient({ currency, canWrite, providers, scs, ocs, products, actions, estadoSCOptions, estadoOCOptions }: {
+export default function ComprasClient({ currency, monedaOptions, canWrite, providers, scs, ocs, products, actions, estadoSCOptions, estadoOCOptions }: {
   currency: string;
+  monedaOptions: { value: string; label: string; color?: string | null }[];
   canWrite: boolean;
   providers: Provider[];
   scs: SCRow[];
@@ -37,11 +38,14 @@ export default function ComprasClient({ currency, canWrite, providers, scs, ocs,
           {canWrite && tab === "sc" && (
             <NewSCDialog
               products={products}
+              monedaOptions={monedaOptions}
+              defaultCurrency={currency}
               onCreate={async (payload) => {
                 const fd = new FormData();
                 fd.set("items", JSON.stringify(payload.items));
                 if (payload.otId) fd.set("otId", payload.otId);
                 if (payload.notas) fd.set("notas", payload.notas);
+                if (payload.currency) fd.set("currency", payload.currency);
                 const r = await actions.createSC(fd);
                 // Control de feedback y recarga se maneja dentro de SCList tras setSCState/OC
                 if (!r.ok) {
@@ -79,10 +83,10 @@ export default function ComprasClient({ currency, canWrite, providers, scs, ocs,
           {canWrite && (
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">Gestiona tus proveedores: crea, edita o elimina.</div>
-              <CreateProviderDialog onCreate={actions.createProvider} />
+              <CreateProviderDialog onCreate={actions.createProvider} monedaOptions={monedaOptions} defaultCurrency={currency} />
             </div>
           )}
-          <ProvidersList providers={providers} actions={canWrite ? { updateProvider: actions.updateProvider, deleteProvider: actions.deleteProvider } : undefined} />
+          <ProvidersList providers={providers} actions={canWrite ? { updateProvider: actions.updateProvider, deleteProvider: actions.deleteProvider } : undefined} monedaOptions={monedaOptions} />
         </TabsContent>
       </Tabs>
     </div>

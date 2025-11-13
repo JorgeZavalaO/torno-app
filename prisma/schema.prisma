@@ -177,7 +177,10 @@ model Cotizacion {
   pedidoReferencia String?   // Referencia de pedido ERP
 
   tipoTrabajoId  String?     // Tipo de trabajo seleccionado
-  tipoTrabajo    ConfiguracionCatalogo? @relation(fields: [tipoTrabajoId], references: [id], onDelete: SetNull)
+  tipoTrabajo    ConfiguracionCatalogo? @relation("cotizacion_tipo_trabajo", fields: [tipoTrabajoId], references: [id], onDelete: SetNull)
+
+  acabadoId      String?     // Acabado de fabricación seleccionado
+  acabado        ConfiguracionCatalogo? @relation("cotizacion_acabado", fields: [acabadoId], references: [id], onDelete: SetNull)
 
   machineCategoryId String?  // Categoría de máquina para costos diferenciados
   machineCategory   MachineCostingCategory? @relation(fields: [machineCategoryId], references: [id], onDelete: SetNull)
@@ -287,6 +290,8 @@ model Proveedor {
   email     String?
   telefono  String?
   direccion String?
+  // Moneda preferida para negociaciones (ISO code, ej: PEN, USD)
+  currency  String?      @default("PEN")
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -300,6 +305,8 @@ model SolicitudCompra {
   estado        EstadoSC    @default(PENDING_ADMIN)
   totalEstimado Decimal?    @db.Decimal(12,2)
   notas         String?
+  // Moneda en la que se estimaron los costos (ISO). Si null => moneda base del sistema.
+  currency      String?     @default("PEN")
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -335,6 +342,8 @@ model OrdenCompra {
   codigo        String     @unique
   estado        EstadoOC   @default(OPEN)
   total         Decimal    @db.Decimal(12,2)
+  // Moneda en la que se pactan los precios de esta OC
+  currency      String     @default("PEN")
   facturaUrl    String?
   fecha         DateTime   @default(now())
 
@@ -573,7 +582,8 @@ model ConfiguracionCatalogo {
   updatedAt   DateTime    @updatedAt
 
   // Relaciones
-  cotizaciones Cotizacion[]
+  cotizacionesTipoTrabajo Cotizacion[] @relation("cotizacion_tipo_trabajo")
+  cotizacionesAcabado     Cotizacion[] @relation("cotizacion_acabado")
 
   @@unique([tipo, codigo])
   @@index([tipo, activo, orden])

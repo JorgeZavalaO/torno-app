@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, Factory, X } from "lucide-react";
+import { Check, Factory, X, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import type { Provider, SCRow } from "./types";
 import {
@@ -14,9 +14,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-function EditCostsDialog({ items, onSubmit }: {
+function EditCostsDialog({ items, onSubmit, currency }: {
   items: Array<{ id: string; label: string; costoEstimado: number|null }>;
   onSubmit: (items: Array<{ id: string; costoEstimado: number|null }>) => void | Promise<void>;
+  currency?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [vals, setVals] = useState<Record<string, number|string>>(
@@ -32,33 +33,55 @@ function EditCostsDialog({ items, onSubmit }: {
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">Editar costos</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[620px]">
         <DialogHeader>
-          <DialogTitle>Costos estimados</DialogTitle>
-          <DialogDescription>Actualiza el costo unitario estimado por ítem.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2 max-h-[45vh] overflow-auto pr-1">
-          {items.map(it => (
-            <div key={it.id} className="grid grid-cols-12 gap-2 items-center">
-              <div className="col-span-8 truncate">{it.label}</div>
-              <div className="col-span-4">
-                <Input
-                  type="number" inputMode="decimal" min={0} step="0.01"
-                  value={vals[it.id] ?? ""} placeholder="0.00"
-                  onChange={e => setVals(v => ({ ...v, [it.id]: e.target.value }))}
-                />
-              </div>
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-amber-600" />
+            <div className="flex-1">
+              <DialogTitle>Costos estimados {currency ? `(${currency})` : ""}</DialogTitle>
+              <DialogDescription>
+                Actualiza el costo unitario estimado por ítem{currency ? ` (moneda: ${currency})` : ""}.
+              </DialogDescription>
             </div>
-          ))}
+          </div>
+        </DialogHeader>
+        <div className="max-h-[45vh] overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 border-b border-slate-200 dark:border-slate-700">
+              <tr>
+                <th className="text-left p-3 font-semibold text-slate-700 dark:text-slate-300">Ítem</th>
+                <th className="text-right p-3 font-semibold text-slate-700 dark:text-slate-300">Costo Est. {currency ? `(${currency})` : ""}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => (
+                <tr key={it.id} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-900/20' : 'bg-slate-50 dark:bg-slate-900/40'} >
+                  <td className="p-3 truncate text-slate-700 dark:text-slate-300" title={it.label}>{it.label}</td>
+                  <td className="p-3">
+                    <div className="flex items-center justify-end gap-2">
+                      {currency && (
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 w-12 text-right">{currency}</span>
+                      )}
+                      <Input
+                        className="h-9 w-40 text-right"
+                        type="number" inputMode="decimal" min={0} step="0.01"
+                        value={vals[it.id] ?? ""} placeholder="0.00"
+                        onChange={e => setVals(v => ({ ...v, [it.id]: e.target.value }))}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 pt-4">
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button onClick={() => {
+          <Button className="gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white" onClick={() => {
             const payload = items.map(it => {
               const raw = String(vals[it.id] ?? "").trim();
               return { id: it.id, costoEstimado: raw === "" ? null : Number(raw) };
             });
-            // soportar onSubmit async o sync
             Promise.resolve(onSubmit(payload))
               .then(() => {
                 toast.success("Costos enviados");
@@ -67,7 +90,7 @@ function EditCostsDialog({ items, onSubmit }: {
               .catch(() => {
                 toast.error("No se pudieron enviar los costos");
               });
-          }}>Guardar</Button>
+          }}><DollarSign className="h-4 w-4" />Guardar</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -81,6 +104,7 @@ export function SCRowActions({
   onApprove,
   onCreateOC,
   onUpdateCosts,
+  monedaOptions,
 }: {
   row: SCRow;
   canWrite: boolean;
@@ -90,8 +114,10 @@ export function SCRowActions({
     proveedorId: string;
     codigo: string;
     items: Array<{ productoId: string; cantidad: number; costoUnitario: number }>;
+    currency?: string;
   }) => void;
   onUpdateCosts: (payload: { scId: string; items: Array<{ id: string; costoEstimado: number|null }> }) => void;
+  monedaOptions?: { value: string; label: string; color?: string | null }[];
 }) {
   // visible si SC es editable (mismas reglas del server)
   const editable = row.estado === "PENDING_ADMIN" || row.estado === "PENDING_GERENCIA" || ((row.ocs?.length ?? 0) === 0 && row.estado === "APPROVED");
@@ -118,6 +144,10 @@ export function SCRowActions({
   }, [row.items, row.pendingTotal]);
 
   const [proveedorId, setProveedorId] = useState(hasProviders ? providers[0].id : "");
+  const [currency, setCurrency] = useState<string | undefined>(() => {
+    const p = providers[0];
+    return p?.currency || row.currency || monedaOptions?.[0]?.value || "PEN";
+  });
   const [codigo, setCodigo] = useState(defaultCodigo);
   const [open, setOpen] = useState(false);
 
@@ -206,6 +236,7 @@ export function SCRowActions({
         <EditCostsDialog
           items={row.items.map(i => ({ id: i.id!, label: `${i.nombre ?? i.productoId} (${i.uom})`, costoEstimado: i.costoEstimado ?? null }))}
           onSubmit={(items) => onUpdateCosts({ scId: row.id, items })}
+          currency={row.currency}
         />
       )}
       {row.estado === "PENDING_ADMIN" && (
@@ -279,7 +310,7 @@ export function SCRowActions({
               <>
                 {/* Encabezado proveedor / código */}
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2">
+                    <div className="col-span-2">
                     <div className="text-sm text-muted-foreground mb-1">Proveedor</div>
                     <select
                       className="border rounded-md h-9 px-2 w-full"
@@ -288,7 +319,7 @@ export function SCRowActions({
                     >
                       {providers.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.nombre} — {p.ruc}
+                          {p.nombre} — {p.ruc} {p.currency ? `(${p.currency})` : ""}
                         </option>
                       ))}
                     </select>
@@ -297,6 +328,18 @@ export function SCRowActions({
                     <div className="text-sm text-muted-foreground mb-1">Código</div>
                     <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} />
                   </div>
+                    {monedaOptions && (
+                      <div>
+                        <div className="text-sm text-muted-foreground mb-1">Moneda OC</div>
+                        <select
+                          className="border rounded-md h-9 px-2 w-full"
+                          value={currency}
+                          onChange={e => setCurrency(e.target.value)}
+                        >
+                          {monedaOptions.map(m => <option key={m.value} value={m.value}>{m.value} — {m.label}</option>)}
+                        </select>
+                      </div>
+                    )}
                 </div>
 
                 {/* Resumen rápido */}
@@ -321,7 +364,7 @@ export function SCRowActions({
                         <th className="text-right p-2">Cubierto</th>
                         <th className="text-right p-2">Pendiente</th>
                         <th className="text-right p-2">Ordenar</th>
-                        <th className="text-right p-2">Costo Unit. (est.)</th>
+                        <th className="text-right p-2">Costo Unit. (est.) {row.currency ? `(${row.currency})` : ""}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -373,7 +416,7 @@ export function SCRowActions({
                     <thead className="bg-muted/40">
                       <tr>
                         <th className="text-left p-2">Producto</th>
-                        <th className="text-right p-2">Costo Unitario (final)</th>
+                        <th className="text-right p-2">Costo Unitario (final) {currency ? `(OC: ${currency})` : ""}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -450,7 +493,7 @@ export function SCRowActions({
                       // valida que no haya costo negativo
                       if (lines.some(l => l.costoUnitario < 0)) return;
 
-                      onCreateOC({ proveedorId, codigo, items: lines });
+                      onCreateOC({ proveedorId, codigo, items: lines, currency });
                       setOpen(false);
                     }}
                     disabled={!proveedorId || invalidExceeds || !anyQty}

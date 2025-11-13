@@ -8,7 +8,7 @@ export const getProvidersCached = cache(
   async () =>
     prisma.proveedor.findMany({
       orderBy: { nombre: "asc" },
-      select: { id: true, nombre: true, ruc: true, email: true, telefono: true, direccion: true },
+      select: { id: true, nombre: true, ruc: true, email: true, telefono: true, direccion: true, currency: true },
     }),
   ["purchases:providers:list"],
   { tags: [cacheTags.providers], revalidate: 120 }
@@ -69,6 +69,7 @@ export const getSCsCached = cache(
         ocs: r.ordenesCompra,
         orderedTotal,
         pendingTotal,
+        currency: r.currency ?? undefined,
       };
     });
   },
@@ -107,7 +108,7 @@ export const getOCsCached = cache(
       estado: r.estado,
       fecha: r.fecha,
       total: toNum(r.total),
-      proveedor: { id: r.proveedor.id, nombre: r.proveedor.nombre, ruc: r.proveedor.ruc },
+      proveedor: { id: r.proveedor.id, nombre: r.proveedor.nombre, ruc: r.proveedor.ruc, currency: r.proveedor.currency ?? undefined },
       scId: r.solicitudCompra.id,
       items: r.items.map(i => {
         const recibido = toNum(movMap[r.codigo]?.[i.productoId] ?? 0);
@@ -129,6 +130,7 @@ export const getOCsCached = cache(
         const pedido = toNum(i.cantidad);
         return acc + Math.max(0, pedido - recibido);
       }, 0),
+      currency: r.currency ?? undefined,
     }));
   },
   ["purchases:oc:list"],
