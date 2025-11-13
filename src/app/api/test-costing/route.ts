@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { assertCanReadCosting } from "@/app/lib/guards";
 import { getCostingParamsGrouped, getCostsByMachineType } from "@/app/server/queries/costing-params";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await assertCanReadCosting();
     // 1. Obtener parámetros agrupados
     const grouped = await getCostingParamsGrouped();
     

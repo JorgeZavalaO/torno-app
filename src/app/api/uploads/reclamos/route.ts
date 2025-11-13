@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { assertCanWriteReclamos } from '@/app/lib/guards';
 import { put } from '@vercel/blob';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
@@ -13,6 +14,11 @@ type UploadFile = {
 
 export async function POST(request: Request) {
   try {
+    try {
+      await assertCanWriteReclamos();
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const body = await request.json();
     const files: UploadFile[] = body.files || [];
 

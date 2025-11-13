@@ -39,17 +39,30 @@ async function main() {
 
   // Verificar que todos los permisos del guards.ts están incluidos
   const guardsPermissions = [
+    // Roles y permisos
     "roles.read", "roles.write",
     "permissions.read", "permissions.write",
+    // Usuarios
     "users.assignRoles",
+    // Clientes
     "clients.read", "clients.write",
+    // Configuración de costos y catálogos
     "settings.costing.read", "settings.costing.write",
+    "settings.catalogos.read", "settings.catalogos.write",
+    // Cotizaciones
     "quotes.read", "quotes.write",
+    // Inventario
     "inventory.read", "inventory.write",
+    // Compras
     "purchases.read", "purchases.write",
+    // Órdenes de trabajo
     "workorders.read", "workorders.write",
+    // Máquinas
     "machines.read", "machines.write",
-    "production.read", "production.write"
+    // Producción
+    "production.read", "production.write",
+    // Reclamos
+    "reclamos.read", "reclamos.write", "reclamos.approve",
   ];
 
   const adminPermissionCodes = adminRole.permissions.map(rp => rp.permission.code);

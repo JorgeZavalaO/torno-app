@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
+import { assertCanReadWorkorders } from '@/app/lib/guards';
 import { getOTListPaged } from '@/app/server/queries/ot';
 
 export async function GET(request: Request) {
+  try {
+    await assertCanReadWorkorders();
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   const url = new URL(request.url);
   const page = Number(url.searchParams.get('page') ?? '1') || 1;
   const pageSize = Number(url.searchParams.get('pageSize') ?? '10') || 10;
