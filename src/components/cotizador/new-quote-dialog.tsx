@@ -87,12 +87,15 @@ export function NewQuoteDialog({
   const [acabados, setAcabados] = useState<Array<{ id: string; nombre: string; descripcion: string | null }>>([]);
   const [piezasLines, setPiezasLines] = useState<PiezaLine[]>([]);
   const [materialesLines, setMaterialesLines] = useState<MaterialLine[]>([]);
+  // Estados para modificar parámetros de esta cotización específicamente
+  const [customGi, setCustomGi] = useState<number | null>(null);
+  const [customMargin, setCustomMargin] = useState<number | null>(null);
   // Eliminado forceMaterials: siempre se autocalcula desde líneas de detalle cuando existen
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
-  const gi = Number(params.gi ?? 0);
-  const margin = Number(params.margin ?? 0);
+  const gi = customGi !== null ? customGi : Number(params.gi ?? 0);
+  const margin = customMargin !== null ? customMargin : Number(params.margin ?? 0);
   
   // Obtener costos según categoría seleccionada
   const selectedCategory = machineCategories.find(c => c.categoria === machineCategory);
@@ -141,6 +144,8 @@ export function NewQuoteDialog({
     setAcabadoId("");
     setPiezasLines([]);
     setMaterialesLines([]);
+    setCustomGi(null);
+    setCustomMargin(null);
   };
 
   const handleSubmit = () => {
@@ -633,27 +638,90 @@ export function NewQuoteDialog({
                       </div>
                       <div>
                         <h3 className="font-semibold text-base text-slate-900 dark:text-slate-100">Parámetros del Sistema</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Configuración actual</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Configuración actual (personalizable por cotización)</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Gastos indirectos</span>
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{(gi * 100).toFixed(1)}%</span>
+                      {/* Gastos indirectos - Editable */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Gastos indirectos</span>
+                          {customGi !== null && (
+                            <Badge variant="secondary" className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
+                              Personalizado
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={customGi !== null ? (customGi * 100).toFixed(1) : (gi * 100).toFixed(1)}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setCustomGi(isNaN(val) ? null : val / 100);
+                            }}
+                            disabled={pending}
+                            className="h-8 text-xs text-center"
+                            placeholder={(gi * 100).toFixed(1)}
+                          />
+                          <span className="text-xs text-slate-600 dark:text-slate-400">%</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Margen de ganancia</span>
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{(margin * 100).toFixed(1)}%</span>
+                      
+                      {/* Margen de ganancia - Editable */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Margen de ganancia</span>
+                          {customMargin !== null && (
+                            <Badge variant="secondary" className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
+                              Personalizado
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="1000"
+                            step="0.1"
+                            value={customMargin !== null ? (customMargin * 100).toFixed(1) : (margin * 100).toFixed(1)}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setCustomMargin(isNaN(val) ? null : val / 100);
+                            }}
+                            disabled={pending}
+                            className="h-8 text-xs text-center"
+                            placeholder={(margin * 100).toFixed(1)}
+                          />
+                          <span className="text-xs text-slate-600 dark:text-slate-400">%</span>
+                        </div>
                       </div>
+                      
+                      {/* Tarifa/hora - Solo lectura */}
                       <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
                         <span className="text-xs text-slate-500 dark:text-slate-400">Tarifa/hora</span>
                         <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(hourlyRate)}</span>
                       </div>
+                      
+                      {/* Tarifa kWh - Solo lectura */}
                       <div className="flex flex-col space-y-1 p-2 bg-white dark:bg-slate-950 rounded-lg">
                         <span className="text-xs text-slate-500 dark:text-slate-400">Tarifa kWh</span>
                         <span className="font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(kwhRate)}</span>
                       </div>
                     </div>
+                    
+                    {/* Nota de cambios personalizados */}
+                    {(customGi !== null || customMargin !== null) && (
+                      <Alert className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-500" />
+                        <AlertDescription className="text-xs text-amber-800 dark:text-amber-200">
+                          Los parámetros de esta cotización han sido personalizados y solo afectarán a este documento
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 </Card>
 

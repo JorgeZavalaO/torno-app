@@ -5,6 +5,21 @@ Formato basado en Keep a Changelog y SemVer.
 ## [Unreleased]
 
 ### Added
+- **Mejoras en diálogos de importación y creación**:
+  - Soporte para descarga de plantillas Excel (.xlsx) en importación de clientes e inventario.
+  - Función `createSimpleExcel()` reutilizable para generar archivos Excel en formato SpreadsheetML XML sin dependencias externas.
+  - Plantillas con datos de ejemplo y esquema correcto para cada módulo (clientes: RUC, email, contacto; productos: categoría, UOM, costo, stock mínimo).
+  - Compatible con Excel, LibreOffice y Google Sheets.
+- **Parámetros de costeo customizables por cotización**:
+  - Nuevos campos en diálogo de nueva cotización: "Gastos Indirectos (GI)" y "Margen de Ganancia" editables por porcentaje.
+  - Los valores customizados aplican solo a la cotización actual y no afectan los parámetros globales del sistema.
+  - Indicadores visuales (badges "Personalizado" y alerta) cuando se usan parámetros customizados.
+  - Estado de parámetros customizados se resetea al cerrar el diálogo.
+- **Mejora UI en diálogo "Crear Nuevo Producto"**:
+  - Rediseño con arquitectura de cards jerárquicas (SKU, Básico, Financiero, Códigos Equivalentes).
+  - Encabezado con gradiente e icono de paquete.
+  - Sección de resumen con indicadores emoji (💰 costo en verde, 📦 stock en ámbar).
+  - Mejor espaciado y organización visual con separadores.
 - Endpoint `/api/uploads/reclamos` para cargar archivos adjuntos con integración a Vercel Blob Storage.
 - Validación de archivos en cliente (2MB máximo) y servidor (MIME types: JPEG, PNG, WebP, PDF).
 - Mejoras en UX/UI del diálogo "Crear Nuevo Reclamo":

@@ -38,7 +38,13 @@ Implementación técnica
 - Propagación: cada página server-side obtiene `getCostingValues()` y pasa `currency` como prop.
 - UI: componentes reciben y muestran moneda dinámica en lugar de valores fijos.s y administración (usuarios/roles/permisos, parámetros y catálogos). Está optimizada para rendimiento (índices SQL, caché por tags) y ofrece controles de seguridad basados en permisos. La moneda base del sistema es configurable (PEN/USD) con conversión automática de parámetros monetarios y propagación completa a todos los módulos.
 
-## Novedades (sept. 2025)
+## Novedades (nov. 2025)
+
+- **Plantillas Excel para importación**: Nuevas opciones de descarga de plantillas en diálogos de importación (clientes, productos) con formato Excel (.xlsx) y datos de ejemplo, eliminando necesidad de CSV manual.
+- **Parámetros customizables por cotización**: En el diálogo "Nueva Cotización", posibilidad de modificar Gastos Indirectos (GI) y Margen de Ganancia solo para esa cotización, sin afectar parámetros globales. Incluye indicadores visuales de customización.
+- **Mejora UI en diálogos de creación**: Rediseño del diálogo "Crear Nuevo Producto" con arquitectura de cards jerárquicas, encabezados con gradiente, emojis indicadores y mejor organización visual.
+
+## Novedades anteriores (sept. 2025)
 
 - Catálogos centralizados: nueva entidad `ConfiguracionCatalogo` para reemplazar/enriquecer enums, con UI en Administración → Catálogos (reordenar, activar/inactivar, color, icono, reset a valores por defecto).
 - Parámetros del sistema: página de "Parámetros" rediseñada con grupos e íconos; selección de moneda desde catálogo `MONEDA`.
