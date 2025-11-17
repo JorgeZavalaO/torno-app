@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Package, Sparkles, AlertCircle, Info } from "lucide-react";
+import { Package, Sparkles, AlertCircle, DollarSign, Boxes, Link2, CheckCircle2 } from "lucide-react";
 // Category options should be provided from server via catalog; fallback to empty array
 
 interface FormErrors {
@@ -164,28 +164,37 @@ export function NewProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Package className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <DialogTitle className="text-xl">Nuevo producto</DialogTitle>
-              <DialogDescription>
-                Crea un nuevo SKU en el inventario con toda la información necesaria
-              </DialogDescription>
+      <DialogContent className="sm:max-w-3xl max-h-[95vh] overflow-y-auto">
+        <DialogHeader className="space-y-3 pb-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10">
+                <Package className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <DialogTitle className="text-2xl font-bold">Nuevo producto</DialogTitle>
+                <DialogDescription className="text-sm mt-1">
+                  Agrega un nuevo SKU al inventario completando los datos necesarios
+                </DialogDescription>
+              </div>
             </div>
           </div>
         </DialogHeader>
 
+        <Separator />
+
         <div className="space-y-6">
-          {/* SKU Configuration */}
-          <div className="space-y-4">
+          {/* SKU Configuration - Card Style */}
+          <div className="space-y-3 p-4 rounded-lg bg-muted/40 border border-border/50">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Configuración de SKU</Label>
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="auto-sku" className="text-sm">Generar automáticamente</Label>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-primary/20">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                </div>
+                <Label className="text-base font-semibold">Configuración de SKU</Label>
+              </div>
+              <div className="flex items-center space-x-2 bg-background px-3 py-1.5 rounded-lg">
+                <Label htmlFor="auto-sku" className="text-xs font-medium cursor-pointer">Generar automáticamente</Label>
                 <Switch
                   id="auto-sku"
                   checked={autoGenerateSku}
@@ -195,8 +204,8 @@ export function NewProductDialog({
             </div>
 
             {!autoGenerateSku && (
-              <div className="space-y-2">
-                <Label htmlFor="sku" className="text-sm">
+              <div className="space-y-2 pt-2">
+                <Label htmlFor="sku" className="text-sm font-medium">
                   SKU personalizado *
                 </Label>
                 <Input
@@ -204,133 +213,143 @@ export function NewProductDialog({
                   value={sku}
                   onChange={e => setSku(e.target.value.toUpperCase())}
                   placeholder="MP-001, PROD-ABC, etc."
-                  className={`uppercase font-mono ${errors.sku ? "border-red-500" : ""}`}
+                  className={`uppercase font-mono text-center ${errors.sku ? "border-red-500 bg-red-50/30" : ""}`}
                 />
                 {errors.sku && (
-                  <div className="flex items-center gap-1 text-sm text-red-600">
-                    <AlertCircle className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.sku}
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Solo letras mayúsculas, números y guiones. Entre 3 y 20 caracteres.
+                  📝 Formato: Letras mayúsculas, números y guiones. Entre 3 y 20 caracteres.
                 </p>
               </div>
             )}
 
             {autoGenerateSku && skuPreview && (
-              <div className="p-3 bg-muted/50 rounded-lg border-2 border-dashed">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Vista previa del SKU:</span>
-                  <Badge variant="outline" className="font-mono">{skuPreview}</Badge>
+              <div className="p-3 bg-primary/5 rounded-lg border-2 border-primary/20 border-dashed mt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    <span className="text-sm font-medium">SKU generado:</span>
+                  </div>
+                  <Badge className="font-mono text-base px-3 py-1 bg-primary text-white">{skuPreview}</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Se generará automáticamente basado en categoría y nombre
+                <p className="text-xs text-muted-foreground mt-2">
+                  ✨ Se creará automáticamente basado en la categoría y nombre del producto
                 </p>
               </div>
             )}
           </div>
 
-          <Separator />
-
-          {/* Basic Information */}
-          <div className="space-y-4">
-            <Label className="text-sm font-medium">Información básica</Label>
-            
-            <div className="space-y-2">
-              <Label htmlFor="nombre" className="text-sm">
-                Nombre del producto *
-              </Label>
-              <Input
-                id="nombre"
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-                placeholder="Descripción clara y concisa del producto"
-                className={errors.nombre ? "border-red-500" : ""}
-              />
-              {errors.nombre && (
-                <div className="flex items-center gap-1 text-sm text-red-600">
-                  <AlertCircle className="h-4 w-4" />
-                  {errors.nombre}
-                </div>
-              )}
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Nombre que aparecerá en reportes y listados</span>
-                <span>{nombre.length}/100</span>
+          {/* Basic Information - Card Style */}
+          <div className="space-y-4 p-4 rounded-lg bg-muted/40 border border-border/50">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-md bg-blue/20">
+                <Boxes className="h-4 w-4 text-blue-600" />
               </div>
+              <Label className="text-base font-semibold">Información básica</Label>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="categoria" className="text-sm">
-                  Categoría *
+                <Label htmlFor="nombre" className="text-sm font-medium">
+                  Nombre del producto *
                 </Label>
-                <Select 
-                  value={categoria} 
-                  onValueChange={setCategoria}
-                >
-                  <SelectTrigger id="categoria">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categoryOptions.map((c) => (
-                      <SelectItem key={c.value} value={c.value} className="py-3">
-                        <div className="flex flex-col">
-                          <span className="font-medium">
-                            {c.label}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {c.value.replace("_", "-").toLowerCase()}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="nombre"
+                  value={nombre}
+                  onChange={e => setNombre(e.target.value)}
+                  placeholder="Ej: Acero inoxidable 304, Rodamiento 6203..."
+                  maxLength={100}
+                  className={errors.nombre ? "border-red-500 bg-red-50/30" : "border-border/50"}
+                />
+                {errors.nombre && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    {errors.nombre}
+                  </div>
+                )}
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Visible en reportes y listados</span>
+                  <span className={`font-medium ${nombre.length > 90 ? "text-amber-600" : "text-muted-foreground"}`}>
+                    {nombre.length}/100
+                  </span>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="uom" className="text-sm">
-                  Unidad de medida *
-                </Label>
-                <Select value={uom} onValueChange={setUom}>
-                  <SelectTrigger id="uom">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uomOptions.map(um => (
-                      <SelectItem key={um.value} value={um.value} className="py-3">
-                        <div className="flex items-center justify-between w-full">
-                          <span className="font-medium">{um.label}</span>
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            {um.value}
-                          </Badge>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="categoria" className="text-sm font-medium">
+                    Categoría *
+                  </Label>
+                  <Select 
+                    value={categoria} 
+                    onValueChange={setCategoria}
+                  >
+                    <SelectTrigger id="categoria" className="border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryOptions.map((c) => (
+                        <SelectItem key={c.value} value={c.value} className="py-3">
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {c.label}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {c.value.replace("_", "-").toLowerCase()}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="uom" className="text-sm font-medium">
+                    Unidad de medida *
+                  </Label>
+                  <Select value={uom} onValueChange={setUom}>
+                    <SelectTrigger id="uom" className="border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uomOptions.map(um => (
+                        <SelectItem key={um.value} value={um.value} className="py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{um.label}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {um.value}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>
 
-          <Separator />
-
-          {/* Financial Information */}
-          <div className="space-y-4">
+          {/* Financial Information - Card Style */}
+          <div className="space-y-4 p-4 rounded-lg bg-muted/40 border border-border/50">
             <div className="flex items-center gap-2">
-              <Label className="text-sm font-medium">Información financiera</Label>
-              <Info className="h-4 w-4 text-muted-foreground" />
+              <div className="p-1.5 rounded-md bg-green-500/20">
+                <DollarSign className="h-4 w-4 text-green-600" />
+              </div>
+              <Label className="text-base font-semibold">Información financiera</Label>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="costo" className="text-sm">
+                <Label htmlFor="costo" className="text-sm font-medium">
                   Costo de referencia
                 </Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm font-semibold">
                     {currency === "USD" ? "$" : "S/"}
                   </span>
                   <Input
@@ -341,22 +360,22 @@ export function NewProductDialog({
                     value={costo}
                     onChange={e => setCosto(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="0.00"
-                    className={`pl-8 ${errors.costo ? "border-red-500" : ""}`}
+                    className={`pl-8 text-right font-mono ${errors.costo ? "border-red-500 bg-red-50/30" : "border-border/50"}`}
                   />
                 </div>
                 {errors.costo && (
-                  <div className="flex items-center gap-1 text-sm text-red-600">
-                    <AlertCircle className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.costo}
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Costo promedio para valorización de inventario
+                  💰 Costo promedio para valorización de inventario
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="stockMinimo" className="text-sm">
+                <Label htmlFor="stockMinimo" className="text-sm font-medium">
                   Stock mínimo
                 </Label>
                 <Input
@@ -367,39 +386,45 @@ export function NewProductDialog({
                   value={stockMinimo}
                   onChange={e => setStockMinimo(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="Cantidad mínima..."
-                  className={errors.stockMinimo ? "border-red-500" : ""}
+                  className={`text-right font-mono ${errors.stockMinimo ? "border-red-500 bg-red-50/30" : "border-border/50"}`}
                 />
                 {errors.stockMinimo && (
-                  <div className="flex items-center gap-1 text-sm text-red-600">
-                    <AlertCircle className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.stockMinimo}
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Alertas cuando el stock esté por debajo de este nivel
+                  ⚠️ Alertas cuando esté por debajo de este nivel
                 </p>
               </div>
             </div>
           </div>
 
-          <Separator />
-
-          {/* Códigos equivalentes opcionales */}
-          <div className="space-y-3">
+          {/* Códigos equivalentes opcionales - Card Style */}
+          <div className="space-y-3 p-4 rounded-lg bg-muted/40 border border-border/50">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Códigos equivalentes (opcional)</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setEqCodes(prev => prev.length < 3 ? [...prev, { sistema: "", codigo: "", descripcion: "" }] : prev)}
-              >
-                Agregar fila
-              </Button>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-purple-500/20">
+                  <Link2 className="h-4 w-4 text-purple-600" />
+                </div>
+                <Label className="text-base font-semibold">Códigos equivalentes (opcional)</Label>
+              </div>
+              {eqCodes.length < 3 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEqCodes(prev => [...prev, { sistema: "", codigo: "", descripcion: "" }])}
+                  className="text-xs"
+                >
+                  + Agregar fila
+                </Button>
+              )}
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-3">
               {eqCodes.map((row, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end bg-background/50 p-2 rounded border">
                   <Input
                     placeholder="Sistema (SAP, Odoo, etc.)"
                     value={row.sistema}
@@ -407,7 +432,7 @@ export function NewProductDialog({
                       const v = e.target.value;
                       setEqCodes(arr => arr.map((r,i)=> i===idx? { ...r, sistema: v }: r));
                     }}
-                    className={errors.equivalentes ? "border-red-500" : ""}
+                    className={`text-sm ${errors.equivalentes ? "border-red-500" : "border-border/50"}`}
                   />
                   <Input
                     placeholder="Código en el sistema"
@@ -416,76 +441,82 @@ export function NewProductDialog({
                       const v = e.target.value;
                       setEqCodes(arr => arr.map((r,i)=> i===idx? { ...r, codigo: v }: r));
                     }}
-                    className={errors.equivalentes ? "border-red-500" : ""}
+                    className={`text-sm ${errors.equivalentes ? "border-red-500" : "border-border/50"}`}
                   />
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <Input
-                      placeholder="Descripción (opcional)"
+                      placeholder="Descripción"
                       value={row.descripcion || ""}
                       onChange={e => {
                         const v = e.target.value;
                         setEqCodes(arr => arr.map((r,i)=> i===idx? { ...r, descripcion: v }: r));
                       }}
+                      className="text-sm border-border/50"
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEqCodes(arr => arr.length > 1 ? arr.filter((_,i)=>i!==idx) : [{ sistema: "", codigo: "", descripcion: "" }])}
-                    >
-                      ✕
-                    </Button>
+                    {eqCodes.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEqCodes(arr => arr.filter((_,i)=>i!==idx))}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        ✕
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
               {errors.equivalentes && (
-                <div className="flex items-center gap-1 text-sm text-red-600">
-                  <AlertCircle className="h-4 w-4" />
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   {errors.equivalentes}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">Estos códigos permiten mapear el SKU con sistemas externos (ERP). Puedes dejarlos en blanco.</p>
+              <p className="text-xs text-muted-foreground">
+                🔗 Mapea el SKU con códigos de sistemas externos (ERP). Opcional.
+              </p>
             </div>
           </div>
 
-          {/* Summary */}
+          {/* Summary - Prominently displayed */}
           {nombre && (
-            <div className="p-4 bg-muted/30 rounded-lg border">
-              <div className="flex items-center gap-2 mb-3">
-                <Package className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">Resumen del producto</span>
+            <div className="p-4 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/30">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle2 className="h-5 w-5 text-primary" />
+                <span className="text-base font-bold text-primary">Resumen del producto</span>
               </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Nombre:</span>
-                  <span className="font-medium">{nombre}</span>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-primary/20">
+                  <span className="text-muted-foreground font-medium">📝 Nombre:</span>
+                  <span className="font-semibold text-right">{nombre}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">SKU:</span>
-                  <span className="font-mono">
+                <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-primary/20">
+                  <span className="text-muted-foreground font-medium">🆔 SKU:</span>
+                  <span className="font-mono font-bold text-primary">
                     {autoGenerateSku ? (skuPreview || "Se generará automáticamente") : (sku || "Personalizado")}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Categoría:</span>
-                  <Badge variant="secondary" className="text-xs">
+                <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-primary/20">
+                  <span className="text-muted-foreground font-medium">📦 Categoría:</span>
+                  <Badge className="bg-primary/20 text-primary border-primary/50">
                     {categoryOptions.find(c => c.value === categoria)?.label || categoria}
                   </Badge>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Unidad:</span>
-                  <span>{uomOptions.find(u => u.value === uom)?.label} ({uom})</span>
+                <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-primary/20">
+                  <span className="text-muted-foreground font-medium">⚖️ Unidad:</span>
+                  <span className="font-medium">{uomOptions.find(u => u.value === uom)?.label || uom}</span>
                 </div>
-        {costo !== "" && Number(costo) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Costo:</span>
-          <span className="font-mono">{currency === "USD" ? "$" : "S/"}{Number(costo).toFixed(2)}</span>
+                {costo !== "" && Number(costo) > 0 && (
+                  <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-green-500/30">
+                    <span className="text-muted-foreground font-medium">💰 Costo:</span>
+                    <span className="font-mono font-bold text-green-600">{currency === "USD" ? "$" : "S/"}{Number(costo).toFixed(2)}</span>
                   </div>
                 )}
                 {stockMinimo !== "" && Number(stockMinimo) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Stock mínimo:</span>
-                    <span>{stockMinimo} {uom}</span>
+                  <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-amber-500/30">
+                    <span className="text-muted-foreground font-medium">📊 Stock mínimo:</span>
+                    <span className="font-medium text-amber-600">{stockMinimo} {uom}</span>
                   </div>
                 )}
               </div>
@@ -493,7 +524,9 @@ export function NewProductDialog({
           )}
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row gap-3 pt-6 border-t">
+        <Separator className="my-4" />
+
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <Button 
             variant="outline" 
             disabled={pending} 
@@ -505,7 +538,7 @@ export function NewProductDialog({
           <Button 
             disabled={pending || !nombre.trim()} 
             onClick={submit}
-            className="flex-1 sm:flex-none"
+            className="flex-1 sm:flex-none bg-primary hover:bg-primary/90"
           >
             {pending ? (
               <>
@@ -513,7 +546,10 @@ export function NewProductDialog({
                 Creando producto...
               </>
             ) : (
-              "Crear producto"
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Crear producto
+              </>
             )}
           </Button>
         </div>
