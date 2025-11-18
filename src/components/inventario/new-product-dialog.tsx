@@ -252,33 +252,33 @@ export function NewProductDialog({
         <DialogHeader className="space-y-3 pb-4">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3 flex-1">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 ring-2 ring-primary/30 shadow-sm">
                 <Package className="h-6 w-6 text-primary" />
               </div>
               <div className="flex-1">
                 <DialogTitle className="text-2xl font-bold">Nuevo producto</DialogTitle>
-                <DialogDescription className="text-sm mt-1">
-                  Agrega un nuevo SKU al inventario completando los datos necesarios
+                <DialogDescription className="text-sm mt-1.5 leading-relaxed">
+                  Agrega un nuevo producto al inventario. Los campos marcados con * son requeridos.
                 </DialogDescription>
               </div>
             </div>
           </div>
         </DialogHeader>
 
-        <Separator />
+        <Separator className="my-4" />
 
         <div className="space-y-6">
           {/* SKU Configuration - Card Style */}
-          <div className="space-y-3 p-4 rounded-lg bg-muted/40 border border-border/50">
+          <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-primary/5 to-primary/0 border-2 border-primary/20 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-primary/20">
+                <div className="p-2 rounded-lg bg-primary/20 ring-2 ring-primary/30">
                   <Sparkles className="h-4 w-4 text-primary" />
                 </div>
-                <Label className="text-base font-semibold">Configuración de SKU</Label>
+                <Label className="text-base font-semibold">Configuración SKU</Label>
               </div>
-              <div className="flex items-center space-x-2 bg-background px-3 py-1.5 rounded-lg">
-                <Label htmlFor="auto-sku" className="text-xs font-medium cursor-pointer">Generar automáticamente</Label>
+              <div className="flex items-center space-x-2 bg-background/80 backdrop-blur px-3 py-1.5 rounded-lg border border-border/50">
+                <Label htmlFor="auto-sku" className="text-xs font-medium cursor-pointer">Automático</Label>
                 <Switch
                   id="auto-sku"
                   checked={autoGenerateSku}
@@ -297,40 +297,40 @@ export function NewProductDialog({
                   value={sku}
                   onChange={e => setSku(e.target.value.toUpperCase())}
                   placeholder="MP-001, PROD-ABC, etc."
-                  className={`uppercase font-mono text-center ${errors.sku ? "border-red-500 bg-red-50/30" : ""}`}
+                  className={`uppercase font-mono text-center transition-all ${errors.sku ? "border-red-500 bg-red-50/50 focus:ring-red-200" : "focus:ring-primary/20"}`}
                 />
                 {errors.sku && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.sku}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  📝 Formato: Letras mayúsculas, números y guiones. Entre 3 y 20 caracteres.
+                <p className="text-xs text-muted-foreground/80">
+                  Mayúsculas, números y guiones (3-20 caracteres)
                 </p>
               </div>
             )}
 
             {autoGenerateSku && skuPreview && (
-              <div className="p-3 bg-primary/5 rounded-lg border-2 border-primary/20 border-dashed mt-3">
+              <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg border-2 border-primary/30 border-dashed mt-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    <span className="text-sm font-medium">SKU generado:</span>
+                    <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+                    <span className="text-sm font-semibold text-primary">SKU generado:</span>
                   </div>
-                  <Badge className="font-mono text-base px-3 py-1 bg-primary text-white">{skuPreview.slice(0, -3)}###</Badge>
+                  <Badge className="font-mono text-base px-3 py-1.5 bg-primary text-white shadow-sm">{skuPreview.slice(0, -3)}###</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  ✨ Se creará automáticamente con contador secuencial (ej: MP-001, MP-002, etc.)
+                <p className="text-xs text-muted-foreground mt-2.5">
+                  Se creará automáticamente con contador secuencial (ej: MP-001, MP-002)
                 </p>
               </div>
             )}
           </div>
 
           {/* Basic Information - Card Style */}
-          <div className="space-y-4 p-4 rounded-lg bg-muted/40 border border-border/50">
+          <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-blue/5 to-blue/0 border-2 border-blue/20 shadow-sm">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-md bg-blue/20">
+              <div className="p-2 rounded-lg bg-blue/20 ring-2 ring-blue/30">
                 <Boxes className="h-4 w-4 text-blue-600" />
               </div>
               <Label className="text-base font-semibold">Información básica</Label>
@@ -347,17 +347,17 @@ export function NewProductDialog({
                   onChange={e => setNombre(e.target.value)}
                   placeholder="Ej: Acero inoxidable 304, Rodamiento 6203..."
                   maxLength={100}
-                  className={errors.nombre ? "border-red-500 bg-red-50/30" : "border-border/50"}
+                  className={`transition-all ${errors.nombre ? "border-red-500 bg-red-50/50 focus:ring-red-200" : "focus:ring-blue/20"}`}
                 />
                 {errors.nombre && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.nombre}
                   </div>
                 )}
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Visible en reportes y listados</span>
-                  <span className={`font-medium ${nombre.length > 90 ? "text-amber-600" : "text-muted-foreground"}`}>
+                  <span className="text-muted-foreground/80">Aparecerá en reportes y listados</span>
+                  <span className={`font-semibold transition-colors ${nombre.length > 90 ? "text-amber-600" : "text-muted-foreground/60"}`}>
                     {nombre.length}/100
                   </span>
                 </div>
@@ -372,12 +372,12 @@ export function NewProductDialog({
                     value={categoria} 
                     onValueChange={setCategoria}
                   >
-                    <SelectTrigger id="categoria" className={errors.categoria ? "border-red-500 bg-red-50/30" : "border-border/50"}>
+                    <SelectTrigger id="categoria" className={`transition-all ${errors.categoria ? "border-red-500 bg-red-50/50" : "focus:ring-blue/20"}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {categoryOptions.map((c) => (
-                        <SelectItem key={c.value} value={c.value} className="py-3">
+                        <SelectItem key={c.value} value={c.value} className="py-2.5">
                           <div className="flex flex-col">
                             <span className="font-medium">
                               {c.label}
@@ -391,7 +391,7 @@ export function NewProductDialog({
                     </SelectContent>
                   </Select>
                   {errors.categoria && (
-                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
                       {errors.categoria}
                     </div>
@@ -403,12 +403,12 @@ export function NewProductDialog({
                     Unidad de medida *
                   </Label>
                   <Select value={uom} onValueChange={setUom}>
-                    <SelectTrigger id="uom" className={errors.uom ? "border-red-500 bg-red-50/30" : "border-border/50"}>
+                    <SelectTrigger id="uom" className={`transition-all ${errors.uom ? "border-red-500 bg-red-50/50" : "focus:ring-blue/20"}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {uomOptions.map(um => (
-                        <SelectItem key={um.value} value={um.value} className="py-3">
+                        <SelectItem key={um.value} value={um.value} className="py-2.5">
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{um.label}</span>
                             <Badge variant="outline" className="text-xs">
@@ -420,7 +420,7 @@ export function NewProductDialog({
                     </SelectContent>
                   </Select>
                   {errors.uom && (
-                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
                       {errors.uom}
                     </div>
@@ -431,9 +431,9 @@ export function NewProductDialog({
           </div>
 
           {/* Financial Information - Card Style */}
-          <div className="space-y-4 p-4 rounded-lg bg-muted/40 border border-border/50">
+          <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-green-500/5 to-green-500/0 border-2 border-green-500/20 shadow-sm">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-md bg-green-500/20">
+              <div className="p-2 rounded-lg bg-green-500/20 ring-2 ring-green-500/30">
                 <DollarSign className="h-4 w-4 text-green-600" />
               </div>
               <Label className="text-base font-semibold">Información financiera</Label>
@@ -456,17 +456,17 @@ export function NewProductDialog({
                     value={costo}
                     onChange={e => setCosto(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="0.00"
-                    className={`pl-8 text-right font-mono ${errors.costo ? "border-red-500 bg-red-50/30" : "border-border/50"}`}
+                    className={`pl-8 text-right font-mono transition-all ${errors.costo ? "border-red-500 bg-red-50/50 focus:ring-red-200" : "focus:ring-green-500/20"}`}
                   />
                 </div>
                 {errors.costo && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.costo}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  💰 Costo promedio para valorización de inventario
+                <p className="text-xs text-muted-foreground/80">
+                  Para valorización de inventario
                 </p>
               </div>
 
@@ -482,22 +482,22 @@ export function NewProductDialog({
                   value={stockMinimo}
                   onChange={e => setStockMinimo(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="Cantidad mínima..."
-                  className={`text-right font-mono ${errors.stockMinimo ? "border-red-500 bg-red-50/30" : "border-border/50"}`}
+                  className={`text-right font-mono transition-all ${errors.stockMinimo ? "border-red-500 bg-red-50/50 focus:ring-red-200" : "focus:ring-green-500/20"}`}
                 />
                 {errors.stockMinimo && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.stockMinimo}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  ⚠️ Alertas cuando esté por debajo de este nivel
+                <p className="text-xs text-muted-foreground/80">
+                  Alertas cuando esté por debajo
                 </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="material" className="text-sm font-medium">
-                  Material (opcional)
+                  Material
                 </Label>
                 <Input
                   id="material"
@@ -506,16 +506,16 @@ export function NewProductDialog({
                   onChange={e => setMaterial(e.target.value)}
                   placeholder="Ej: Acero inoxidable, Aluminio..."
                   maxLength={100}
-                  className={`border-border/50`}
+                  className="transition-all focus:ring-green-500/20"
                 />
-                <p className="text-xs text-muted-foreground">
-                  📋 Descripción del material del producto
+                <p className="text-xs text-muted-foreground/80">
+                  Descripción del material (máx. 100 caracteres)
                 </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="milimetros" className="text-sm font-medium">
-                  Milímetros (opcional)
+                  Milímetros
                 </Label>
                 <Input
                   id="milimetros"
@@ -525,37 +525,37 @@ export function NewProductDialog({
                   value={milimetros}
                   onChange={e => setMilimetros(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="0.000"
-                  className={`text-right font-mono border-border/50`}
+                  className="text-right font-mono transition-all focus:ring-green-500/20"
                 />
-                <p className="text-xs text-muted-foreground">
-                  📏 Medida en milímetros
+                <p className="text-xs text-muted-foreground/80">
+                  Medida en milímetros (mm)
                 </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="pulgadas" className="text-sm font-medium">
-                  Pulgadas (opcional)
+                  Pulgadas
                 </Label>
                 <FractionInput
                   value={pulgadas}
                   onChange={setPulgadas}
                   placeholder="Ej: 1/2, 1 1/4, 2"
                 />
-                <p className="text-xs text-muted-foreground">
-                  📐 Medida en pulgadas (escribe 1/2, 3/4, 1 1/2, etc.)
+                <p className="text-xs text-muted-foreground/80">
+                  Ingresa fracciones (1/2, 1 1/4) o decimales (0.5, 1.25)
                 </p>
               </div>
             </div>
           </div>
 
           {/* Códigos equivalentes opcionales - Card Style */}
-          <div className="space-y-3 p-4 rounded-lg bg-muted/40 border border-border/50">
-            <div className="flex items-center justify-between">
+          <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-purple-500/0 border-2 border-purple-500/20 shadow-sm">
+            <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-purple-500/20">
+                <div className="p-2 rounded-lg bg-purple-500/20 ring-2 ring-purple-500/30">
                   <Link2 className="h-4 w-4 text-purple-600" />
                 </div>
-                <Label className="text-base font-semibold">Códigos equivalentes (opcional)</Label>
+                <Label className="text-base font-semibold">Códigos equivalentes (ERP)</Label>
               </div>
               {eqCodes.length < 3 && (
                 <Button
@@ -563,12 +563,15 @@ export function NewProductDialog({
                   variant="outline"
                   size="sm"
                   onClick={() => setEqCodes(prev => [...prev, { sistema: "", codigo: "", descripcion: "" }])}
-                  className="text-xs"
+                  className="text-xs h-8"
                 >
-                  + Agregar fila
+                  + Agregar
                 </Button>
               )}
             </div>
+            <p className="text-xs text-muted-foreground/80 mb-4">
+              Vincula este producto con códigos en otros sistemas (SAP, Odoo, etc.)
+            </p>
             <div className="grid gap-3">
               {eqCodes.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end bg-background/50 p-2 rounded border">

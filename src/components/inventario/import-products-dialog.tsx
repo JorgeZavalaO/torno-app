@@ -1,24 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileUp, Download } from "lucide-react";
+import { FileUp, Download, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { CATEGORIES } from "@/lib/product-categories";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Función auxiliar para crear Excel simple sin dependencias externas
 const createSimpleExcel = (categoryOptions?: { value: string; label: string }[]) => {
-  const headers = ["Nombre", "Categoría", "UOM", "Costo", "StockMinimo"];
+  const headers = ["Nombre", "Categoría", "UOM", "Costo", "StockMinimo", "Material", "Milimetros", "Pulgadas"];
   const cats = categoryOptions && categoryOptions.length > 0 ? categoryOptions.map((c) => c.value) : CATEGORIES;
   const sampleRows = [
-    ["Ejemplo Pieza 1", cats[0], "kg", 120.50, 10],
-    ["Ejemplo Pieza 2", cats[1] ?? cats[0], "pz", 350.00, 2],
-    ["Ejemplo Pieza 3", cats[4] ?? cats[0], "pz", 150.00, 5],
-    ["Ejemplo Pieza 4", cats[2] ?? cats[0], "l", 45.75, 5],
-    ["Ejemplo Pieza 5", cats[3] ?? cats[0], "und", 78.20, ""],
+    ["Tornillo hexagonal 1/2", cats[0], "pz", 2.50, 100, "Acero inoxidable", 12.7, 0.5],
+    ["Tuerca hexagonal 3/4", cats[0], "pz", 3.75, 50, "Acero al carbono", 19.05, 0.75],
+    ["Arandela plana 1", cats[0], "pz", 0.50, 200, "Acero galvanizado", 25.4, 1],
+    ["Perno M10", cats[1] ?? cats[0], "pz", 1.80, 150, "Acero", 10, ""],
+    ["Eje de transmisión", cats[2] ?? cats[0], "und", 450.00, 5, "Acero forjado", "", ""],
+    ["Rodamiento 6205", cats[3] ?? cats[0], "pz", 25.00, 20, "", "", ""],
+    ["Lubricante industrial", cats[4] ?? cats[0], "l", 45.75, 10, "", "", ""],
   ];
 
   const data = [headers, ...sampleRows];
@@ -116,48 +117,111 @@ export function ImportProductsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!uploading) onOpenChange(o); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Importar productos</DialogTitle>
-          <div className="text-sm text-muted-foreground">Importa múltiples productos desde un archivo Excel</div>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader className="space-y-3 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 ring-2 ring-primary/30 shadow-sm">
+              <Upload className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <DialogTitle className="text-2xl font-bold">Importar productos</DialogTitle>
+              <DialogDescription className="text-sm mt-1.5">
+                Importa múltiples productos desde un archivo Excel
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <Alert>
-          <AlertDescription>
-            Descarga la plantilla Excel para ver el formato requerido. No incluyas SKUs, se generarán automáticamente.
-          </AlertDescription>
-        </Alert>
+        <Separator className="my-4" />
 
-        <Button variant="outline" onClick={downloadTemplate} className="gap-2">
-          <Download className="h-4 w-4" /> Descargar plantilla
-        </Button>
+        <div className="space-y-4">
+          {/* Download Template Section */}
+          <div className="p-5 rounded-xl bg-gradient-to-br from-blue/5 to-blue/0 border-2 border-blue/20 shadow-sm space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-blue/20 ring-2 ring-blue/30">
+                <Download className="h-4 w-4 text-blue-600" />
+              </div>
+              <h3 className="text-base font-semibold">Plantilla Excel</h3>
+            </div>
+            
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50/50 border border-blue-200/50">
+              <AlertCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-muted-foreground">
+                Descarga la plantilla para ver el formato requerido. Incluye campos opcionales: <strong>Material</strong>, <strong>Milimetros</strong> y <strong>Pulgadas</strong>. Los SKUs se generarán automáticamente.
+              </p>
+            </div>
 
-        <Separator />
+            <Button 
+              variant="outline" 
+              onClick={downloadTemplate} 
+              className="w-full gap-2 transition-all hover:bg-blue-50 hover:border-blue-300"
+            >
+              <Download className="h-4 w-4" /> Descargar plantilla Excel
+            </Button>
+          </div>
 
-        <div className="grid w-full max-w-sm items-center gap-1.5">
-          <label htmlFor="excelFile" className="text-sm font-medium">
-            Archivo Excel
-          </label>
-          <input
-            id="excelFile"
-            type="file"
-            accept=".xlsx,.xls"
-            className={"block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90"}
-            onChange={handleFileChange}
-          />
-          <p className="text-xs text-muted-foreground">
-            {file ? `Archivo seleccionado: ${file.name}` : "Ningún archivo seleccionado"}
-          </p>
+          <Separator />
+
+          {/* Upload File Section */}
+          <div className="p-5 rounded-xl bg-gradient-to-br from-green-500/5 to-green-500/0 border-2 border-green-500/20 shadow-sm space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-green-500/20 ring-2 ring-green-500/30">
+                <FileUp className="h-4 w-4 text-green-600" />
+              </div>
+              <h3 className="text-base font-semibold">Cargar archivo</h3>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="excelFile" className="text-sm font-medium">
+                Selecciona el archivo Excel
+              </label>
+              <input
+                id="excelFile"
+                type="file"
+                accept=".xlsx,.xls"
+                className="block w-full text-sm text-slate-600 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90 file:transition-all file:cursor-pointer cursor-pointer border-2 border-dashed border-border/50 rounded-lg p-3 hover:border-green-500/50 transition-all"
+                onChange={handleFileChange}
+                disabled={uploading}
+              />
+              {file ? (
+                <div className="flex items-center gap-2 text-sm p-2.5 rounded-lg bg-green-50/50 border border-green-200/50">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                  <span className="text-green-700 font-medium">{file.name}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {(file.size / 1024).toFixed(2)} KB
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground/80 italic">
+                  Ningún archivo seleccionado
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" disabled={uploading} onClick={() => onOpenChange(false)}>
+        <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4 border-t">
+          <Button 
+            variant="outline" 
+            disabled={uploading} 
+            onClick={() => onOpenChange(false)}
+            className="flex-1 sm:flex-none"
+          >
             Cancelar
           </Button>
-          <Button disabled={!file || uploading} onClick={uploadFile} className="gap-2">
-            {uploading ? "Importando..." : (
+          <Button 
+            disabled={!file || uploading} 
+            onClick={uploadFile} 
+            className="flex-1 sm:flex-none gap-2"
+          >
+            {uploading ? (
               <>
-                <FileUp className="h-4 w-4" /> Importar
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                Importando...
+              </>
+            ) : (
+              <>
+                <FileUp className="h-4 w-4" /> Importar productos
               </>
             )}
           </Button>

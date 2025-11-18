@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { FractionInput } from "@/components/ui/fraction-input";
 import { toast } from "sonner";
-import { Edit, AlertCircle, Info, Trash2 } from "lucide-react";
+import { Edit, AlertCircle, Info, Trash2, Boxes, Ruler, Link2, DollarSign } from "lucide-react";
 // Category options should be provided from server via catalog; fallback to empty array
 import type { ProductRow } from "./types";
 
@@ -264,53 +264,62 @@ export function EditProductDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
+        <DialogHeader className="space-y-3 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 ring-2 ring-primary/30 shadow-sm">
               <Edit className="h-5 w-5 text-primary" />
             </div>
-            <div>
-              <DialogTitle className="text-xl">Editar producto</DialogTitle>
-              <DialogDescription>
-                Modifica la información del producto: {product.sku}
+            <div className="flex-1">
+              <DialogTitle className="text-2xl font-bold">Editar producto</DialogTitle>
+              <DialogDescription className="text-sm mt-1.5">
+                <span className="font-mono text-primary font-semibold">{product?.sku}</span> - Modifica los datos del producto
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
+        <Separator className="my-4" />
+        
         <div className="space-y-6">
           {/* SKU - Solo mostrar, no editable */}
-          <div className="p-3 bg-muted/30 rounded-lg">
-            <Label className="text-sm font-medium text-muted-foreground">SKU (no editable)</Label>
-            <div className="font-mono text-lg font-bold">{product.sku}</div>
+          <div className="p-4 rounded-xl bg-gradient-to-br from-blue/5 to-blue/0 border-2 border-blue/20 shadow-sm">
+            <Label className="text-sm font-medium text-muted-foreground">🆔 SKU (no editable)</Label>
+            <div className="font-mono text-xl font-bold text-primary mt-2 px-3 py-2 bg-background/60 rounded-lg border border-border/50">{product?.sku}</div>
           </div>
 
           {/* Basic Information */}
-          <div className="space-y-4">
-            <Label className="text-sm font-medium">Información básica</Label>
-            
-            <div className="space-y-2">
-              <Label htmlFor="nombre" className="text-sm">
-                Nombre del producto *
-              </Label>
-              <Input
-                id="nombre"
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-                placeholder="Descripción clara y concisa del producto"
-                className={errors.nombre ? "border-red-500" : ""}
-              />
-              {errors.nombre && (
-                <div className="flex items-center gap-1 text-sm text-red-600">
-                  <AlertCircle className="h-4 w-4" />
-                  {errors.nombre}
-                </div>
-              )}
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Nombre que aparecerá en reportes y listados</span>
-                <span>{nombre.length}/100</span>
+          <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-blue/5 to-blue/0 border-2 border-blue/20 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-blue/20 ring-2 ring-blue/30">
+                <Boxes className="h-4 w-4 text-blue-600" />
               </div>
+              <Label className="text-base font-semibold">Información básica</Label>
             </div>
+            
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="nombre" className="text-sm font-medium">
+                  Nombre del producto *
+                </Label>
+                <Input
+                  id="nombre"
+                  value={nombre}
+                  onChange={e => setNombre(e.target.value)}
+                  placeholder="Descripción clara y concisa del producto"
+                  className={`transition-all ${errors.nombre ? "border-red-500 bg-red-50/50 focus:ring-red-200" : "focus:ring-blue/20"}`}
+                  maxLength={100}
+                />
+                {errors.nombre && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    {errors.nombre}
+                  </div>
+                )}
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground/80">Aparecerá en reportes y listados</span>
+                  <span className={`font-semibold transition-colors ${nombre.length > 90 ? "text-amber-600" : "text-muted-foreground/60"}`}>{nombre.length}/100</span>
+                </div>
+              </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -364,24 +373,27 @@ export function EditProductDialog({
                 </Select>
               </div>
             </div>
+            </div>
           </div>
 
           <Separator />
 
           {/* Financial Information */}
-          <div className="space-y-4">
+          <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-green-500/5 to-green-500/0 border-2 border-green-500/20 shadow-sm">
             <div className="flex items-center gap-2">
-              <Label className="text-sm font-medium">Información financiera</Label>
-              <Info className="h-4 w-4 text-muted-foreground" />
+              <div className="p-2 rounded-lg bg-green-500/20 ring-2 ring-green-500/30">
+                <DollarSign className="h-4 w-4 text-green-600" />
+              </div>
+              <Label className="text-base font-semibold">Información financiera</Label>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="costo" className="text-sm">
+                <Label htmlFor="costo" className="text-sm font-medium">
                   Costo de referencia
                 </Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm font-semibold">
                     {currency === "USD" ? "$" : "S/"}
                   </span>
                   <Input
@@ -392,22 +404,22 @@ export function EditProductDialog({
                     value={costo}
                     onChange={e => setCosto(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="0.00"
-                    className={`pl-8 ${errors.costo ? "border-red-500" : ""}`}
+                    className={`pl-8 text-right font-mono transition-all ${errors.costo ? "border-red-500 bg-red-50/50 focus:ring-red-200" : "focus:ring-green-500/20"}`}
                   />
                 </div>
                 {errors.costo && (
-                  <div className="flex items-center gap-1 text-sm text-red-600">
-                    <AlertCircle className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.costo}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Costo promedio para valorización de inventario
+                <p className="text-xs text-muted-foreground/80">
+                  Para valorización de inventario
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="stockMinimo" className="text-sm">
+                <Label htmlFor="stockMinimo" className="text-sm font-medium">
                   Stock mínimo
                 </Label>
                 <Input
@@ -418,21 +430,35 @@ export function EditProductDialog({
                   value={stockMinimo}
                   onChange={e => setStockMinimo(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="Cantidad mínima..."
-                  className={errors.stockMinimo ? "border-red-500" : ""}
+                  className={`transition-all font-mono ${errors.stockMinimo ? "border-red-500 bg-red-50/50 focus:ring-red-200" : "focus:ring-green-500/20"}`}
                 />
                 {errors.stockMinimo && (
-                  <div className="flex items-center gap-1 text-sm text-red-600">
-                    <AlertCircle className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     {errors.stockMinimo}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Alertas cuando el stock esté por debajo de este nivel
+                <p className="text-xs text-muted-foreground/80">
+                  Genera alerta cuando cae por debajo
                 </p>
               </div>
+            </div>
+          </div>
 
+          <Separator />
+
+          {/* Measurement Information */}
+          <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-amber-500/5 to-amber-500/0 border-2 border-amber-500/20 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-amber-500/20 ring-2 ring-amber-500/30">
+                <Ruler className="h-4 w-4 text-amber-600" />
+              </div>
+              <Label className="text-base font-semibold">Especificaciones de medida</Label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="material" className="text-sm">
+                <Label htmlFor="material" className="text-sm font-medium">
                   Material (opcional)
                 </Label>
                 <Input
@@ -440,17 +466,17 @@ export function EditProductDialog({
                   type="text"
                   value={material}
                   onChange={e => setMaterial(e.target.value)}
-                  placeholder="Ej: Acero inoxidable, Aluminio..."
+                  placeholder="Ej: Acero, Aluminio..."
                   maxLength={100}
-                  className=""
+                  className="transition-all focus:ring-amber-500/20"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Descripción del material del producto
+                <p className="text-xs text-muted-foreground/80">
+                  Tipo de material
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="milimetros" className="text-sm">
+                <Label htmlFor="milimetros" className="text-sm font-medium">
                   Milímetros (opcional)
                 </Label>
                 <Input
@@ -461,141 +487,141 @@ export function EditProductDialog({
                   value={milimetros}
                   onChange={e => setMilimetros(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="0.000"
-                  className="text-right font-mono"
+                  className="text-right font-mono transition-all focus:ring-amber-500/20"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Medida en milímetros
+                <p className="text-xs text-muted-foreground/80">
+                  Medida en mm
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pulgadas" className="text-sm">
+                <Label htmlFor="pulgadas" className="text-sm font-medium">
                   Pulgadas (opcional)
                 </Label>
                 <FractionInput
                   value={pulgadas}
                   onChange={setPulgadas}
-                  placeholder="Ej: 1/2, 1 1/4, 2"
+                  placeholder="Ej: 1/2, 1 1/4"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Medida en pulgadas (escribe 1/2, 3/4, 1 1/2, etc.)
-                </p>
+                <p className="text-xs text-muted-foreground/80">
+                  Medida en pulgadas (1/2, 3/4, etc.)</p>
               </div>
             </div>
           </div>
 
           <Separator />
 
-          {/* Códigos equivalentes */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Códigos equivalentes</Label>
+          {/* Equivalent Codes */}
+          <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-purple-500/0 border-2 border-purple-500/20 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-purple-500/20 ring-2 ring-purple-500/30">
+                <Link2 className="h-4 w-4 text-purple-600" />
+              </div>
+              <Label className="text-base font-semibold">Códigos equivalentes</Label>
+            </div>
+
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-muted-foreground/80">Vincula con sistemas externos (SAP, Odoo, etc.)</p>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={addNewEquivalentRow}
                 disabled={eqCodes.length >= 10}
+                className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100"
               >
-                Agregar código
+                + Agregar
               </Button>
             </div>
             
             <div className="grid gap-3">
               {loadingCodes ? (
-                <div className="flex items-center justify-center p-4 text-muted-foreground">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                <div className="text-center text-sm text-muted-foreground py-4">
                   Cargando códigos equivalentes...
                 </div>
-              ) : (
+              ) : eqCodes.length > 0 ? (
                 eqCodes.map((eq, idx) => (
-                <div 
-                  key={idx} 
-                  className={`grid grid-cols-1 md:grid-cols-3 gap-2 p-3 rounded-lg border ${
-                    eq.toDelete ? 'bg-red-50 border-red-200 opacity-50' : 
-                    eq.isNew ? 'bg-green-50 border-green-200' : 
-                    'bg-background'
-                  }`}
-                >
-                  <Input
-                    placeholder="Sistema (SAP, Odoo, etc.)"
-                    value={eq.sistema}
-                    disabled={eq.toDelete}
-                    onChange={e => updateEquivalentCode(idx, 'sistema', e.target.value)}
-                    className={errors.equivalentes ? "border-red-500" : ""}
-                  />
-                  <Input
-                    placeholder="Código en el sistema"
-                    value={eq.codigo}
-                    disabled={eq.toDelete}
-                    onChange={e => updateEquivalentCode(idx, 'codigo', e.target.value)}
-                    className={errors.equivalentes ? "border-red-500" : ""}
-                  />
-                  <div className="flex gap-2">
+                  <div 
+                    key={idx} 
+                    className={`grid grid-cols-1 md:grid-cols-3 gap-2 p-3.5 rounded-lg border transition-all ${eq.toDelete ? 'bg-red-50/60 border-red-200/50 opacity-60' : eq.isNew ? 'bg-purple-50/60 border-purple-200/50' : 'bg-background border-border/50'}`}
+                  >
                     <Input
-                      placeholder="Descripción (opcional)"
-                      value={eq.descripcion || ""}
+                      placeholder="Sistema (SAP, Odoo, ERP...)"
+                      value={eq.sistema}
                       disabled={eq.toDelete}
-                      onChange={e => updateEquivalentCode(idx, 'descripcion', e.target.value)}
+                      onChange={e => updateEquivalentCode(idx, 'sistema', e.target.value)}
+                      className={`transition-all font-semibold text-sm ${errors.equivalentes ? "border-red-500" : "focus:ring-purple-500/20"}`}
                     />
-                    <Button
-                      type="button"
-                      variant={eq.toDelete ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => 
-                        eq.toDelete 
-                          ? updateEquivalentCode(idx, 'toDelete', false) // Restaurar
-                          : removeEquivalentRow(idx) // Eliminar/marcar
-                      }
-                      title={eq.toDelete ? "Restaurar" : "Eliminar"}
-                    >
-                      {eq.toDelete ? "↶" : <Trash2 className="h-4 w-4" />}
-                    </Button>
+                    <Input
+                      placeholder="Código"
+                      value={eq.codigo}
+                      disabled={eq.toDelete}
+                      onChange={e => updateEquivalentCode(idx, 'codigo', e.target.value)}
+                      className={`transition-all font-mono text-sm ${errors.equivalentes ? "border-red-500" : "focus:ring-purple-500/20"}`}
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Descripción (opt.)"
+                        value={eq.descripcion || ""}
+                        disabled={eq.toDelete}
+                        onChange={e => updateEquivalentCode(idx, 'descripcion', e.target.value)}
+                        className="transition-all text-sm focus:ring-purple-500/20"
+                      />
+                      <Button
+                        type="button"
+                        variant={eq.toDelete ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => 
+                          eq.toDelete 
+                            ? updateEquivalentCode(idx, 'toDelete', false)
+                            : removeEquivalentRow(idx)
+                        }
+                        title={eq.toDelete ? "Restaurar" : "Eliminar"}
+                        className={eq.toDelete ? "bg-red-600 hover:bg-red-700 text-white" : "hover:bg-red-50"}
+                      >
+                        {eq.toDelete ? "↶" : <Trash2 className="h-4 w-4 text-red-600" />}
+                      </Button>
+                    </div>
+                    
+                    <div className="md:col-span-3 flex gap-2">
+                      {eq.toDelete && <span className="text-xs text-red-600 bg-red-50/50 px-2 py-1 rounded">Será eliminado</span>}
+                      {eq.isNew && eq.sistema && eq.codigo && <span className="text-xs text-purple-600 bg-purple-50/50 px-2 py-1 rounded">Será agregado</span>}
+                    </div>
                   </div>
-                  
-                  {/* Indicador de estado */}
-                  <div className="md:col-span-3">
-                    {eq.toDelete && (
-                      <p className="text-xs text-red-600">Este código será eliminado</p>
-                    )}
-                    {eq.isNew && eq.sistema && eq.codigo && (
-                      <p className="text-xs text-green-600">Este código será agregado</p>
-                    )}
-                  </div>
-                </div>
-              ))
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground/60 italic text-center py-4">
+                  No hay códigos. Agrega uno para vincular con sistemas externos.
+                </p>
               )}
               
               {errors.equivalentes && (
-                <div className="flex items-center gap-1 text-sm text-red-600">
-                  <AlertCircle className="h-4 w-4" />
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   {errors.equivalentes}
                 </div>
               )}
-              
-              <p className="text-xs text-muted-foreground">
-                Estos códigos permiten mapear el SKU con sistemas externos (ERP).
-                Los cambios se aplicarán al guardar.
-              </p>
             </div>
           </div>
 
           {/* Current Stock Info */}
-          <div className="p-4 bg-muted/30 rounded-lg border">
-            <div className="flex items-center gap-2 mb-2">
-              <Info className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Información actual</span>
+          <Separator />
+
+          <div className="p-5 rounded-xl bg-gradient-to-br from-slate-500/5 to-slate-500/0 border-2 border-slate-500/20 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 rounded-lg bg-slate-500/20 ring-2 ring-slate-500/30">
+                <Info className="h-4 w-4 text-slate-600" />
+              </div>
+              <Label className="text-base font-semibold">Información actual</Label>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Stock actual:</span>
-                <span className="ml-2 font-medium">{product.stock} {product.uom}</span>
+              <div className="p-3 rounded-lg bg-background/80 border border-border/50">
+                <p className="text-xs text-muted-foreground/80 font-medium mb-1">Stock actual</p>
+                <p className="text-lg font-bold text-primary">{product.stock} <span className="text-sm text-muted-foreground font-normal">{product.uom}</span></p>
               </div>
-              <div>
-                <span className="text-muted-foreground">Valor en inventario:</span>
-                <span className="ml-2 font-medium">
-                  {currency === "USD" ? "$" : "S/"}{product.stockValue.toFixed(2)}
-                </span>
+              <div className="p-3 rounded-lg bg-background/80 border border-border/50">
+                <p className="text-xs text-muted-foreground/80 font-medium mb-1">Valor en inventario</p>
+                <p className="text-lg font-bold text-green-600">{currency === "USD" ? "$" : "S/"}{product.stockValue.toFixed(2)}</p>
               </div>
             </div>
           </div>
