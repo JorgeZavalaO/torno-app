@@ -42,6 +42,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { QuoteLinesEditor, PiezaLine, MaterialLine } from "./quote-lines-editor";
 import { getTiposTrabajo } from "@/app/(protected)/cotizador/actions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ClientCombobox } from "./client-combobox";
 
 type Client = { id: string; nombre: string; ruc: string };
 type CostingParams = Record<string, string | number>;
@@ -326,23 +327,13 @@ export function NewQuoteDialog({
                           Cliente
                           <Badge variant="destructive" className="text-xs font-medium">Requerido</Badge>
                         </Label>
-                        <Select value={clienteId} onValueChange={setClienteId} disabled={pending}>
-                          <SelectTrigger className="h-11 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500">
-                            <SelectValue placeholder="Seleccionar cliente..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {clients.map((client) => (
-                              <SelectItem key={client.id} value={client.id}>
-                                <div className="flex flex-col items-start py-1">
-                                  <div className="font-medium text-slate-900 dark:text-slate-100">{client.nombre}</div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                                    RUC: {client.ruc}
-                                  </div>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <ClientCombobox
+                          value={clienteId}
+                          onChange={setClienteId}
+                          clients={clients}
+                          disabled={pending}
+                          placeholder="Seleccionar cliente..."
+                        />
                         {!clienteId && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
                             <AlertTriangle className="h-3 w-3" />
