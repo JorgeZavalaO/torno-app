@@ -215,9 +215,9 @@ export async function createProduct(fd: FormData): Promise<r> {
   
   if (!parsed.success) {
     // Mostrar el primer error de validación
-    const firstError = parsed.error.errors[0];
+    const firstError = parsed.error.issues[0];
     const fieldName = firstError.path.join('.');
-    console.error('Error de validación:', parsed.error.errors);
+    console.error('Error de validación:', parsed.error.issues);
     return { 
       ok: false, 
       message: `Error en ${fieldName}: ${firstError.message}` 
