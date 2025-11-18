@@ -213,7 +213,16 @@ export async function createProduct(fd: FormData): Promise<r> {
     stockMinimo: fd.get("stockMinimo") ?? null,
   });
   
-  if (!parsed.success) return { ok: false, message: "Datos inválidos del producto" };
+  if (!parsed.success) {
+    // Mostrar el primer error de validación
+    const firstError = parsed.error.errors[0];
+    const fieldName = firstError.path.join('.');
+    console.error('Error de validación:', parsed.error.errors);
+    return { 
+      ok: false, 
+      message: `Error en ${fieldName}: ${firstError.message}` 
+    };
+  }
   const { nombre, categoria, uom, costo, stockMinimo } = parsed.data;
   // Leer equivalentes opcionales en formato JSON (array de objetos)
   let equivalentes: Array<{ sistema: string; codigo: string; descripcion?: string } > = [];

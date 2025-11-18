@@ -24,6 +24,19 @@ interface FormErrors {
   equivalentes?: string;
 }
 
+// Mapa de prefijos de categoría (hardcoded para evitar problemas de importación)
+const CATEGORY_PREFIX_MAP: Record<string, string> = {
+  MATERIA_PRIMA: "MP",
+  PIEZA_FABRICADA: "FB",
+  HERRAMIENTA_CORTE: "HC",
+  HERRAMIENTA: "HE",
+  CONSUMIBLE: "CO",
+  REPUESTO: "RP",
+  INSUMO: "IN",
+  REFACCION: "RF",
+  FABRICACION: "FB",
+};
+
 export function NewProductDialog({
   open, onOpenChange, onSuccess, actions, currency = "PEN",
   uomOptions = [],
@@ -52,13 +65,13 @@ export function NewProductDialog({
     { sistema: "", codigo: "", descripcion: "" },
   ]);
 
-  // Generate SKU preview based on category and name
+  // Generate SKU preview based on category - same logic as server
   const generateSkuPreview = () => {
-    if (!nombre || !autoGenerateSku) return "";
+    if (!categoria || !autoGenerateSku) return "";
     
-    const categoryPrefix = categoria.split('_')[0].substring(0, 2).toUpperCase();
-    const namePrefix = nombre.split(' ')[0].substring(0, 3).toUpperCase();
-    return `${categoryPrefix}${namePrefix}-XXX`;
+    const prefix = CATEGORY_PREFIX_MAP[categoria] || "XX";
+    // Show as PREFIX-999 to indicate it will be auto-generated with counter
+    return `${prefix}-999`;
   };
 
   const skuPreview = generateSkuPreview();
@@ -78,23 +91,43 @@ export function NewProductDialog({
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
     
+    // Validar nombre (obligatorio)
     if (!nombre.trim()) {
       newErrors.nombre = "El nombre del producto es obligatorio";
     } else if (nombre.trim().length < 3) {
       newErrors.nombre = "El nombre debe tener al menos 3 caracteres";
+    } else if (nombre.trim().length > 100) {
+      newErrors.nombre = "El nombre no puede exceder 100 caracteres";
     }
 
-    if (!autoGenerateSku && sku.trim()) {
-      const skuPattern = /^[A-Z0-9-_]{3,20}$/;
-      if (!skuPattern.test(sku.trim())) {
-        newErrors.sku = "SKU debe contener solo letras, números, guiones y ser entre 3-20 caracteres";
+    // Validar categoría (obligatorio)
+    if (!categoria || categoria.trim() === "") {
+      newErrors.categoria = "Debes seleccionar una categoría";
+    }
+
+    // Validar UOM (obligatorio)
+    if (!uom || uom.trim() === "") {
+      newErrors.uom = "Debes seleccionar una unidad de medida";
+    }
+
+    // Validar SKU personalizado si está activado
+    if (!autoGenerateSku) {
+      if (!sku.trim()) {
+        newErrors.sku = "El SKU personalizado es obligatorio si no usas generación automática";
+      } else {
+        const skuPattern = /^[A-Z0-9-_]{3,20}$/;
+        if (!skuPattern.test(sku.trim())) {
+          newErrors.sku = "SKU debe contener solo letras mayúsculas, números, guiones y entre 3-20 caracteres";
+        }
       }
     }
 
+    // Validar costo
     if (costo !== "" && Number(costo) < 0) {
       newErrors.costo = "El costo no puede ser negativo";
     }
 
+    // Validar stock mínimo
     if (stockMinimo !== "" && Number(stockMinimo) < 0) {
       newErrors.stockMinimo = "El stock mínimo no puede ser negativo";
     }
@@ -110,6 +143,15 @@ export function NewProductDialog({
         newErrors.equivalentes = "Si especificas un código, el sistema es obligatorio";
         break;
       }
+      // Validar longitud de campos
+      if (eq.sistema.trim().length > 50) {
+        newErrors.equivalentes = "El nombre del sistema no puede exceder 50 caracteres";
+        break;
+      }
+      if (eq.codigo.trim().length > 100) {
+        newErrors.equivalentes = "El código no puede exceder 100 caracteres";
+        break;
+      }
     }
 
     setErrors(newErrors);
@@ -118,7 +160,23 @@ export function NewProductDialog({
 
   const submit = () => {
     if (!validateForm()) {
-      toast.error("Corrige los errores en el formulario");
+      // Mostrar el primer error encontrado
+      const firstError = Object.entries(errors)[0];
+      if (firstError) {
+        const [field, message] = firstError;
+        const fieldNames: Record<string, string> = {
+          nombre: "Nombre",
+          categoria: "Categoría",
+          uom: "Unidad de medida",
+          sku: "SKU",
+          costo: "Costo",
+          stockMinimo: "Stock mínimo",
+          equivalentes: "Códigos equivalentes"
+        };
+        toast.error(`Error en ${fieldNames[field]}: ${message}`);
+      } else {
+        toast.error("Corrige los errores en el formulario");
+      }
       return;
     }
 
@@ -131,8 +189,16 @@ export function NewProductDialog({
     fd.set("nombre", nombre.trim());
     fd.set("categoria", categoria);
     fd.set("uom", uom);
-    fd.set("costo", String(costo || 0));
-    if (stockMinimo !== "") fd.set("stockMinimo", String(stockMinimo));
+    
+    // Asegurar que costo siempre sea un número válido
+    const costoValue = costo === "" ? 0 : Number(costo);
+    fd.set("costo", String(costoValue));
+    
+    // Solo enviar stockMinimo si tiene valor
+    if (stockMinimo !== "" && stockMinimo !== null) {
+      fd.set("stockMinimo", String(Number(stockMinimo)));
+    }
+    
     // Adjuntar códigos equivalentes válidos
     const cleanEq = eqCodes
       .filter(e => e.sistema.trim() && e.codigo.trim())
@@ -234,10 +300,10 @@ export function NewProductDialog({
                     <Sparkles className="h-5 w-5 text-primary" />
                     <span className="text-sm font-medium">SKU generado:</span>
                   </div>
-                  <Badge className="font-mono text-base px-3 py-1 bg-primary text-white">{skuPreview}</Badge>
+                  <Badge className="font-mono text-base px-3 py-1 bg-primary text-white">{skuPreview.slice(0, -3)}###</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  ✨ Se creará automáticamente basado en la categoría y nombre del producto
+                  ✨ Se creará automáticamente con contador secuencial (ej: MP-001, MP-002, etc.)
                 </p>
               </div>
             )}
@@ -288,7 +354,7 @@ export function NewProductDialog({
                     value={categoria} 
                     onValueChange={setCategoria}
                   >
-                    <SelectTrigger id="categoria" className="border-border/50">
+                    <SelectTrigger id="categoria" className={errors.categoria ? "border-red-500 bg-red-50/30" : "border-border/50"}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -306,6 +372,12 @@ export function NewProductDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.categoria && (
+                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      {errors.categoria}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -313,7 +385,7 @@ export function NewProductDialog({
                     Unidad de medida *
                   </Label>
                   <Select value={uom} onValueChange={setUom}>
-                    <SelectTrigger id="uom" className="border-border/50">
+                    <SelectTrigger id="uom" className={errors.uom ? "border-red-500 bg-red-50/30" : "border-border/50"}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -329,6 +401,12 @@ export function NewProductDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.uom && (
+                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2 rounded">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      {errors.uom}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
