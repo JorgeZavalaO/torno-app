@@ -437,36 +437,89 @@ export async function importProducts(file: File): Promise<r> {
   await assertCanWriteInventory();
   
   try {
-    const text = await file.text();
-    const lines = text.split('\n').filter(line => line.trim());
+    // Importar xlsx dinámicamente (solo en servidor)
+    const XLSX = await import('xlsx');
     
-    // Verificar cabecera
-    const headers = lines[0].trim().split(',');
-    const expectedHeaders = ['Nombre', 'Categoría', 'UOM', 'Costo', 'StockMinimo'];
+    // Leer el archivo como ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     
-    if (!expectedHeaders.every(header => headers.includes(header))) {
+    // Obtener la primera hoja
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Convertir a JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as (string | number | boolean | null)[][];
+    
+    if (jsonData.length < 2) {
       return { 
         ok: false, 
-        message: `Formato de CSV inválido. Las columnas deben ser: ${expectedHeaders.join(', ')}` 
+        message: "El archivo Excel está vacío o no tiene datos" 
       };
     }
     
+    // Verificar cabecera
+    const headers = jsonData[0].map((h) => String(h ?? '').trim());
+    const expectedHeaders = ['Nombre', 'Categoría', 'UOM', 'Costo', 'StockMinimo', 'Material', 'Milimetros', 'Pulgadas'];
+    const requiredHeaders = ['Nombre', 'Categoría', 'UOM', 'Costo'];
+    
+    // Validar que al menos tenga las columnas requeridas
+    const hasRequiredHeaders = requiredHeaders.every(header => headers.includes(header));
+    if (!hasRequiredHeaders) {
+      return { 
+        ok: false, 
+        message: `Formato de Excel inválido. Las columnas requeridas son: ${requiredHeaders.join(', ')}. Columnas opcionales: ${expectedHeaders.slice(4).join(', ')}` 
+      };
+    }
+    
+    // Obtener índices de columnas
+    const getColumnIndex = (header: string) => headers.indexOf(header);
+    const nombreIdx = getColumnIndex('Nombre');
+    const categoriaIdx = getColumnIndex('Categoría');
+    const uomIdx = getColumnIndex('UOM');
+    const costoIdx = getColumnIndex('Costo');
+    const stockMinimoIdx = getColumnIndex('StockMinimo');
+    const materialIdx = getColumnIndex('Material');
+    const milimetrosIdx = getColumnIndex('Milimetros');
+    const pulgadasIdx = getColumnIndex('Pulgadas');
+    
     // Procesar filas de datos (ignorar cabecera)
-    const dataRows = lines.slice(1);
+    const dataRows = jsonData.slice(1);
     let importedCount = 0;
+    let skippedCount = 0;
     
     for (const row of dataRows) {
-      if (!row.trim()) continue;
-      
-      const columns = row.split(',');
-      if (columns.length < 4) continue; // Mínimo necesario: nombre, categoría, uom, costo
-      
-      const [nombre, categoria, uom, costo, stockMinimo] = columns;
-      
-      // Validar categoría
-  if (!['MATERIA_PRIMA', 'HERRAMIENTA_CORTE', 'CONSUMIBLE', 'REPUESTO', 'FABRICACION'].includes(categoria)) {
+      if (!row || row.length === 0 || !row[nombreIdx]) {
+        skippedCount++;
         continue;
       }
+      
+      const nombre = String(row[nombreIdx] || '').trim();
+      const categoria = String(row[categoriaIdx] || '').trim();
+      const uom = String(row[uomIdx] || '').trim();
+      const costoStr = String(row[costoIdx] || '0').trim();
+      const stockMinimoStr = row[stockMinimoIdx] !== undefined && row[stockMinimoIdx] !== '' ? String(row[stockMinimoIdx]).trim() : null;
+      const material = row[materialIdx] !== undefined && row[materialIdx] !== '' ? String(row[materialIdx]).trim() : null;
+      const milimetrosStr = row[milimetrosIdx] !== undefined && row[milimetrosIdx] !== '' ? String(row[milimetrosIdx]).trim() : null;
+      const pulgadasStr = row[pulgadasIdx] !== undefined && row[pulgadasIdx] !== '' ? String(row[pulgadasIdx]).trim() : null;
+      
+      // Validar datos mínimos
+      if (!nombre || !categoria || !uom) {
+        skippedCount++;
+        continue;
+      }
+      
+      // Validar categoría
+      if (!['MATERIA_PRIMA', 'HERRAMIENTA_CORTE', 'CONSUMIBLE', 'REPUESTO', 'FABRICACION'].includes(categoria)) {
+        skippedCount++;
+        continue;
+      }
+      
+      // Parsear números
+      const costo = parseFloat(costoStr) || 0;
+      const stockMinimo = stockMinimoStr ? parseFloat(stockMinimoStr) : null;
+      const milimetros = milimetrosStr ? parseFloat(milimetrosStr) : null;
+      const pulgadas = pulgadasStr ? parseFloat(pulgadasStr) : null;
       
       // Generar SKU automático
       const sku = await generateSKU(categoria);
@@ -475,11 +528,14 @@ export async function importProducts(file: File): Promise<r> {
       await prisma.producto.create({
         data: {
           sku,
-          nombre: nombre.trim(),
-          categoria: categoria as "MATERIA_PRIMA" | "HERRAMIENTA_CORTE" | "CONSUMIBLE" | "REPUESTO" | "FABRICACION",
-          uom: uom.trim(),
-          costo: D(parseFloat(costo) || 0),
-          stockMinimo: stockMinimo?.trim() ? D(parseFloat(stockMinimo)) : null,
+          nombre,
+          categoria: categoria as CategoriaProducto,
+          uom,
+          costo: D(costo),
+          stockMinimo: stockMinimo !== null ? D(stockMinimo) : null,
+          material: material || null,
+          milimetros: milimetros !== null ? D(milimetros) : null,
+          pulgadas: pulgadas !== null ? D(pulgadas) : null,
         },
       });
       
@@ -487,10 +543,15 @@ export async function importProducts(file: File): Promise<r> {
     }
     
     bumpAll();
-    return { ok: true, message: "Productos importados correctamente", imported: importedCount };
+    
+    const message = skippedCount > 0 
+      ? `${importedCount} productos importados correctamente, ${skippedCount} filas omitidas`
+      : `${importedCount} productos importados correctamente`;
+    
+    return { ok: true, message, imported: importedCount };
   } catch (e) {
     console.error("Error al importar productos:", e);
-    return { ok: false, message: "Error al procesar el archivo CSV" };
+    return { ok: false, message: `Error al procesar el archivo Excel: ${e instanceof Error ? e.message : 'Error desconocido'}` };
   }
 }
 

@@ -7,11 +7,13 @@ import { FileUp, Download, Upload, AlertCircle, CheckCircle2 } from "lucide-reac
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { CATEGORIES } from "@/lib/product-categories";
+import * as XLSX from "xlsx";
 
-// Función auxiliar para crear Excel simple sin dependencias externas
-const createSimpleExcel = (categoryOptions?: { value: string; label: string }[]) => {
+// Función para crear Excel XLSX real usando la librería xlsx
+const createExcelFile = (categoryOptions?: { value: string; label: string }[]) => {
   const headers = ["Nombre", "Categoría", "UOM", "Costo", "StockMinimo", "Material", "Milimetros", "Pulgadas"];
   const cats = categoryOptions && categoryOptions.length > 0 ? categoryOptions.map((c) => c.value) : CATEGORIES;
+  
   const sampleRows = [
     ["Tornillo hexagonal 1/2", cats[0], "pz", 2.50, 100, "Acero inoxidable", 12.7, 0.5],
     ["Tuerca hexagonal 3/4", cats[0], "pz", 3.75, 50, "Acero al carbono", 19.05, 0.75],
@@ -22,30 +24,29 @@ const createSimpleExcel = (categoryOptions?: { value: string; label: string }[])
     ["Lubricante industrial", cats[4] ?? cats[0], "l", 45.75, 10, "", "", ""],
   ];
 
-  const data = [headers, ...sampleRows];
+  // Crear workbook y worksheet
+  const wb = XLSX.utils.book_new();
+  const wsData = [headers, ...sampleRows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Crear XML de Excel
-  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
- <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
-  <Created>${new Date().toISOString()}</Created>
-  <LastSavedTime>${new Date().toISOString()}</LastSavedTime>
- </DocumentProperties>
- <Worksheet ss:Name="Productos">
-  <Table>
-   ${data.map(row => `<Row>
-     ${row.map(cell => `<Cell><Data ss:Type="String">${String(cell).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</Data></Cell>`).join("")}
-    </Row>`).join("\n")}
-  </Table>
- </Worksheet>
-</Workbook>`;
+  // Ajustar anchos de columna
+  const colWidths = [
+    { wch: 30 }, // Nombre
+    { wch: 20 }, // Categoría
+    { wch: 8 },  // UOM
+    { wch: 10 }, // Costo
+    { wch: 12 }, // StockMinimo
+    { wch: 20 }, // Material
+    { wch: 12 }, // Milimetros
+    { wch: 10 }, // Pulgadas
+  ];
+  ws['!cols'] = colWidths;
 
-  return xmlContent;
+  // Agregar hoja al workbook
+  XLSX.utils.book_append_sheet(wb, ws, "Productos");
+
+  // Generar archivo XLSX
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 };
 
 export function ImportProductsDialog({
@@ -71,20 +72,20 @@ export function ImportProductsDialog({
 
   const downloadTemplate = () => {
     try {
-      const excelContent = createSimpleExcel(categoryOptions);
+      const excelBuffer = createExcelFile(categoryOptions);
       
       // Crear blob y descargar
-      const blob = new Blob([excelContent], { type: "application/vnd.ms-excel" });
+      const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "plantilla-productos.xls";
+      link.download = "plantilla-productos.xlsx";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast.success("Plantilla descargada correctamente");
+      toast.success("Plantilla Excel descargada correctamente");
     } catch (error) {
       console.error("Error descargando plantilla:", error);
       toast.error("Error al descargar la plantilla");
