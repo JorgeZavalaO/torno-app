@@ -68,6 +68,9 @@ const ProductSchema = z.object({
   uom: z.string().min(1),
   costo: z.coerce.number().min(0),
   stockMinimo: z.coerce.number().min(0).optional().nullable(),
+  material: z.string().max(100).optional(),
+  milimetros: z.coerce.number().min(0).optional(),
+  pulgadas: z.coerce.number().min(0).optional(),
 });
 
 // Schema modificado para la creación donde SKU es opcional (se generará automáticamente)
@@ -211,6 +214,9 @@ export async function createProduct(fd: FormData): Promise<r> {
     uom: fd.get("uom"),
     costo: fd.get("costo"),
     stockMinimo: fd.get("stockMinimo") ?? null,
+    material: fd.get("material") || undefined,
+    milimetros: fd.get("milimetros") || undefined,
+    pulgadas: fd.get("pulgadas") || undefined,
   });
   
   if (!parsed.success) {
@@ -223,7 +229,7 @@ export async function createProduct(fd: FormData): Promise<r> {
       message: `Error en ${fieldName}: ${firstError.message}` 
     };
   }
-  const { nombre, categoria, uom, costo, stockMinimo } = parsed.data;
+  const { nombre, categoria, uom, costo, stockMinimo, material, milimetros, pulgadas } = parsed.data;
   // Leer equivalentes opcionales en formato JSON (array de objetos)
   let equivalentes: Array<{ sistema: string; codigo: string; descripcion?: string } > = [];
   const rawEq = fd.get('equivalentes');
@@ -254,6 +260,9 @@ export async function createProduct(fd: FormData): Promise<r> {
         sku, nombre, categoria: categoria as CategoriaProducto, uom,
         costo: D(costo),
         stockMinimo: stockMinimo != null ? D(stockMinimo) : null,
+        material: material || null,
+        milimetros: milimetros != null ? D(milimetros) : null,
+        pulgadas: pulgadas != null ? D(pulgadas) : null,
       },
     });
 
@@ -304,9 +313,12 @@ export async function updateProduct(fd: FormData): Promise<r> {
     uom: fd.get("uom"),
     costo: fd.get("costo"),
     stockMinimo: fd.get("stockMinimo") ?? null,
+    material: fd.get("material") || undefined,
+    milimetros: fd.get("milimetros") || undefined,
+    pulgadas: fd.get("pulgadas") || undefined,
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos del producto" };
-  const { sku, nombre, categoria, uom, costo, stockMinimo } = parsed.data;
+  const { sku, nombre, categoria, uom, costo, stockMinimo, material, milimetros, pulgadas } = parsed.data;
 
   try {
     await prisma.producto.update({
@@ -315,6 +327,9 @@ export async function updateProduct(fd: FormData): Promise<r> {
         nombre, categoria: categoria as unknown as CategoriaProducto, uom,
         costo: D(costo),
         stockMinimo: stockMinimo != null ? D(stockMinimo) : null,
+        material: material || null,
+        milimetros: milimetros != null ? D(milimetros) : null,
+        pulgadas: pulgadas != null ? D(pulgadas) : null,
       },
     });
     bumpAll();

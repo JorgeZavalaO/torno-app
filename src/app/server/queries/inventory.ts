@@ -49,7 +49,7 @@ export const getProductsWithStock = cache(
       prisma.producto.findMany({
         where: productWhere,
         orderBy: { nombre: "asc" },
-        select: { sku: true, nombre: true, categoria: true, uom: true, costo: true, stockMinimo: true, createdAt: true, updatedAt: true },
+        select: { sku: true, nombre: true, categoria: true, uom: true, costo: true, stockMinimo: true, createdAt: true, updatedAt: true, material: true, milimetros: true, pulgadas: true },
       }),
       prisma.movimiento.groupBy({
         by: ["productoId"],
@@ -211,6 +211,9 @@ export async function getProductsWithStockUncached(searchTerm?: string) {
         stockMinimo: true,
         createdAt: true,
         updatedAt: true,
+        material: true,
+        milimetros: true,
+        pulgadas: true,
       },
     }),
     prisma.movimiento.groupBy({

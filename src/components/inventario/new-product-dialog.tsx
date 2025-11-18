@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { FractionInput } from "@/components/ui/fraction-input";
 import { toast } from "sonner";
 import { Package, Sparkles, AlertCircle, DollarSign, Boxes, Link2, CheckCircle2 } from "lucide-react";
 // Category options should be provided from server via catalog; fallback to empty array
@@ -57,6 +58,9 @@ export function NewProductDialog({
   const [uom, setUom] = useState(uomOptions[0]?.value || "pz");
   const [costo, setCosto] = useState<number | "">(0);
   const [stockMinimo, setStockMinimo] = useState<number | "">("");
+  const [material, setMaterial] = useState("");
+  const [milimetros, setMilimetros] = useState<number | "">("");
+  const [pulgadas, setPulgadas] = useState<number | "">("");
   const [autoGenerateSku, setAutoGenerateSku] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
   const [pending, start] = useTransition();
@@ -83,6 +87,9 @@ export function NewProductDialog({
     setUom(uomOptions[0]?.value || "pz");
     setCosto(0);
     setStockMinimo("");
+    setMaterial("");
+    setMilimetros("");
+    setPulgadas("");
     setAutoGenerateSku(true);
     setErrors({});
     setEqCodes([{ sistema: "", codigo: "", descripcion: "" }]);
@@ -197,6 +204,17 @@ export function NewProductDialog({
     // Solo enviar stockMinimo si tiene valor
     if (stockMinimo !== "" && stockMinimo !== null) {
       fd.set("stockMinimo", String(Number(stockMinimo)));
+    }
+    
+    // Enviar campos opcionales si tienen valor
+    if (material.trim()) {
+      fd.set("material", material.trim());
+    }
+    if (milimetros !== "") {
+      fd.set("milimetros", String(Number(milimetros)));
+    }
+    if (pulgadas !== "") {
+      fd.set("pulgadas", String(Number(pulgadas)));
     }
     
     // Adjuntar códigos equivalentes válidos
@@ -474,6 +492,57 @@ export function NewProductDialog({
                 )}
                 <p className="text-xs text-muted-foreground">
                   ⚠️ Alertas cuando esté por debajo de este nivel
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="material" className="text-sm font-medium">
+                  Material (opcional)
+                </Label>
+                <Input
+                  id="material"
+                  type="text"
+                  value={material}
+                  onChange={e => setMaterial(e.target.value)}
+                  placeholder="Ej: Acero inoxidable, Aluminio..."
+                  maxLength={100}
+                  className={`border-border/50`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  📋 Descripción del material del producto
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="milimetros" className="text-sm font-medium">
+                  Milímetros (opcional)
+                </Label>
+                <Input
+                  id="milimetros"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  value={milimetros}
+                  onChange={e => setMilimetros(e.target.value === "" ? "" : Number(e.target.value))}
+                  placeholder="0.000"
+                  className={`text-right font-mono border-border/50`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  📏 Medida en milímetros
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="pulgadas" className="text-sm font-medium">
+                  Pulgadas (opcional)
+                </Label>
+                <FractionInput
+                  value={pulgadas}
+                  onChange={setPulgadas}
+                  placeholder="Ej: 1/2, 1 1/4, 2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  📐 Medida en pulgadas (escribe 1/2, 3/4, 1 1/2, etc.)
                 </p>
               </div>
             </div>

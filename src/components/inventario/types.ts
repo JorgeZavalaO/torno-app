@@ -13,6 +13,9 @@ export type ProductRow = {
   stockValue: number;
   createdAt: string | Date;
   updatedAt: string | Date;
+  material?: string | null;
+  milimetros?: number | null;
+  pulgadas?: number | null;
 };
 
 export type MovementRow = {
