@@ -131,7 +131,7 @@ export const getMachineDetail = cache(
     if (!m) return null;
 
     const since30 = new Date(Date.now() - 30*24*3600*1000);
-    const [eventos, mantenimientos, horasSerie] = await Promise.all([
+    const [eventos, mantenimientos, horasSerie, mountedTools, availableTools] = await Promise.all([
       prisma.maquinaEvento.findMany({
         where: { maquinaId: id, inicio: { gte: since30 } },
         orderBy: { inicio: "desc" },
@@ -152,6 +152,17 @@ export const getMachineDetail = cache(
         GROUP BY 1
         ORDER BY 1 ASC
       `,
+      // Herramientas montadas
+      prisma.toolInstance.findMany({
+        where: { maquinaId: id, estado: "EN_USO" },
+        include: { producto: { select: { nombre: true, sku: true, uom: true } } }
+      }),
+      // Herramientas disponibles para montar (NUEVA o AFILADO)
+      prisma.toolInstance.findMany({
+        where: { estado: { in: ["NUEVA", "AFILADO"] } },
+        include: { producto: { select: { nombre: true } } },
+        orderBy: { codigo: "asc" }
+      })
     ]);
 
   const horasTot = eventos.reduce((s,e)=> s + Number(e.horas || 0), 0);
@@ -184,6 +195,16 @@ export const getMachineDetail = cache(
         costo: Number(m.costo), // Convertir Decimal a number
       })),
       serie30d: horasSerie,
+      mountedTools: mountedTools.map(t => ({
+        ...t,
+        vidaAcumulada: Number(t.vidaAcumulada),
+        vidaUtilEstimada: t.vidaUtilEstimada ? Number(t.vidaUtilEstimada) : null
+      })),
+      availableTools: availableTools.map(t => ({
+        id: t.id,
+        codigo: t.codigo,
+        producto: { nombre: t.producto.nombre }
+      })),
       kpis: {
         horas30d: horasTot,
         usoPctAprox,

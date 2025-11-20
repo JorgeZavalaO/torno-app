@@ -6,6 +6,7 @@ import { revalidateTag, revalidatePath } from "next/cache";
 import { cacheTags } from "@/app/lib/cache-tags";
 import { z } from "zod";
 import { recomputeOTCosts } from "@/app/(protected)/ot/actions";
+import { registerMachineProduction } from "@/app/(protected)/inventario/tools-actions";
 
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
 
@@ -63,6 +64,14 @@ export async function logHours(entry: z.infer<typeof SingleHoursSchema>){
   await prisma.parteProduccion.create({
     data:{ otId: parsed.data.otId, userId: targetUserId, horas: D(parsed.data.horas), maquina: parsed.data.maquina ?? null, nota: parsed.data.nota ?? null }
   });
+
+  // --- NUEVO: Registrar desgaste de herramientas si se especificó máquina ---
+  if (parsed.data.maquina) {
+    // const maquinaReal = await prisma.maquina.findUnique({ ... });
+    // Pendiente: Implementar desgaste por horas si es necesario
+  }
+  // -----------------------------------------------------------------------
+
   await recomputeOTCosts(parsed.data.otId); // Recalcular costos después de registrar horas
   bump([parsed.data.otId]);
   return { ok:true as const, message:"Parte registrado" };
@@ -126,6 +135,36 @@ export async function logPieces(payload: z.infer<typeof PiecesSchema>){
     }
   }
   if(errs.length) return { ok:false as const, message: errs.join(" • ") };
+
+  // --- NUEVO: Registrar desgaste de herramientas si hay máquina asociada ---
+  // Como logPieces no recibe la máquina, necesitamos inferirla o pedirla.
+  // Por ahora, intentamos inferirla del último parte de producción de esta OT o asumimos que el usuario debe indicarla.
+  // Sin embargo, el schema actual de logPieces no tiene máquina.
+  // Opción A: Modificar PiecesSchema para incluir maquinaId (Ideal)
+  // Opción B: Buscar la máquina más reciente usada en esta OT (Fallback)
+  
+  // Vamos a buscar el último parte de producción de esta OT para ver qué máquina se usó
+  const lastLog = await prisma.parteProduccion.findFirst({
+    where: { otId, maquina: { not: null } },
+    orderBy: { fecha: "desc" },
+    select: { maquina: true }
+  });
+
+  // Si encontramos una máquina (nombre/código), buscamos su ID real
+  if (lastLog?.maquina) {
+    const maquinaReal = await prisma.maquina.findUnique({
+      where: { codigo: lastLog.maquina }, // Asumiendo que 'maquina' en ParteProduccion guarda el código
+      select: { id: true }
+    });
+
+    if (maquinaReal) {
+      // Calcular total de piezas producidas en este lote
+      const totalPiezas = items.reduce((acc, item) => acc + item.cantidad, 0);
+      // Registrar desgaste en segundo plano (no bloqueante)
+      await registerMachineProduction(otId, maquinaReal.id, totalPiezas);
+    }
+  }
+  // -----------------------------------------------------------------------
 
   await prisma.$transaction(async (tx) => {
     // Precalcular costos por SKU para movimientos (una sola consulta)

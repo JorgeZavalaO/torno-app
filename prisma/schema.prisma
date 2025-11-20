@@ -5,7 +5,7 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
 }
 
 datasource db {
@@ -239,6 +239,11 @@ model Producto {
   otMateriales OTMaterial[]
   otPiezas     OTPieza[]
   codigosEquivalentes ProductoCodigoEquivalente[]
+  
+  // Trazabilidad de herramientas
+  requiereTrazabilidad Boolean @default(false)
+  vidaUtilEstimada     Decimal? @db.Decimal(12,3)
+  toolInstances        ToolInstance[]
 
   @@index([nombre])
 }
@@ -439,6 +444,8 @@ model OrdenTrabajo {
   maquinaEventos   MaquinaEvento[]
   reclamo          Reclamo?
   reclamosReferencia Reclamo[]   @relation("ReclamoOTReferencia")
+  
+  herramientasUsadas OTToolUsage[]
 
   @@index([estado, creadaEn])
   @@index([creadaEn])
@@ -633,6 +640,7 @@ model Maquina {
 
   eventos         MaquinaEvento[]
   mantenimientos  MaquinaMantenimiento[]
+  herramientasMontadas ToolInstance[]
 }
 
 model MaquinaEvento {
@@ -746,4 +754,61 @@ model Reclamo {
   @@index([clienteId])
   @@index([estado])
   @@index([otReferenciaId])
+}
+
+enum ToolState {
+  NUEVA
+  EN_USO
+  AFILADO
+  DESGASTADA
+  ROTA
+  PERDIDA
+}
+
+model ToolInstance {
+  id            String    @id @default(uuid())
+  codigo        String    @unique // Identificador único (ej. QR)
+  productoId    String
+  estado        ToolState @default(NUEVA)
+  ubicacion     String?   // ej. "Almacén", "Torno 1"
+  
+  costoInicial  Decimal   @db.Decimal(12,2)
+  fechaAlta     DateTime  @default(now())
+  fechaBaja     DateTime?
+  
+  vidaUtilEstimada Decimal? @db.Decimal(12,3) // Copia del producto al nacer
+  vidaAcumulada    Decimal  @db.Decimal(12,3) @default(0) // Total piezas producidas o horas uso
+
+  producto      Producto  @relation(fields: [productoId], references: [sku])
+  
+  maquinaId     String?
+  maquina       Maquina?  @relation(fields: [maquinaId], references: [id])
+  
+  usos          OTToolUsage[]
+
+  @@index([productoId])
+  @@index([maquinaId])
+  @@index([estado])
+}
+
+model OTToolUsage {
+  id             String       @id @default(uuid())
+  otId           String
+  toolInstanceId String
+  
+  fechaInicio    DateTime     @default(now())
+  fechaFin       DateTime?
+  
+  cantidadProducida Decimal   @db.Decimal(12,3) // Cuánto produjo en esta sesión
+  
+  estadoInicial  ToolState
+  estadoFinal    ToolState?   // Cómo quedó después del uso
+  
+  notas          String?
+
+  ot             OrdenTrabajo @relation(fields: [otId], references: [id])
+  toolInstance   ToolInstance @relation(fields: [toolInstanceId], references: [id])
+
+  @@index([otId])
+  @@index([toolInstanceId])
 }

@@ -15,6 +15,10 @@ type Result = { ok: true; message?: string; sku?: string; imported?: number } | 
 type r = Result;
 
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
+const optionalPositiveNumber = z.preprocess((val) => {
+  if (val === undefined || val === null || val === "") return undefined;
+  return val;
+}, z.coerce.number().positive().gt(0));
 
 /**
  * Calcula el costo promedio ponderado de un producto basado en los ingresos por compras.
@@ -71,6 +75,14 @@ const ProductSchema = z.object({
   material: z.string().max(100).optional(),
   milimetros: z.coerce.number().min(0).optional(),
   pulgadas: z.coerce.number().min(0).optional(),
+  requiereTrazabilidad: z.coerce.boolean().optional().default(false),
+  vidaUtilEstimada: optionalPositiveNumber.optional(),
+}).refine(data => {
+  if (!data.requiereTrazabilidad) return true;
+  return typeof data.vidaUtilEstimada === "number" && data.vidaUtilEstimada > 0;
+}, {
+  message: "La vida útil estimada es obligatoria cuando se requiere trazabilidad",
+  path: ["vidaUtilEstimada"],
 });
 
 // Schema modificado para la creación donde SKU es opcional (se generará automáticamente)
@@ -217,6 +229,8 @@ export async function createProduct(fd: FormData): Promise<r> {
     material: fd.get("material") || undefined,
     milimetros: fd.get("milimetros") || undefined,
     pulgadas: fd.get("pulgadas") || undefined,
+    requiereTrazabilidad: fd.get("requiereTrazabilidad") ?? undefined,
+    vidaUtilEstimada: fd.get("vidaUtilEstimada") ?? undefined,
   });
   
   if (!parsed.success) {
@@ -229,7 +243,7 @@ export async function createProduct(fd: FormData): Promise<r> {
       message: `Error en ${fieldName}: ${firstError.message}` 
     };
   }
-  const { nombre, categoria, uom, costo, stockMinimo, material, milimetros, pulgadas } = parsed.data;
+  const { nombre, categoria, uom, costo, stockMinimo, material, milimetros, pulgadas, requiereTrazabilidad, vidaUtilEstimada } = parsed.data;
   // Leer equivalentes opcionales en formato JSON (array de objetos)
   let equivalentes: Array<{ sistema: string; codigo: string; descripcion?: string } > = [];
   const rawEq = fd.get('equivalentes');
@@ -263,6 +277,8 @@ export async function createProduct(fd: FormData): Promise<r> {
         material: material || null,
         milimetros: milimetros != null ? D(milimetros) : null,
         pulgadas: pulgadas != null ? D(pulgadas) : null,
+        requiereTrazabilidad: Boolean(requiereTrazabilidad),
+        vidaUtilEstimada: typeof vidaUtilEstimada === "number" ? D(vidaUtilEstimada) : null,
       },
     });
 
@@ -316,9 +332,11 @@ export async function updateProduct(fd: FormData): Promise<r> {
     material: fd.get("material") || undefined,
     milimetros: fd.get("milimetros") || undefined,
     pulgadas: fd.get("pulgadas") || undefined,
+    requiereTrazabilidad: fd.get("requiereTrazabilidad") ?? undefined,
+    vidaUtilEstimada: fd.get("vidaUtilEstimada") ?? undefined,
   });
   if (!parsed.success) return { ok: false, message: "Datos inválidos del producto" };
-  const { sku, nombre, categoria, uom, costo, stockMinimo, material, milimetros, pulgadas } = parsed.data;
+  const { sku, nombre, categoria, uom, costo, stockMinimo, material, milimetros, pulgadas, requiereTrazabilidad, vidaUtilEstimada } = parsed.data;
 
   try {
     await prisma.producto.update({
@@ -330,6 +348,8 @@ export async function updateProduct(fd: FormData): Promise<r> {
         material: material || null,
         milimetros: milimetros != null ? D(milimetros) : null,
         pulgadas: pulgadas != null ? D(pulgadas) : null,
+        requiereTrazabilidad: Boolean(requiereTrazabilidad),
+        vidaUtilEstimada: typeof vidaUtilEstimada === "number" ? D(vidaUtilEstimada) : null,
       },
     });
     bumpAll();

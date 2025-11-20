@@ -9,7 +9,7 @@ BEGIN
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind = 'i' AND c.relname = 'Cotizacion_codigo_key'
   ) THEN
-    CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "Cotizacion_codigo_key" ON "public"."Cotizacion" ("codigo");
+    CREATE UNIQUE INDEX IF NOT EXISTS "Cotizacion_codigo_key" ON "public"."Cotizacion" ("codigo");
   END IF;
 END$$;
 
@@ -22,6 +22,6 @@ BEGIN
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind = 'i' AND c.relname = 'SolicitudCompra_codigo_key'
   ) THEN
-    CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "SolicitudCompra_codigo_key" ON "public"."SolicitudCompra" ("codigo");
+    CREATE UNIQUE INDEX IF NOT EXISTS "SolicitudCompra_codigo_key" ON "public"."SolicitudCompra" ("codigo");
   END IF;
 END$$;

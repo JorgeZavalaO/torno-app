@@ -23,6 +23,7 @@ interface FormErrors {
   costo?: string;
   stockMinimo?: string;
   equivalentes?: string;
+  vidaUtilEstimada?: string;
 }
 
 // Mapa de prefijos de categoría (hardcoded para evitar problemas de importación)
@@ -61,6 +62,8 @@ export function NewProductDialog({
   const [material, setMaterial] = useState("");
   const [milimetros, setMilimetros] = useState<number | "">("");
   const [pulgadas, setPulgadas] = useState<number | "">("");
+  const [requiereTrazabilidad, setRequiereTrazabilidad] = useState(false);
+  const [vidaUtilEstimada, setVidaUtilEstimada] = useState<number | "">("");
   const [autoGenerateSku, setAutoGenerateSku] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
   const [pending, start] = useTransition();
@@ -90,9 +93,21 @@ export function NewProductDialog({
     setMaterial("");
     setMilimetros("");
     setPulgadas("");
+    setRequiereTrazabilidad(false);
+    setVidaUtilEstimada("");
     setAutoGenerateSku(true);
     setErrors({});
     setEqCodes([{ sistema: "", codigo: "", descripcion: "" }]);
+  };
+
+  const isToolCategory = categoria === "HERRAMIENTA" || categoria === "HERRAMIENTA_CORTE";
+
+  const handleCategoriaChange = (value: string) => {
+    setCategoria(value);
+    if (value !== "HERRAMIENTA" && value !== "HERRAMIENTA_CORTE") {
+      setRequiereTrazabilidad(false);
+      setVidaUtilEstimada("");
+    }
   };
 
   const validateForm = (): boolean => {
@@ -137,6 +152,10 @@ export function NewProductDialog({
     // Validar stock mínimo
     if (stockMinimo !== "" && Number(stockMinimo) < 0) {
       newErrors.stockMinimo = "El stock mínimo no puede ser negativo";
+    }
+
+    if (isToolCategory && requiereTrazabilidad && (vidaUtilEstimada === "" || Number(vidaUtilEstimada) <= 0)) {
+      newErrors.vidaUtilEstimada = "Define una vida útil estimada mayor a cero";
     }
 
     // Validar códigos equivalentes
@@ -215,6 +234,11 @@ export function NewProductDialog({
     }
     if (pulgadas !== "") {
       fd.set("pulgadas", String(Number(pulgadas)));
+    }
+
+    fd.set("requiereTrazabilidad", String(isToolCategory && requiereTrazabilidad));
+    if (vidaUtilEstimada !== "" && Number(vidaUtilEstimada) > 0) {
+      fd.set("vidaUtilEstimada", String(Number(vidaUtilEstimada)));
     }
     
     // Adjuntar códigos equivalentes válidos
@@ -370,7 +394,7 @@ export function NewProductDialog({
                   </Label>
                   <Select 
                     value={categoria} 
-                    onValueChange={setCategoria}
+                    onValueChange={handleCategoriaChange}
                   >
                     <SelectTrigger id="categoria" className={`transition-all ${errors.categoria ? "border-red-500 bg-red-50/50" : "focus:ring-blue/20"}`}>
                       <SelectValue />
@@ -548,6 +572,59 @@ export function NewProductDialog({
             </div>
           </div>
 
+          {/* Tool tracking */}
+          {isToolCategory && (
+            <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-amber-500/5 to-amber-500/0 border-2 border-amber-500/20 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-amber-500/20 ring-2 ring-amber-500/30">
+                    <Sparkles className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <Label className="text-base font-semibold">Seguimiento y desgaste</Label>
+                </div>
+                <div className="flex items-center space-x-2 bg-background/80 backdrop-blur px-3 py-1.5 rounded-lg border border-border/50">
+                  <Label htmlFor="traceability" className="text-xs font-medium cursor-pointer">Requiere trazabilidad</Label>
+                  <Switch
+                    id="traceability"
+                    checked={requiereTrazabilidad}
+                    onCheckedChange={setRequiereTrazabilidad}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground/80">
+                Activa esta opción para herramientas críticas que necesitas rastrear por número de serie.
+              </p>
+
+              {requiereTrazabilidad && (
+                <div className="space-y-2">
+                  <Label htmlFor="vidaUtilEstimada" className="text-sm font-medium">
+                    Vida útil estimada (piezas u horas)
+                  </Label>
+                  <Input
+                    id="vidaUtilEstimada"
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={vidaUtilEstimada}
+                    onChange={e => setVidaUtilEstimada(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="Ej: 500 piezas"
+                    className={`text-right font-mono transition-all ${errors.vidaUtilEstimada ? "border-red-500 bg-red-50/50" : "focus:ring-amber-500/20"}`}
+                  />
+                  {errors.vidaUtilEstimada && (
+                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-200/50">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      {errors.vidaUtilEstimada}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground/80">
+                    Usaremos este dato como base para amortizar el costo hasta conocer el desgaste real.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Códigos equivalentes opcionales - Card Style */}
           <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-purple-500/0 border-2 border-purple-500/20 shadow-sm">
             <div className="flex items-center justify-between mb-1">
@@ -667,6 +744,18 @@ export function NewProductDialog({
                   <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-amber-500/30">
                     <span className="text-muted-foreground font-medium">📊 Stock mínimo:</span>
                     <span className="font-medium text-amber-600">{stockMinimo} {uom}</span>
+                  </div>
+                )}
+                {isToolCategory && (
+                  <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-amber-500/30">
+                    <span className="text-muted-foreground font-medium">🛠️ Trazabilidad:</span>
+                    <span className="font-medium">{requiereTrazabilidad ? "Sí" : "No"}</span>
+                  </div>
+                )}
+                {isToolCategory && requiereTrazabilidad && vidaUtilEstimada !== "" && Number(vidaUtilEstimada) > 0 && (
+                  <div className="flex justify-between items-center py-2 px-3 bg-background/60 rounded border border-amber-500/30">
+                    <span className="text-muted-foreground font-medium">⌛ Vida útil estimada:</span>
+                    <span className="font-mono font-semibold">{vidaUtilEstimada} unidades</span>
                   </div>
                 )}
               </div>

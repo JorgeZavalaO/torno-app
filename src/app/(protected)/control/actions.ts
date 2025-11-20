@@ -8,6 +8,7 @@ import { logHoursBulk, logPieces } from "@/app/server/services/production";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { recomputeOTCosts } from "@/app/(protected)/ot/actions"; // IMPORTA
+import { registerMachineProduction } from "@/app/(protected)/inventario/tools-actions";
 
 /* -------------------------------------------------------------------------- */
 /*                                Infra común                                 */
@@ -306,6 +307,38 @@ export async function logWorkAndPieces(fd: FormData): Promise<R> {
   if (items.length) {
     const rP = await logPieces({ otId, items });
     if (!rP.ok) return { ok: false, message: rP.message || "Error al registrar piezas" };
+
+    // --- NUEVO: Registrar desgaste de herramientas si hay máquina asociada ---
+    // Intentamos obtener el ID de la máquina usada para este lote de piezas.
+    // Prioridad:
+    // 1. maquinaId explícito en el formulario (si se seleccionó máquina simple)
+    // 2. maquina (nombre) explícito en el formulario
+    // 3. Si se enviaron horas con máquinas múltiples, usar la primera máquina (heurística simple)
+    
+    let targetMachineId: string | undefined = maquinaId;
+
+    if (!targetMachineId && maquina) {
+      const m = await prisma.maquina.findFirst({ where: { nombre: maquina }, select: { id: true } });
+      if (m) targetMachineId = m.id;
+    }
+
+    if (!targetMachineId && maquinas && maquinas.length > 0) {
+      // Si hay múltiples máquinas, es ambiguo a cuál asignar el desgaste de las piezas.
+      // Asumimos la primera máquina de la lista o intentamos resolver por nombre/id.
+      const firstM = maquinas[0];
+      if (firstM.id) targetMachineId = firstM.id;
+      else if (firstM.nombre) {
+        const m = await prisma.maquina.findFirst({ where: { nombre: firstM.nombre }, select: { id: true } });
+        if (m) targetMachineId = m.id;
+      }
+    }
+
+    if (targetMachineId) {
+      const totalPiezas = items.reduce((acc, item) => acc + item.cantidad, 0);
+      // Registrar desgaste en segundo plano
+      await registerMachineProduction(otId, targetMachineId, totalPiezas);
+    }
+    // -----------------------------------------------------------------------
   }
 
   await recomputeOTCosts(otId); // NUEVO: recalcular costos después de registrar horas/piezas

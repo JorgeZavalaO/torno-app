@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import MaintenanceScheduleDialog from "@/components/machines/maintenance-schedule-dialog";
 import MaintenanceEditDialog from "@/components/machines/maintenance-edit-dialog";
+import { MachineTools } from "@/components/maquinas/machine-tools";
 import { 
   ArrowLeft, 
   Clock, 
@@ -247,40 +248,11 @@ export default function MachineDetailClient({ canWrite, detail, actions, statusO
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Información Técnica
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {m.fabricante && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Fabricante:</span>
-                <span className="ml-2 font-medium">{m.fabricante}</span>
-              </div>
-            )}
-            {m.modelo && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Modelo:</span>
-                <span className="ml-2 font-medium">{m.modelo}</span>
-              </div>
-            )}
-            {m.serie && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Serie:</span>
-                <span className="ml-2 font-mono">{m.serie}</span>
-              </div>
-            )}
-            {m.capacidad && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Capacidad:</span>
-                <span className="ml-2 font-medium">{m.capacidad}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <MachineTools 
+          maquinaId={m.id} 
+          mountedTools={detail.mountedTools} 
+          availableTools={detail.availableTools} 
+        />
       </div>
 
       {/* Programar mantenimiento */}
