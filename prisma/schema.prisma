@@ -5,8 +5,9 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../node_modules/.prisma/client"
+  provider = "prisma-client-js"
+  // Usamos la ruta por defecto: node_modules/.prisma/client
+  // (No especificamos output para permitir compatibilidad con @prisma/client en v6.13.0)
 }
 
 datasource db {
