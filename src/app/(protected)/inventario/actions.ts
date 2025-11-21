@@ -714,3 +714,69 @@ export async function removeMachineLife(fd: FormData): Promise<Result> {
     return { ok: false, message: "No se pudo eliminar" };
   }
 }
+
+const BulkStockSchema = z.object({
+  items: z.array(z.object({
+    sku: z.string().min(1),
+    cantidad: z.coerce.number().positive(),
+    costoUnitario: z.coerce.number().min(0),
+  })).min(1),
+  nota: z.string().optional(),
+});
+
+export async function registerInitialBalances(fd: FormData): Promise<Result> {
+  await assertCanWriteInventory();
+  
+  const rawItems = fd.get("items");
+  const nota = fd.get("nota") as string | undefined;
+
+  if (!rawItems) return { ok: false, message: "No se enviaron items" };
+
+  let items: unknown[] = [];
+  try {
+    items = JSON.parse(String(rawItems));
+  } catch {
+    return { ok: false, message: "Formato de items inválido" };
+  }
+
+  const parsed = BulkStockSchema.safeParse({ items, nota });
+  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
+
+  const { items: validItems, nota: validNota } = parsed.data;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const item of validItems) {
+        // Crear movimiento de ajuste
+        await tx.movimiento.create({
+          data: {
+            productoId: item.sku,
+            tipo: "INGRESO_AJUSTE",
+            cantidad: D(item.cantidad),
+            costoUnitario: D(item.costoUnitario),
+            nota: validNota || "Saldo Inicial (Carga Masiva)",
+          },
+        });
+
+        // Actualizar costo del producto (directo, ya que es saldo inicial/ajuste)
+        // Opcional: Podríamos usar promedio ponderado si ya existe stock, 
+        // pero para "Saldo Inicial" suele preferirse establecer el costo base.
+        // Si el usuario quiere promedio, debería usar compras.
+        // Aquí asumiremos que el costo ingresado es el nuevo costo referencial si no había stock,
+        // o actualizamos el costo promedio si así se desea.
+        // Para simplificar y ser consistente con "Saldo Inicial", actualizamos el costo actual.
+        
+        await tx.producto.update({
+          where: { sku: item.sku },
+          data: { costo: D(item.costoUnitario) },
+        });
+      }
+    });
+
+    bumpAll();
+    return { ok: true, message: `${validItems.length} saldos registrados correctamente` };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: "Error al registrar saldos" };
+  }
+}

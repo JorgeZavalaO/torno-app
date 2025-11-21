@@ -12,6 +12,7 @@ export interface InventoryHeaderProps {
   onNewProduct: () => void;
   onNewMovement: () => void;
   onImport: () => void;
+  onBulkStock?: () => void;
 }
 
 export const InventoryHeader: React.FC<InventoryHeaderProps> = ({
@@ -22,6 +23,7 @@ export const InventoryHeader: React.FC<InventoryHeaderProps> = ({
   onNewProduct,
   onNewMovement,
   onImport,
+  onBulkStock,
 }) => {
   return (
     <div className="flex items-center justify-between">
@@ -49,6 +51,11 @@ export const InventoryHeader: React.FC<InventoryHeaderProps> = ({
         {canWrite && (
           <>
             <Button onClick={onNewMovement} className="gap-2"><Boxes className="h-4 w-4" /> Nuevo movimiento</Button>
+            {onBulkStock && (
+              <Button variant="outline" onClick={onBulkStock} className="gap-2">
+                <Boxes className="h-4 w-4" /> Carga Masiva
+              </Button>
+            )}
             <Button variant="outline" onClick={onNewProduct} className="gap-2"><Plus className="h-4 w-4" /> Nuevo producto</Button>
             <Button variant="outline" onClick={onImport} className="gap-2"><FileUp className="h-4 w-4" /> Importar productos</Button>
           </>

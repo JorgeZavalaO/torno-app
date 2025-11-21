@@ -43,5 +43,6 @@ export type Actions = {
   addEquivalentCode: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   removeEquivalentCode: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   getProductEquivalentCodes: (sku: string) => Promise<Array<{ id: string; sistema: string; codigo: string; descripcion?: string | null }>>;
-  searchProducts: (searchTerm?: string) => Promise<ProductRow[]>;
+  searchProducts: (term?: string) => Promise<ProductRow[]>;
+  registerInitialBalances: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 };

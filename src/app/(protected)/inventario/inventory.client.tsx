@@ -12,6 +12,7 @@ import { NewProductDialog } from "@/components/inventario/new-product-dialog";
 import { EditProductDialog } from "@/components/inventario/edit-product-dialog";
 import { NewMovementDialog } from "@/components/inventario/new-movement-dialog";
 import { ImportProductsDialog } from "@/components/inventario/import-products-dialog";
+import { BulkStockDialog } from "@/components/inventario/bulk-stock-dialog";
 import { InventoryHeader } from "@/components/inventario/inventory-header";
 import { InventoryStats } from "@/components/inventario/inventory-stats";
 import { ProductTable } from "@/components/inventario/product-table";
@@ -47,6 +48,7 @@ export default function InventoryClient({
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [showNewMovement, setShowNewMovement] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showBulkStock, setShowBulkStock] = useState(false);
   const [showEditProduct, setShowEditProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
   // estado nuevo
@@ -112,6 +114,7 @@ export default function InventoryClient({
         onNewProduct={() => setShowNewProduct(true)}
         onNewMovement={() => setShowNewMovement(true)}
         onImport={() => setShowImport(true)}
+        onBulkStock={() => setShowBulkStock(true)}
       />
 
       <Tabs defaultValue="productos">
@@ -196,6 +199,13 @@ export default function InventoryClient({
             onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
             actions={actions}
             categoryOptions={categoryOptions}
+          />
+          <BulkStockDialog
+            open={showBulkStock}
+            onOpenChange={setShowBulkStock}
+            products={productOptions}
+            onSuccess={(msg) => { toast.success(msg); router.refresh(); }}
+            actions={actions}
           />
         </>
       )}
