@@ -103,7 +103,7 @@ export async function createProvider(fd: FormData): Promise<Result> {
   if (!parsed.success) return { ok: false, message: "Datos inválidos del proveedor" };
   try {
     const currency = await validateCurrency(parsed.data.currency);
-    const { currency: _cIgnored, ...rest } = parsed.data;
+    const { currency: _, ...rest } = parsed.data;
     const p = await prisma.proveedor.create({ data: { ...rest, currency }, select: { id: true } });
     bump();
     return { ok: true, message: "Proveedor creado", id: p.id };

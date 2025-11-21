@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 import { getProductKardex, getMachineCategories } from "@/app/server/queries/inventory";
+import { getCostingParamByKey } from "@/app/server/queries/costing-params";
 import { Button } from "@/components/ui/button";
 import { EquivalentCodes } from "@/components/inventario/equivalent-codes";
 import { ProductLifeConfig } from "@/components/inventario/product-life-config";
@@ -30,7 +31,7 @@ export default async function ProductKardexPage({ params }: { params: Promise<{ 
 
   const { producto, stock, movs, equivalentes } = data as typeof data & { 
     equivalentes: { id: string; sistema: string; codigo: string; descripcion?: string | null }[];
-    producto: { vidasUtilesCategoria: { id: string; machineCategoryId: string; vidaUtil: any; machineCategory: { id: string; categoria: string } }[] }
+    producto: { vidasUtilesCategoria: { id: string; machineCategoryId: string; vidaUtil: number | string | { toString: () => string }; machineCategory: { id: string; categoria: string } }[] }
   };
   const low =
     producto.stockMinimo != null &&
