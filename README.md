@@ -40,6 +40,8 @@ Implementación técnica
 
 ## Novedades (nov. 2025)
 
+- **Trazabilidad Unitaria y Costeo Real de Herramientas**: Sistema completo de ciclo de vida para herramientas individuales montadas en máquinas, con desgaste automático durante producción y recálculo retroactivo de costos al fin de vida. Incluye modelos `ToolInstance` y `OTToolUsage`, campos de trazabilidad en `Producto`, UI para montar/desmontar herramientas y reportar roturas/desgaste.
+- **Configuración Prisma mejorada**: Actualización de generator de `prisma-client` a `prisma-client-js` (clásico) para máxima compatibilidad con Prisma 6.13.0 y eliminación de errores de módulos en Vercel. Build reproducible y estable en local y CI/CD.
 - **Plantillas Excel para importación**: Nuevas opciones de descarga de plantillas en diálogos de importación (clientes, productos) con formato Excel (.xlsx) y datos de ejemplo, eliminando necesidad de CSV manual.
 - **Parámetros customizables por cotización**: En el diálogo "Nueva Cotización", posibilidad de modificar Gastos Indirectos (GI) y Margen de Ganancia solo para esa cotización, sin afectar parámetros globales. Incluye indicadores visuales de customización.
 - **Mejora UI en diálogos de creación**: Rediseño del diálogo "Crear Nuevo Producto" con arquitectura de cards jerárquicas, encabezados con gradiente, emojis indicadores y mejor organización visual.
@@ -223,6 +225,46 @@ prisma/
 - Caché: `unstable_cache` + tags (`src/app/lib/cache-tags.ts`).
 - Moneda/currency: `src/app/server/queries/costing-params.ts` y helpers en `src/app/lib/format.ts` / conversiones.
 
+## Herramientas y Trazabilidad
+
+**Ciclo de vida de herramientas unitarias**
+
+1. **Creación de instancia** (`ToolInstance`)
+   - Vinculada a un producto con `requiereTrazabilidad: true` y `vidaUtilEstimada` en piezas.
+   - Código único (QR) para identificación.
+   - Estado inicial: `NUEVA`.
+
+2. **Montaje en máquina** (`Maquina`)
+   - Herramienta pasa a estado `EN_USO` en máquina específica.
+   - Registro de ubicación y costo inicial.
+
+3. **Desgaste automático durante producción** (`OTToolUsage`)
+   - Durante registro de producción (horas/piezas en OT), se imputa desgaste a herramientas montadas.
+   - **Cálculo estimado**: (costoInicial / vidaUtilEstimada) × piezasProducidas.
+   - `vidaAcumulada` en `ToolInstance` se incrementa con cada sesión de producción.
+
+4. **Reportar fin de vida** (`ROTA`, `DESGASTADA`, `PERDIDA`)
+   - Herramienta marca como inactiva.
+   - **Recálculo retroactivo de costos**: Costo real final se ajusta en todas las OTs donde fue usada.
+   - Fórmula: Costo real = CostoInicial (vs. estimado imputado en producción).
+   - Diferencia se adiciona al campo `costOverheads` de cada OT.
+
+5. **Auditoría**
+   - Todas las sesiones de uso quedan registradas en `OTToolUsage`.
+   - Historial completo de desgaste: `OT → herramientasUsadas → (cantidadProducida, estadoInicial/Final, fechas)`.
+
+**Campos agregados**
+- `Producto.requiereTrazabilidad` (Boolean, default false): marca productos que requieren trazabilidad.
+- `Producto.vidaUtilEstimada` (Decimal, opcional): vida útil en piezas/horas.
+- `ToolInstance`: modelo nuevo con estado, ubicación, costo inicial, vida acumulada, máquina asignada.
+- `OTToolUsage`: modelo nuevo registra uso de herramienta en OT (cantidad producida, estado antes/después, notas).
+- `OrdenTrabajo.herramientasUsadas` (relación): acceso rápido a todas las herramientas usadas en una OT.
+
+**UI y acciones**
+- **Máquinas** → detalle → pestaña "Herramientas": tabla de herramientas montadas con acciones montar/desmontar/reportar rotura.
+- **Inventario** → diálogo de editar producto: checkbox y campos de trazabilidad.
+- **Server Actions**: `createToolInstance`, `mountToolOnMachine`, `registerMachineProduction`, `updateToolStatus`, `finalizeToolLifeAndRecalculate`.
+
 ## Módulos y funciones
 
 - Inventario
@@ -241,6 +283,7 @@ prisma/
 - Máquinas
   - Listado con filtros y KPIs (horas últimos 30d, pendientes, fallas/averías, costo 30d, horas hasta próximo mant.).
   - Registro de eventos (uso, paro, avería), registro rápido de horas, programación/edición/cierre de mantenimiento.
+  - **Gestión de herramientas montadas**: tabla de herramientas asignadas a máquina con acciones de montar/desmontar/reportar rotura.
 - Cotizador y Clientes
   - Parámetros de costeo, desglose y conversión automática de moneda.
   - Propagación de la moneda base del sistema a nuevas cotizaciones.

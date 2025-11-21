@@ -653,3 +653,64 @@ export async function recalculateAllProductCosts(): Promise<Result> {
     };
   }
 }
+
+// Nuevas funciones para gestionar la vida útil específica de máquinas
+const MachineLifeSchema = z.object({
+  productoId: z.string().min(1),
+  machineCategoryId: z.string().min(1),
+  vidaUtil: z.coerce.number().positive(),
+});
+
+export async function addMachineLife(fd: FormData): Promise<Result> {
+  await assertCanWriteInventory();
+  const parsed = MachineLifeSchema.safeParse({
+    productoId: fd.get("productoId"),
+    machineCategoryId: fd.get("machineCategoryId"),
+    vidaUtil: fd.get("vidaUtil"),
+  });
+  if (!parsed.success) return { ok: false, message: "Datos inválidos" };
+  const { productoId, machineCategoryId, vidaUtil } = parsed.data;
+
+  try {
+    await prisma.productoVidaCategoria.upsert({
+      where: {
+        productoId_machineCategoryId: {
+          productoId,
+          machineCategoryId,
+        },
+      },
+      update: {
+        vidaUtil: D(vidaUtil),
+      },
+      create: {
+        productoId,
+        machineCategoryId,
+        vidaUtil: D(vidaUtil),
+      },
+    });
+    revalidateTag(cacheTags.inventoryKardex(productoId));
+    revalidatePath(`/inventario/${encodeURIComponent(productoId)}`, "page");
+    return { ok: true, message: "Vida útil configurada" };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: "No se pudo guardar la configuración" };
+  }
+}
+
+export async function removeMachineLife(fd: FormData): Promise<Result> {
+  await assertCanWriteInventory();
+  const id = fd.get("id") as string;
+  if (!id) return { ok: false, message: "ID requerido" };
+
+  try {
+    const record = await prisma.productoVidaCategoria.delete({
+      where: { id },
+    });
+    revalidateTag(cacheTags.inventoryKardex(record.productoId));
+    revalidatePath(`/inventario/${encodeURIComponent(record.productoId)}`, "page");
+    return { ok: true, message: "Configuración eliminada" };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: "No se pudo eliminar" };
+  }
+}

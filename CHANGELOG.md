@@ -5,6 +5,20 @@ Formato basado en Keep a Changelog y SemVer.
 ## [Unreleased]
 
 ### Added
+- **Trazabilidad Unitaria y Costeo Real de Herramientas**:
+  - Nuevos modelos `ToolInstance` y `OTToolUsage` para rastrear herramientas individuales montadas en máquinas.
+  - Campos `requiereTrazabilidad` y `vidaUtilEstimada` en `Producto` para marcar herramientas trazables.
+  - Estados de herramienta: `NUEVA`, `EN_USO`, `AFILADO`, `DESGASTADA`, `ROTA`, `PERDIDA`.
+  - **Desgaste automático durante producción**: Al registrar horas/piezas en OT, se imputa costo estimado a herramientas montadas en máquina.
+  - **Recálculo retroactivo al fin de vida**: Cuando herramienta alcanza estado final, se calcula costo real y se ajusta retroactivamente en todas las OTs donde fue usada.
+  - Server Actions: `createToolInstance`, `mountToolOnMachine`, `registerMachineProduction`, `updateToolStatus`, `finalizeToolLifeAndRecalculate`.
+  - UI: Componente `MachineTools` en detalle de máquina con tabla de herramientas montadas, diálogos para montar/desmontar/reportar.
+  - Prueba de flujo completo: `scripts/test-tool-lifecycle-flow.ts` valida ciclo completo (creación → montaje → desgaste → retroactivo).
+- **Configuración Prisma optimizada para Prisma 6.13.0**:
+  - Cambio de generator de `prisma-client` (nuevo, ESM) a `prisma-client-js` (clásico) para máxima compatibilidad.
+  - Eliminación de errores de módulos "Can't resolve '.prisma/client/index-browser'" en Vercel.
+  - Build reproducible y estable en local y CI/CD.
+  - Generación de archivos correctos en `node_modules/.prisma/client` esperados por `@prisma/client`.
 - **Mejoras en diálogos de importación y creación**:
   - Soporte para descarga de plantillas Excel (.xlsx) en importación de clientes e inventario.
   - Función `createSimpleExcel()` reutilizable para generar archivos Excel en formato SpreadsheetML XML sin dependencias externas.

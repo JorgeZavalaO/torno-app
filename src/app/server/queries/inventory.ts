@@ -125,7 +125,16 @@ export const getRecentMovements = cache(
 /** Detalle de producto con Kardex */
 export async function getProductKardex(sku: string) {
   const [p, movs] = await Promise.all([
-    prisma.producto.findUnique({ where: { sku } }),
+    prisma.producto.findUnique({ 
+      where: { sku },
+      include: {
+        vidasUtilesCategoria: {
+          include: {
+            machineCategory: true
+          }
+        }
+      }
+    }),
     prisma.movimiento.findMany({
       where: { productoId: sku },
       orderBy: { fecha: "desc" },
@@ -156,6 +165,7 @@ export async function getProductKardex(sku: string) {
       sku: p.sku, nombre: p.nombre, categoria: p.categoria, uom: p.uom,
       costo: toNum(p.costo), stockMinimo: p.stockMinimo ? toNum(p.stockMinimo) : null,
       createdAt: p.createdAt, updatedAt: p.updatedAt,
+      vidasUtilesCategoria: p.vidasUtilesCategoria,
     },
     equivalentes: eqCodes,
     stock,
@@ -256,5 +266,14 @@ export async function getProductsWithStockUncached(searchTerm?: string) {
       refCost,
       stockValue: Number((stock * refCost).toFixed(2)),
     };
+  });
+}
+
+/** Categorías de máquinas (para costos) */
+export async function getMachineCategories() {
+  return prisma.machineCostingCategory.findMany({
+    where: { activo: true },
+    orderBy: { categoria: "asc" },
+    select: { id: true, categoria: true },
   });
 }

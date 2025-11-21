@@ -24,9 +24,9 @@ async function main() {
     // Configuración de costos
     { code: "settings.costing.read", description: "Leer configuración de costos" },
     { code: "settings.costing.write", description: "Editar configuración de costos" },
-  // Configuración - Catálogos
-  { code: "settings.catalogos.read", description: "Leer catálogos del sistema" },
-  { code: "settings.catalogos.write", description: "Editar catálogos del sistema" },
+    // Configuración - Catálogos
+    { code: "settings.catalogos.read", description: "Leer catálogos del sistema" },
+    { code: "settings.catalogos.write", description: "Editar catálogos del sistema" },
 
     // Cotizaciones
     { code: "quotes.read", description: "Leer cotizaciones" },

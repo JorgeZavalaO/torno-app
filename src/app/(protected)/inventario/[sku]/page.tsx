@@ -2,11 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
-import { getProductKardex } from "@/app/server/queries/inventory";
-import { getCostingParamByKey } from "@/app/server/queries/costing-params";
+import { getProductKardex, getMachineCategories } from "@/app/server/queries/inventory";
 import { Button } from "@/components/ui/button";
 import { EquivalentCodes } from "@/components/inventario/equivalent-codes";
-import { addEquivalentCode, removeEquivalentCode } from "../actions";
+import { ProductLifeConfig } from "@/components/inventario/product-life-config";
+import { addEquivalentCode, removeEquivalentCode, addMachineLife, removeMachineLife } from "../actions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -18,14 +18,20 @@ export default async function ProductKardexPage({ params }: { params: Promise<{ 
 
   const { sku: rawSku } = await params;
   const sku = decodeURIComponent(rawSku);
-  const data = await getProductKardex(sku);
+  const [data, categories] = await Promise.all([
+    getProductKardex(sku),
+    getMachineCategories(),
+  ]);
   if (!data) redirect("/inventario");
 
   // Obtener la moneda del sistema desde parámetros
   const currencyParam = await getCostingParamByKey("currency");
   const systemCurrency = currencyParam?.valueText || "USD";
 
-  const { producto, stock, movs, equivalentes } = data as typeof data & { equivalentes: { id: string; sistema: string; codigo: string; descripcion?: string | null }[] };
+  const { producto, stock, movs, equivalentes } = data as typeof data & { 
+    equivalentes: { id: string; sistema: string; codigo: string; descripcion?: string | null }[];
+    producto: { vidasUtilesCategoria: { id: string; machineCategoryId: string; vidaUtil: any; machineCategory: { id: string; categoria: string } }[] }
+  };
   const low =
     producto.stockMinimo != null &&
     Number(stock) < Number(producto.stockMinimo);
@@ -87,6 +93,18 @@ export default async function ProductKardexPage({ params }: { params: Promise<{ 
 
       {/* Tabla Kardex */}
   <EquivalentCodes sku={producto.sku} codes={equivalentes} actions={{ addEquivalentCode, removeEquivalentCode }} />
+
+  {producto.categoria === "HERRAMIENTA" && (
+    <ProductLifeConfig
+      sku={producto.sku}
+      configs={producto.vidasUtilesCategoria.map((v) => ({
+        ...v,
+        vidaUtil: Number(v.vidaUtil),
+      }))}
+      categories={categories}
+      actions={{ addMachineLife, removeMachineLife }}
+    />
+  )}
 
   {/* Tabla Kardex */}
       <Card className="overflow-hidden">
