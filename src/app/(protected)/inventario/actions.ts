@@ -720,6 +720,7 @@ const BulkStockSchema = z.object({
     sku: z.string().min(1),
     cantidad: z.coerce.number().positive(),
     costoUnitario: z.coerce.number().min(0),
+    tipo: z.enum(["INGRESO_AJUSTE", "SALIDA_AJUSTE"]).optional().default("INGRESO_AJUSTE"),
   })).min(1),
   nota: z.string().optional(),
 });
@@ -747,36 +748,78 @@ export async function registerInitialBalances(fd: FormData): Promise<Result> {
   try {
     await prisma.$transaction(async (tx) => {
       for (const item of validItems) {
-        // Crear movimiento de ajuste
+        const tipo = item.tipo || "INGRESO_AJUSTE";
+        const sign = tipo === "SALIDA_AJUSTE" ? -1 : 1;
+        const cantidad = sign * item.cantidad;
+
+        // Validar stock disponible para salidas
+        if (tipo === "SALIDA_AJUSTE") {
+          const current = await tx.movimiento.aggregate({
+            where: { productoId: item.sku },
+            _sum: { cantidad: true },
+          });
+          const currentStock = Number(current._sum.cantidad?.toString() ?? 0);
+          
+          if (currentStock < item.cantidad) {
+            throw new Error(
+              `Stock insuficiente para ${item.sku}: disponible ${currentStock}, solicitado ${item.cantidad}`
+            );
+          }
+        }
+
+        // Crear movimiento
         await tx.movimiento.create({
           data: {
             productoId: item.sku,
-            tipo: "INGRESO_AJUSTE",
-            cantidad: D(item.cantidad),
+            tipo: tipo,
+            cantidad: D(cantidad),
             costoUnitario: D(item.costoUnitario),
-            nota: validNota || "Saldo Inicial (Carga Masiva)",
+            nota: validNota || (tipo === "SALIDA_AJUSTE" ? "Ajuste de Salida" : "Ajuste de Ingreso"),
           },
         });
 
-        // Actualizar costo del producto (directo, ya que es saldo inicial/ajuste)
-        // Opcional: Podríamos usar promedio ponderado si ya existe stock, 
-        // pero para "Saldo Inicial" suele preferirse establecer el costo base.
-        // Si el usuario quiere promedio, debería usar compras.
-        // Aquí asumiremos que el costo ingresado es el nuevo costo referencial si no había stock,
-        // o actualizamos el costo promedio si así se desea.
-        // Para simplificar y ser consistente con "Saldo Inicial", actualizamos el costo actual.
-        
-        await tx.producto.update({
-          where: { sku: item.sku },
-          data: { costo: D(item.costoUnitario) },
-        });
+        // Actualizar costo del producto (solo para ingresos)
+        if (tipo === "INGRESO_AJUSTE") {
+          await tx.producto.update({
+            where: { sku: item.sku },
+            data: { costo: D(item.costoUnitario) },
+          });
+
+          // 🆕 Para ingresos de herramientas: crear automáticamente instancias de ToolInstance
+          const producto = await tx.producto.findUnique({
+            where: { sku: item.sku },
+            select: { categoria: true, vidaUtilEstimada: true }
+          });
+
+          if (producto && (producto.categoria === "HERRAMIENTA" || producto.categoria === "HERRAMIENTA_CORTE")) {
+            // Crear una instancia por cada unidad ingresada
+            const cantidadInt = Math.floor(Number(item.cantidad));
+            for (let i = 0; i < cantidadInt; i++) {
+              // Generar código único: SKU-TIMESTAMP-SECUENCIA
+              const timestamp = Date.now();
+              const codigo = `${item.sku}-${timestamp}-${i + 1}`;
+
+              await tx.toolInstance.create({
+                data: {
+                  productoId: item.sku,
+                  codigo,
+                  estado: "NUEVA",
+                  ubicacion: "Almacén",
+                  costoInicial: D(item.costoUnitario),
+                  vidaUtilEstimada: producto.vidaUtilEstimada || undefined,
+                },
+              });
+            }
+          }
+        }
       }
     });
 
     bumpAll();
-    return { ok: true, message: `${validItems.length} saldos registrados correctamente` };
+    return { ok: true, message: `${validItems.length} movimientos registrados correctamente` };
   } catch (e) {
     console.error(e);
-    return { ok: false, message: "Error al registrar saldos" };
+    const message = e instanceof Error ? e.message : "Error al registrar movimientos";
+    return { ok: false, message };
   }
 }

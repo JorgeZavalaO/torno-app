@@ -166,7 +166,7 @@ export const getMachineDetail = cache(
             categoria: { in: ["HERRAMIENTA", "HERRAMIENTA_CORTE"] }
           }
         },
-        include: { producto: { select: { nombre: true } } },
+        include: { producto: { select: { nombre: true, sku: true, uom: true } } },
         orderBy: { codigo: "asc" }
       })
     ]);
@@ -209,7 +209,14 @@ export const getMachineDetail = cache(
       availableTools: availableTools.map(t => ({
         id: t.id,
         codigo: t.codigo,
-        producto: { nombre: t.producto.nombre }
+        estado: t.estado,
+        vidaAcumulada: Number(t.vidaAcumulada),
+        costoInicial: Number(t.costoInicial),
+        producto: { 
+          nombre: t.producto.nombre,
+          sku: t.producto.sku,
+          uom: t.producto.uom
+        }
       })),
       kpis: {
         horas30d: horasTot,

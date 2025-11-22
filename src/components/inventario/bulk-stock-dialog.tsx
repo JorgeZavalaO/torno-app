@@ -44,6 +44,8 @@ type ProductOption = {
   uom: string;
 };
 
+type MovementType = "INGRESO_AJUSTE" | "SALIDA_AJUSTE";
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,15 +61,16 @@ type Row = {
   sku: string;
   cantidad: string;
   costo: string;
+  tipo: MovementType;
 };
 
 export function BulkStockDialog({ open, onOpenChange, products, onSuccess, actions }: Props) {
   const [rows, setRows] = useState<Row[]>([createEmptyRow()]);
   const [isPending, setIsPending] = useState(false);
-  const [nota, setNota] = useState("Saldo Inicial");
+  const [nota, setNota] = useState("Ajuste de Inventario");
 
   function createEmptyRow(): Row {
-    return { id: crypto.randomUUID(), sku: "", cantidad: "", costo: "" };
+    return { id: crypto.randomUUID(), sku: "", cantidad: "", costo: "", tipo: "INGRESO_AJUSTE" };
   }
 
   function addRow() {
@@ -97,47 +100,55 @@ export function BulkStockDialog({ open, onOpenChange, products, onSuccess, actio
       return;
     }
 
+    // Validar stock disponible para salidas
     setIsPending(true);
-    const fd = new FormData();
-    fd.append(
-      "items",
-      JSON.stringify(
-        validRows.map((r) => ({
-          sku: r.sku,
-          cantidad: Number(r.cantidad),
-          costoUnitario: Number(r.costo),
-        }))
-      )
-    );
-    fd.append("nota", nota);
+    try {
+      const fd = new FormData();
+      fd.append(
+        "items",
+        JSON.stringify(
+          validRows.map((r) => ({
+            sku: r.sku,
+            cantidad: Number(r.cantidad),
+            costoUnitario: Number(r.costo),
+            tipo: r.tipo,
+          }))
+        )
+      );
+      fd.append("nota", nota);
 
-    const res = await actions.registerInitialBalances(fd);
-    setIsPending(false);
+      const res = await actions.registerInitialBalances(fd);
+      setIsPending(false);
 
-    if (res.ok) {
-      onSuccess(res.message || "Saldos registrados");
-      onOpenChange(false);
-      setRows([createEmptyRow()]);
-      setNota("Saldo Inicial");
-    } else {
-      toast.error(res.message || "Error al registrar");
+      if (res.ok) {
+        onSuccess(res.message || "Ajustes registrados");
+        onOpenChange(false);
+        setRows([createEmptyRow()]);
+        setNota("Ajuste de Inventario");
+      } else {
+        toast.error(res.message || "Error al registrar");
+      }
+    } catch (error) {
+      setIsPending(false);
+      toast.error("Error inesperado");
+      console.error(error);
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="!max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Carga Masiva de Saldos Iniciales</DialogTitle>
+          <DialogTitle>Carga Masiva de Movimientos de Inventario</DialogTitle>
           <DialogDescription>
-            Agrega múltiples productos para establecer su stock inicial y costo.
+            Agrega múltiples productos con ingresos o salidas de ajuste. Útil para saldos iniciales o correcciones post-inventario.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-4 py-2">
           <div className="flex-1">
             <Label>Nota del movimiento</Label>
-            <Input value={nota} onChange={(e) => setNota(e.target.value)} />
+            <Input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej: Inventario Físico 2025" />
           </div>
         </div>
 
@@ -145,7 +156,8 @@ export function BulkStockDialog({ open, onOpenChange, products, onSuccess, actio
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[400px]">Producto</TableHead>
+                <TableHead className="w-[300px]">Producto</TableHead>
+                <TableHead className="w-[120px]">Tipo</TableHead>
                 <TableHead className="w-[120px]">Cantidad</TableHead>
                 <TableHead className="w-[120px]">Costo Unit.</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
@@ -159,6 +171,12 @@ export function BulkStockDialog({ open, onOpenChange, products, onSuccess, actio
                       products={products}
                       value={row.sku}
                       onChange={(sku) => updateRow(row.id, "sku", sku)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <TypeSelector
+                      value={row.tipo}
+                      onChange={(tipo) => updateRow(row.id, "tipo", tipo)}
                     />
                   </TableCell>
                   <TableCell>
@@ -209,7 +227,7 @@ export function BulkStockDialog({ open, onOpenChange, products, onSuccess, actio
             Cancelar
           </Button>
           <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending ? "Guardando..." : "Registrar Saldos"}
+            {isPending ? "Guardando..." : "Registrar Movimientos"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -249,7 +267,7 @@ function ProductCombobox({
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" align="start">
+      <PopoverContent className="w-[300px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Buscar producto..." />
           <CommandList>
@@ -283,5 +301,24 @@ function ProductCombobox({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function TypeSelector({
+  value,
+  onChange,
+}: {
+  value: MovementType;
+  onChange: (tipo: MovementType) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as MovementType)}
+      className="w-full px-2 py-1 border rounded-md text-sm"
+    >
+      <option value="INGRESO_AJUSTE">📥 Ingreso</option>
+      <option value="SALIDA_AJUSTE">📤 Salida</option>
+    </select>
   );
 }

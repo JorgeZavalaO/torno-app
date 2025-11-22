@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,13 @@ type Tool = {
 type AvailableTool = {
   id: string;
   codigo: string;
+  estado: string;
+  vidaAcumulada: number;
+  costoInicial: number;
   producto: {
     nombre: string;
+    sku: string;
+    uom: string;
   };
 };
 
@@ -43,6 +48,7 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
   const router = useRouter();
   const [pending, start] = useTransition();
   const [mountOpen, setMountOpen] = useState(false);
+  const [selectedProductSku, setSelectedProductSku] = useState<string>("");
   const [selectedToolId, setSelectedToolId] = useState<string>("");
   
   // Estado para diálogo de baja/rotura
@@ -57,6 +63,7 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
       if (res.ok) {
         toast.success("Herramienta montada correctamente");
         setMountOpen(false);
+        setSelectedProductSku("");
         setSelectedToolId("");
         router.refresh();
       } else {
@@ -104,6 +111,25 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
     if (pct > 75) return "bg-amber-500";
     return "bg-green-500";
   };
+
+  // Agrupar herramientas disponibles por producto
+  const toolsByProduct = useMemo(() => {
+    const grouped: Record<string, AvailableTool[]> = {};
+    availableTools.forEach((tool) => {
+      const sku = tool.producto.sku;
+      if (!grouped[sku]) {
+        grouped[sku] = [];
+      }
+      grouped[sku].push(tool);
+    });
+    return grouped;
+  }, [availableTools]);
+
+  // Herramientas del producto seleccionado
+  const toolsForSelectedProduct = selectedProductSku ? toolsByProduct[selectedProductSku] || [] : [];
+
+  // Herramienta seleccionada (para mostrar detalles)
+  const selectedTool = selectedToolId ? availableTools.find((t) => t.id === selectedToolId) : null;
 
   return (
     <Card className="h-full">
@@ -191,14 +217,14 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
 
       {/* Modal Montar Herramienta */}
       <Dialog open={mountOpen} onOpenChange={setMountOpen}>
-        <DialogContent>
+        <DialogContent className="!max-w-3xl w-[90vw]">
           <DialogHeader>
             <DialogTitle>Montar Herramienta</DialogTitle>
             <DialogDescription>
-              Selecciona una herramienta disponible del inventario para asignarla a esta máquina.
+              Selecciona el producto y luego elige la serie específica que deseas montar.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-4">
+          <div className="py-4 space-y-5">
             {availableTools.length === 0 ? (
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-center">
                 <AlertTriangle className="h-5 w-5 text-amber-600 mx-auto mb-2" />
@@ -209,32 +235,93 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
               </div>
             ) : (
               <>
+                {/* Step 1: Seleccionar Producto */}
                 <div>
-                  <Label className="mb-2 block">Herramienta Disponible</Label>
-                  <Select value={selectedToolId} onValueChange={setSelectedToolId}>
+                  <Label className="mb-2 block font-medium">1. Seleccionar Producto</Label>
+                  <Select value={selectedProductSku} onValueChange={(val) => {
+                    setSelectedProductSku(val);
+                    setSelectedToolId(""); // Reset serie al cambiar producto
+                  }}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar herramienta..." />
+                      <SelectValue placeholder="Elegir producto..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableTools.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          <span className="font-mono mr-2 text-muted-foreground">[{t.codigo}]</span>
-                          {t.producto.nombre}
-                        </SelectItem>
-                      ))}
+                      {Object.entries(toolsByProduct).map(([sku, tools]) => {
+                        const producto = tools[0].producto;
+                        return (
+                          <SelectItem key={sku} value={sku}>
+                            <span className="font-mono text-muted-foreground mr-2">[{sku}]</span>
+                            {producto.nombre} ({tools.length} disponible{tools.length !== 1 ? 's' : ''})
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {availableTools.length} herramienta{availableTools.length !== 1 ? 's' : ''} disponible{availableTools.length !== 1 ? 's' : ''}
-                  </p>
                 </div>
+
+                {/* Step 2: Seleccionar Serie */}
+                {selectedProductSku && (
+                  <div>
+                    <Label className="mb-2 block font-medium">2. Seleccionar Serie / Instancia</Label>
+                    <Select value={selectedToolId} onValueChange={setSelectedToolId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Elegir serie..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {toolsForSelectedProduct.map((tool) => (
+                          <SelectItem key={tool.id} value={tool.id}>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-semibold">{tool.codigo}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {tool.estado === "NUEVA" ? "✨ Nueva" : "⚙️ Afilada"}
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Step 3: Mostrar Detalles */}
+                {selectedTool && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                    <div className="text-sm font-medium text-blue-900">Detalles de la Herramienta</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Serie:</span>
+                        <p className="font-mono font-semibold">{selectedTool.codigo}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Estado:</span>
+                        <p className="font-semibold">
+                          {selectedTool.estado === "NUEVA" ? "✨ Nueva" : "⚙️ Afilada"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Productos Fabricados:</span>
+                        <p className="font-semibold">{Number(selectedTool.vidaAcumulada).toFixed(1)} {selectedTool.producto.uom}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Costo Inicial:</span>
+                        <p className="font-semibold">${Number(selectedTool.costoInicial).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMountOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => {
+              setMountOpen(false);
+              setSelectedProductSku("");
+              setSelectedToolId("");
+            }}>
+              Cancelar
+            </Button>
             <Button onClick={handleMount} disabled={!selectedToolId || pending || availableTools.length === 0}>
-              {pending ? "Montando..." : "Montar"}
+              {pending ? "Montando..." : "Montar Herramienta"}
             </Button>
           </DialogFooter>
         </DialogContent>
