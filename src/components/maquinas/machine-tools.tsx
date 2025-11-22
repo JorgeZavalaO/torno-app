@@ -198,29 +198,42 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
               Selecciona una herramienta disponible del inventario para asignarla a esta máquina.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label className="mb-2 block">Herramienta Disponible</Label>
-            <Select value={selectedToolId} onValueChange={setSelectedToolId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar herramienta..." />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTools.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground text-center">No hay herramientas disponibles</div>
-                ) : (
-                  availableTools.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <span className="font-mono mr-2 text-muted-foreground">[{t.codigo}]</span>
-                      {t.producto.nombre}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+          <div className="py-4 space-y-4">
+            {availableTools.length === 0 ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-center">
+                <AlertTriangle className="h-5 w-5 text-amber-600 mx-auto mb-2" />
+                <p className="text-sm font-medium text-amber-900">No hay herramientas disponibles</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Asegúrate de que haya productos de categoría &quot;Herramienta&quot; o &quot;Herramienta-Corte&quot; con estado NUEVA o AFILADO en el inventario y que no estén montadas en otras máquinas.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label className="mb-2 block">Herramienta Disponible</Label>
+                  <Select value={selectedToolId} onValueChange={setSelectedToolId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar herramienta..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTools.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          <span className="font-mono mr-2 text-muted-foreground">[{t.codigo}]</span>
+                          {t.producto.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {availableTools.length} herramienta{availableTools.length !== 1 ? 's' : ''} disponible{availableTools.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMountOpen(false)}>Cancelar</Button>
-            <Button onClick={handleMount} disabled={!selectedToolId || pending}>
+            <Button onClick={handleMount} disabled={!selectedToolId || pending || availableTools.length === 0}>
               {pending ? "Montando..." : "Montar"}
             </Button>
           </DialogFooter>

@@ -157,9 +157,15 @@ export const getMachineDetail = cache(
         where: { maquinaId: id, estado: "EN_USO" },
         include: { producto: { select: { nombre: true, sku: true, uom: true } } }
       }),
-      // Herramientas disponibles para montar (NUEVA o AFILADO)
+      // Herramientas disponibles para montar (NUEVA o AFILADO, solo herramientas)
       prisma.toolInstance.findMany({
-        where: { estado: { in: ["NUEVA", "AFILADO"] } },
+        where: { 
+          estado: { in: ["NUEVA", "AFILADO"] },
+          maquinaId: null, // No está montada en ninguna máquina
+          producto: {
+            categoria: { in: ["HERRAMIENTA", "HERRAMIENTA_CORTE"] }
+          }
+        },
         include: { producto: { select: { nombre: true } } },
         orderBy: { codigo: "asc" }
       })
