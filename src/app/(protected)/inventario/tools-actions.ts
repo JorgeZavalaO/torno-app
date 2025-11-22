@@ -308,8 +308,11 @@ export async function mountToolOnMachine(toolId: string, maquinaId: string) {
       }
     });
 
+    // Revalidar para que se actualice la UI
+    revalidateTag(cacheTags.inventoryProducts);
     revalidatePath("/inventario");
-    revalidatePath("/maquinas");
+    revalidatePath("/maquinas", "layout");
+    revalidatePath(`/maquinas/${maquinaId}`, "page");
     return { ok: true, message: "Herramienta montada correctamente" };
   } catch (e) {
     console.error(e);
@@ -321,6 +324,9 @@ export async function unmountToolFromMachine(toolId: string, estadoFinal: ToolSt
   await assertCanWriteInventory();
 
   try {
+    const tool = await prisma.toolInstance.findUnique({ where: { id: toolId } });
+    if (!tool) return { ok: false, message: "Herramienta no encontrada" };
+
     await prisma.toolInstance.update({
       where: { id: toolId },
       data: {
@@ -330,8 +336,10 @@ export async function unmountToolFromMachine(toolId: string, estadoFinal: ToolSt
       }
     });
 
+    revalidateTag(cacheTags.inventoryProducts);
     revalidatePath("/inventario");
-    revalidatePath("/maquinas");
+    revalidatePath("/maquinas", "layout");
+    revalidatePath(`/maquinas/${tool.maquinaId}`, "page");
     return { ok: true, message: "Herramienta desmontada correctamente" };
   } catch (e) {
     console.error(e);

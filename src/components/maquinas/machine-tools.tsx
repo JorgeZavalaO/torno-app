@@ -6,11 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Wrench, Plus, AlertTriangle, ArrowRightLeft, Trash2, History } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Wrench, Plus, AlertTriangle, ArrowRightLeft, Trash2, History, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { mountToolOnMachine, unmountToolFromMachine, updateToolStatus } from "@/app/(protected)/inventario/tools-actions";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 type Tool = {
   id: string;
@@ -48,26 +51,41 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
   const router = useRouter();
   const [pending, start] = useTransition();
   const [mountOpen, setMountOpen] = useState(false);
-  const [selectedProductSku, setSelectedProductSku] = useState<string>("");
-  const [selectedToolId, setSelectedToolId] = useState<string>("");
+  const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(new Set());
   
+  // Estados para el flujo de selección paso a paso
+  const [openCombobox, setOpenCombobox] = useState(false);
+  const [selectedProductSku, setSelectedProductSku] = useState<string>("");
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>("");
+
   // Estado para diálogo de baja/rotura
   const [breakOpen, setBreakOpen] = useState(false);
   const [toolToBreak, setToolToBreak] = useState<Tool | null>(null);
   const [breakReason, setBreakReason] = useState<"ROTA" | "DESGASTADA">("ROTA");
 
   const handleMount = () => {
-    if (!selectedToolId) return;
+    if (selectedToolIds.size === 0) return;
     start(async () => {
-      const res = await mountToolOnMachine(selectedToolId, maquinaId);
-      if (res.ok) {
-        toast.success("Herramienta montada correctamente");
+      let mountedCount = 0;
+      let errorCount = 0;
+
+      for (const toolId of selectedToolIds) {
+        const res = await mountToolOnMachine(toolId, maquinaId);
+        if (res.ok) {
+          mountedCount++;
+        } else {
+          errorCount++;
+        }
+      }
+
+      if (mountedCount > 0) {
+        toast.success(`${mountedCount} herramienta${mountedCount !== 1 ? 's' : ''} montada${mountedCount !== 1 ? 's' : ''} correctamente`);
         setMountOpen(false);
-        setSelectedProductSku("");
-        setSelectedToolId("");
+        setSelectedToolIds(new Set());
         router.refresh();
-      } else {
-        toast.error(res.message);
+      }
+      if (errorCount > 0) {
+        toast.error(`Error al montar ${errorCount} herramienta${errorCount !== 1 ? 's' : ''}`);
       }
     });
   };
@@ -112,7 +130,14 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
     return "bg-green-500";
   };
 
-  // Agrupar herramientas disponibles por producto
+  // Herramientas seleccionadas
+  const selectedTools = useMemo(() => {
+    return Array.from(selectedToolIds)
+      .map(id => availableTools.find(t => t.id === id))
+      .filter(Boolean) as AvailableTool[];
+  }, [selectedToolIds, availableTools]);
+
+  // Agrupar herramientas disponibles por producto (para el resumen)
   const toolsByProduct = useMemo(() => {
     const grouped: Record<string, AvailableTool[]> = {};
     availableTools.forEach((tool) => {
@@ -125,11 +150,39 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
     return grouped;
   }, [availableTools]);
 
-  // Herramientas del producto seleccionado
-  const toolsForSelectedProduct = selectedProductSku ? toolsByProduct[selectedProductSku] || [] : [];
+  // Lista de productos únicos para el Combobox
+  const uniqueProducts = useMemo(() => {
+    return Object.entries(toolsByProduct).map(([sku, tools]) => ({
+      sku,
+      nombre: tools[0].producto.nombre,
+      count: tools.length
+    })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [toolsByProduct]);
 
-  // Herramienta seleccionada (para mostrar detalles)
-  const selectedTool = selectedToolId ? availableTools.find((t) => t.id === selectedToolId) : null;
+  // Instancias disponibles del producto seleccionado (excluyendo las ya seleccionadas para montar)
+  const availableInstancesForProduct = useMemo(() => {
+    if (!selectedProductSku) return [];
+    const tools = toolsByProduct[selectedProductSku] || [];
+    return tools.filter(t => !selectedToolIds.has(t.id));
+  }, [selectedProductSku, toolsByProduct, selectedToolIds]);
+
+  const handleAddTool = () => {
+    if (selectedInstanceId) {
+      const newSelected = new Set(selectedToolIds);
+      newSelected.add(selectedInstanceId);
+      setSelectedToolIds(newSelected);
+      
+      // Resetear selección de instancia pero mantener producto para facilitar agregar otra del mismo tipo
+      setSelectedInstanceId("");
+      toast.success("Herramienta agregada a la lista");
+    }
+  };
+
+  const handleRemoveTool = (id: string) => {
+    const newSelected = new Set(selectedToolIds);
+    newSelected.delete(id);
+    setSelectedToolIds(newSelected);
+  };
 
   return (
     <Card className="h-full">
@@ -215,113 +268,213 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
         )}
       </CardContent>
 
-      {/* Modal Montar Herramienta */}
-      <Dialog open={mountOpen} onOpenChange={setMountOpen}>
-        <DialogContent className="!max-w-3xl w-[90vw]">
-          <DialogHeader>
-            <DialogTitle>Montar Herramienta</DialogTitle>
+      {/* Modal Montar Herramientas */}
+      <Dialog open={mountOpen} onOpenChange={(open) => {
+        setMountOpen(open);
+        if (!open) {
+          setSelectedProductSku("");
+          setSelectedInstanceId("");
+          setSelectedToolIds(new Set());
+        }
+      }}>
+        <DialogContent className="!max-w-3xl w-[90vw] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b shrink-0">
+            <DialogTitle>Montar Herramientas</DialogTitle>
             <DialogDescription>
-              Selecciona el producto y luego elige la serie específica que deseas montar.
+              Selecciona las herramientas paso a paso para montarlas en la máquina.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-5">
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-8">
             {availableTools.length === 0 ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-center">
-                <AlertTriangle className="h-5 w-5 text-amber-600 mx-auto mb-2" />
-                <p className="text-sm font-medium text-amber-900">No hay herramientas disponibles</p>
-                <p className="text-xs text-amber-700 mt-1">
-                  Asegúrate de que haya productos de categoría &quot;Herramienta&quot; o &quot;Herramienta-Corte&quot; con estado NUEVA o AFILADO en el inventario y que no estén montadas en otras máquinas.
-                </p>
+              <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 bg-muted/30 rounded-lg border border-dashed">
+                <div className="p-3 bg-amber-100 rounded-full">
+                  <AlertTriangle className="h-6 w-6 text-amber-600" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-medium text-lg">No hay herramientas disponibles</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                    No se encontraron herramientas con estado NUEVA o AFILADO en el inventario que no estén ya montadas.
+                  </p>
+                </div>
               </div>
             ) : (
               <>
-                {/* Step 1: Seleccionar Producto */}
-                <div>
-                  <Label className="mb-2 block font-medium">1. Seleccionar Producto</Label>
-                  <Select value={selectedProductSku} onValueChange={(val) => {
-                    setSelectedProductSku(val);
-                    setSelectedToolId(""); // Reset serie al cambiar producto
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Elegir producto..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(toolsByProduct).map(([sku, tools]) => {
-                        const producto = tools[0].producto;
-                        return (
-                          <SelectItem key={sku} value={sku}>
-                            <span className="font-mono text-muted-foreground mr-2">[{sku}]</span>
-                            {producto.nombre} ({tools.length} disponible{tools.length !== 1 ? 's' : ''})
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Step 2: Seleccionar Serie */}
-                {selectedProductSku && (
-                  <div>
-                    <Label className="mb-2 block font-medium">2. Seleccionar Serie / Instancia</Label>
-                    <Select value={selectedToolId} onValueChange={setSelectedToolId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Elegir serie..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        {toolsForSelectedProduct.map((tool) => (
-                          <SelectItem key={tool.id} value={tool.id}>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-semibold">{tool.codigo}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {tool.estado === "NUEVA" ? "✨ Nueva" : "⚙️ Afilada"}
-                              </Badge>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {/* Zona de Selección */}
+                <div className="bg-muted/30 p-4 rounded-lg border space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">1</div>
+                    <h3 className="font-medium">Agregar Herramienta</h3>
                   </div>
-                )}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Paso 1: Buscar Producto */}
+                    <div className="space-y-2">
+                      <Label>Producto / Tipo</Label>
+                      <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={openCombobox}
+                            className="w-full justify-between"
+                          >
+                            {selectedProductSku
+                              ? uniqueProducts.find((p) => p.sku === selectedProductSku)?.nombre
+                              : "Buscar producto..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Buscar por nombre o SKU..." />
+                            <CommandList>
+                              <CommandEmpty>No se encontró el producto.</CommandEmpty>
+                              <CommandGroup>
+                                {uniqueProducts.map((product) => (
+                                  <CommandItem
+                                    key={product.sku}
+                                    value={product.nombre}
+                                    onSelect={() => {
+                                      setSelectedProductSku(product.sku === selectedProductSku ? "" : product.sku);
+                                      setSelectedInstanceId(""); // Reset instancia
+                                      setOpenCombobox(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedProductSku === product.sku ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span>{product.nombre}</span>
+                                      <span className="text-xs text-muted-foreground">SKU: {product.sku} ({product.count})</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
 
-                {/* Step 3: Mostrar Detalles */}
-                {selectedTool && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
-                    <div className="text-sm font-medium text-blue-900">Detalles de la Herramienta</div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">Serie:</span>
-                        <p className="font-mono font-semibold">{selectedTool.codigo}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Estado:</span>
-                        <p className="font-semibold">
-                          {selectedTool.estado === "NUEVA" ? "✨ Nueva" : "⚙️ Afilada"}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Productos Fabricados:</span>
-                        <p className="font-semibold">{Number(selectedTool.vidaAcumulada).toFixed(1)} {selectedTool.producto.uom}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Costo Inicial:</span>
-                        <p className="font-semibold">${Number(selectedTool.costoInicial).toFixed(2)}</p>
+                    {/* Paso 2: Seleccionar Serie */}
+                    <div className="space-y-2">
+                      <Label>Serie / Instancia</Label>
+                      <div className="flex gap-2">
+                        <Select 
+                          value={selectedInstanceId} 
+                          onValueChange={setSelectedInstanceId}
+                          disabled={!selectedProductSku || availableInstancesForProduct.length === 0}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={
+                              !selectedProductSku 
+                                ? "Primero elige un producto" 
+                                : availableInstancesForProduct.length === 0 
+                                  ? "Sin stock disponible" 
+                                  : "Seleccionar serie..."
+                            } />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableInstancesForProduct.map((tool) => (
+                              <SelectItem key={tool.id} value={tool.id}>
+                                <span className="font-mono font-medium mr-2">{tool.codigo}</span>
+                                <span className="text-muted-foreground text-xs">
+                                  ({tool.estado === "NUEVA" ? "NUEVA" : "AFILADO"})
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button 
+                          onClick={handleAddTool}
+                          disabled={!selectedInstanceId}
+                          size="icon"
+                          className="shrink-0"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
+
+                {/* Lista de Herramientas a Montar */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-xs font-bold">2</div>
+                      <h3 className="font-medium">Herramientas a Montar ({selectedTools.length})</h3>
+                    </div>
+                    {selectedTools.length > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 h-7"
+                        onClick={() => setSelectedToolIds(new Set())}
+                      >
+                        Limpiar todo
+                      </Button>
+                    )}
+                  </div>
+
+                  {selectedTools.length === 0 ? (
+                    <div className="text-center py-8 border rounded-lg border-dashed text-muted-foreground bg-muted/10">
+                      <Wrench className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                      <p className="text-sm">No has seleccionado ninguna herramienta aún.</p>
+                      <p className="text-xs mt-1">Usa el formulario de arriba para agregar herramientas.</p>
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg divide-y max-h-[300px] overflow-y-auto bg-card">
+                      {selectedTools.map((tool) => (
+                        <div key={tool.id} className="flex items-center justify-between p-3 hover:bg-muted/30 transition-colors group">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                              {tool.producto.sku.slice(0, 2)}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm">{tool.producto.nombre}</span>
+                                <Badge variant="outline" className="text-[10px] h-5">
+                                  {tool.codigo}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                <span>{tool.estado}</span>
+                                <span>•</span>
+                                <span>Vida: {Number(tool.vidaAcumulada).toFixed(1)} {tool.producto.uom}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleRemoveTool(tool.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="p-4 border-t bg-muted/10">
             <Button variant="outline" onClick={() => {
               setMountOpen(false);
-              setSelectedProductSku("");
-              setSelectedToolId("");
+              setSelectedToolIds(new Set());
             }}>
               Cancelar
             </Button>
-            <Button onClick={handleMount} disabled={!selectedToolId || pending || availableTools.length === 0}>
-              {pending ? "Montando..." : "Montar Herramienta"}
+            <Button onClick={handleMount} disabled={selectedToolIds.size === 0 || pending || availableTools.length === 0}>
+              {pending ? "Montando..." : `Montar ${selectedToolIds.size > 0 ? `(${selectedToolIds.size})` : ''}`}
             </Button>
           </DialogFooter>
         </DialogContent>
