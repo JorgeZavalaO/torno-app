@@ -27,6 +27,17 @@ function bumpClientsCache() {
   revalidatePath("/clientes", "page");
 }
 
+/* --- Limpiar caché forzadamente --- */
+export async function clearClientsCache(): Promise<ActionResult> {
+  await assertCanWriteClients();
+  try {
+    bumpClientsCache();
+    return { ok: true, message: "Caché de clientes invalidado" };
+  } catch (e) {
+    return { ok: false, message: String(e) };
+  }
+}
+
 /* --- List (si quieres llamar desde RSC) --- */
 export async function listClients() {
   await assertCanReadClients();

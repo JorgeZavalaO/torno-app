@@ -3,8 +3,9 @@
 import { useDeferredValue, useMemo, useState, startTransition } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search, RefreshCw, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   ClientModal,
@@ -38,6 +39,7 @@ export default function ClientesClient({
   }>({ open: false, client: null });
   const [quotes, setQuotes] = useState<QuoteData[]>([]);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   // Defer del input para evitar bloques de UI en listas grandes
   const deferredQuery = useDeferredValue(query);
@@ -90,12 +92,77 @@ export default function ClientesClient({
     startTransition(() => router.refresh());
   };
 
+  const handleClearCache = async () => {
+    setClearing(true);
+    try {
+      const res = await actions.clearClientsCache(new FormData());
+      if (res.ok) {
+        toast.success("Caché invalidado");
+        startTransition(() => router.refresh());
+      } else {
+        toast.error(res.message);
+      }
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const handleDownloadData = () => {
+    // Convertir datos a CSV
+    const headers = ["Nombre", "RUC", "Email", "Teléfono", "Dirección", "Contacto", "Tel. Contacto", "Estado"];
+    const rows = items.map(c => [
+      c.nombre,
+      c.ruc,
+      c.email || "",
+      c.telefono || "",
+      c.direccion || "",
+      c.contactoNombre || "",
+      c.contactoTelefono || "",
+      c.activo ? "Activo" : "Inactivo",
+    ]);
+
+    const csv = [
+      headers.join(","),
+      ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    // Crear blob y descargar
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `clientes_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Lista de Clientes</h1>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleDownloadData}
+            disabled={items.length === 0}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Descargar
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleClearCache}
+            disabled={clearing}
+            className="gap-2"
+            title="Limpiar caché del servidor (útil si ves datos desactualizados)"
+          >
+            <RefreshCw className={`h-4 w-4 ${clearing ? 'animate-spin' : ''}`} />
+            {clearing ? 'Limpiando...' : 'Limpiar Caché'}
+          </Button>
           {canWrite && (
             <>
               <ImportModal

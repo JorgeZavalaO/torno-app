@@ -13,5 +13,5 @@ export const getClientsCached = cache(
       },
     }),
   ["clients:list"],
-  { tags: [cacheTags.clients] }
+  { tags: [cacheTags.clients], revalidate: 300 } // 5 minutos - evita cache infinito
 );

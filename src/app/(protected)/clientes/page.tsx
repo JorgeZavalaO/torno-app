@@ -4,7 +4,7 @@ import { userHasPermission } from "@/app/lib/rbac";
 import { getClientsCached } from "@/app/server/queries/clients";
 import { getCostingValues } from "@/app/server/queries/costing-params";
 import ClientesClient from "./clientes.client";
-import { createClient, updateClient, deleteClient, importClients } from "./actions";
+import { createClient, updateClient, deleteClient, importClients, clearClientsCache } from "./actions";
 
 export default async function ClientesPage() {
   // Autenticación
@@ -33,6 +33,7 @@ export default async function ClientesPage() {
         updateClient,
         deleteClient,
         importClients,
+        clearClientsCache,
       }}
     />
   );
