@@ -41,7 +41,9 @@ Implementación técnica
 ## Novedades (nov. 2025)
 
 - **Trazabilidad Unitaria y Costeo Real de Herramientas**: Sistema completo de ciclo de vida para herramientas individuales montadas en máquinas, con desgaste automático durante producción y recálculo retroactivo de costos al fin de vida. Incluye modelos `ToolInstance` y `OTToolUsage`, campos de trazabilidad en `Producto`, UI para montar/desmontar herramientas y reportar roturas/desgaste.
+- **Workflow mejorado para montar herramientas**: Interfaz paso a paso con Combobox de búsqueda para productos, Select para series/instancias y botón de agregar individual. Permite acumular múltiples herramientas antes de montar en una sola operación con cola visual.
 - **Configuración Prisma mejorada**: Actualización de generator de `prisma-client` a `prisma-client-js` (clásico) para máxima compatibilidad con Prisma 6.13.0 y eliminación de errores de módulos en Vercel. Build reproducible y estable en local y CI/CD.
+- **Caché optimizado en módulo de clientes**: Implementación de timeout de 5 minutos (`revalidate: 300`) en cache de clientes para auto-expiración. Botones de "Limpiar Caché" (invalidación manual inmediata) y "Descargar CSV" (exportar datos actuales) en header de vista de clientes.
 - **Plantillas Excel para importación**: Nuevas opciones de descarga de plantillas en diálogos de importación (clientes, productos) con formato Excel (.xlsx) y datos de ejemplo, eliminando necesidad de CSV manual.
 - **Parámetros customizables por cotización**: En el diálogo "Nueva Cotización", posibilidad de modificar Gastos Indirectos (GI) y Margen de Ganancia solo para esa cotización, sin afectar parámetros globales. Incluye indicadores visuales de customización.
 - **Mejora UI en diálogos de creación**: Rediseño del diálogo "Crear Nuevo Producto" con arquitectura de cards jerárquicas, encabezados con gradiente, emojis indicadores y mejor organización visual.
@@ -283,7 +285,13 @@ prisma/
 - Máquinas
   - Listado con filtros y KPIs (horas últimos 30d, pendientes, fallas/averías, costo 30d, horas hasta próximo mant.).
   - Registro de eventos (uso, paro, avería), registro rápido de horas, programación/edición/cierre de mantenimiento.
-  - **Gestión de herramientas montadas**: tabla de herramientas asignadas a máquina con acciones de montar/desmontar/reportar rotura.
+  - **Gestión de herramientas montadas**: Interfaz paso a paso para montar herramientas con:
+    * Combobox de búsqueda de productos (teclado y filtrado instantáneo).
+    * Select de series/instancias filtrado por producto seleccionado.
+    * Botón para agregar herramientas individuales a cola.
+    * Vista de herramientas en cola con botones de eliminar.
+    * Montaje en batch de todas las herramientas seleccionadas.
+    * Acciones de desmontar y reportar rotura/desgaste.
 - Cotizador y Clientes
   - Parámetros de costeo, desglose y conversión automática de moneda.
   - Propagación de la moneda base del sistema a nuevas cotizaciones.

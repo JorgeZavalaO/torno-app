@@ -5,6 +5,21 @@ Formato basado en Keep a Changelog y SemVer.
 ## [Unreleased]
 
 ### Added
+- **Workflow paso a paso para montar herramientas en máquinas**:
+  - Rediseño de interfaz `MachineTools` con arquitectura de wizard de 3 pasos.
+  - Combobox (Command + Popover) para búsqueda y selección de productos con teclado.
+  - Select dinámico de series/instancias filtrado por producto seleccionado y excluyendo ya montadas.
+  - Botón de agregar individual para acumular herramientas en cola antes de montar.
+  - Sección "Herramientas a Montar" con contador y botones de eliminar individual.
+  - Indicadores numéricos "1" y "2" para guiar flujo de trabajo.
+  - Montaje en batch de todas las herramientas seleccionadas en una sola operación.
+- **Optimización de caché en módulo de clientes**:
+  - Agregado `revalidate: 300` (5 minutos) a `getClientsCached()` para auto-expiración de caché.
+  - Nueva server action `clearClientsCache()` para invalidación manual inmediata del caché.
+  - Botón "Limpiar Caché" en header de vista de clientes con spinner animado y tooltip informativo.
+  - Botón "Descargar CSV" para exportar lista actual de clientes como archivo (formato: `clientes_YYYY-MM-DD.csv`).
+  - Funciones `handleClearCache()` y `handleDownloadData()` en `clientes.client.tsx`.
+  - Solución al problema de persistencia de datos en UI después de reset de base de datos.
 - **Trazabilidad Unitaria y Costeo Real de Herramientas**:
   - Nuevos modelos `ToolInstance` y `OTToolUsage` para rastrear herramientas individuales montadas en máquinas.
   - Campos `requiereTrazabilidad` y `vidaUtilEstimada` en `Producto` para marcar herramientas trazables.
@@ -56,6 +71,10 @@ Formato basado en Keep a Changelog y SemVer.
 
 ### Fixed
 - Creación de reclamo fallaba por campo `archivos` requerido en el modelo Prisma; ahora se crea con arreglo vacío por defecto para evitar error 500.
+- Errores de TypeScript en build:
+  - Agregado `clearClientsCache` al tipo `ClientActions` en `src/components/clientes/types.ts`.
+  - Eliminado prop `onClientCreated` no utilizado de `ClientTable` y `ClientRow`.
+  - Suprimido warning de variable `__currency` no usada en desestructuración de `compras/actions.ts`.
 
 
 ## [0.9.1] - 2025-10-22
