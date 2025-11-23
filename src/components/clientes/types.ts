@@ -15,6 +15,7 @@ export type ClientActions = {
   updateClient: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   deleteClient: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
   importClients: (file: File) => Promise<{ ok: boolean; message?: string }>;
+  clearClientsCache: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 };
 
 export type QuoteData = {

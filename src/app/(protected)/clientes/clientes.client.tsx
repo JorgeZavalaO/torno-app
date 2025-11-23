@@ -205,7 +205,6 @@ export default function ClientesClient({
           canWrite={canWrite}
           actions={actions}
           onDeleted={handleClientDeleted}
-          onClientCreated={handleClientCreated}
           onClientUpdated={handleClientUpdated}
           onOpenQuotes={handleOpenQuotes}
         />

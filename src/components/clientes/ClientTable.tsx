@@ -13,7 +13,6 @@ interface ClientTableProps {
   canWrite: boolean;
   actions: ClientActions;
   onDeleted: (id: string) => void;
-  onClientCreated: (client: Client) => void;
   onClientUpdated: (client: Client) => void;
   onOpenQuotes: (client: Client) => void;
 }
@@ -23,7 +22,6 @@ export default function ClientTable({
   canWrite,
   actions,
   onDeleted,
-  onClientCreated,
   onClientUpdated,
   onOpenQuotes,
 }: ClientTableProps) {
@@ -47,7 +45,6 @@ export default function ClientTable({
             canWrite={canWrite}
             actions={actions}
             onDeleted={onDeleted}
-            onClientCreated={onClientCreated}
             onClientUpdated={onClientUpdated}
             onOpenQuotes={onOpenQuotes}
           />
@@ -69,7 +66,6 @@ const ClientRow = memo(function ClientRow({
   canWrite,
   actions,
   onDeleted,
-  onClientCreated,
   onClientUpdated,
   onOpenQuotes,
 }: {
@@ -77,7 +73,6 @@ const ClientRow = memo(function ClientRow({
   canWrite: boolean;
   actions: ClientActions;
   onDeleted: (id: string) => void;
-  onClientCreated: (client: Client) => void;
   onClientUpdated: (client: Client) => void;
   onOpenQuotes: (client: Client) => void;
 }) {
