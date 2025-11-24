@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,8 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
         toast.success(`${mountedCount} herramienta${mountedCount !== 1 ? 's' : ''} montada${mountedCount !== 1 ? 's' : ''} correctamente`);
         setMountOpen(false);
         setSelectedToolIds(new Set());
-        router.refresh();
+        // Trigger refresh sin bloquear - ejecuta en paralelo
+        startTransition(() => router.refresh());
       }
       if (errorCount > 0) {
         toast.error(`Error al montar ${errorCount} herramienta${errorCount !== 1 ? 's' : ''}`);
@@ -95,7 +96,8 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
       const res = await unmountToolFromMachine(toolId);
       if (res.ok) {
         toast.success("Herramienta desmontada (devuelta a almacén)");
-        router.refresh();
+        // Trigger refresh sin bloquear - ejecuta en paralelo
+        startTransition(() => router.refresh());
       } else {
         toast.error(res.message);
       }
@@ -111,7 +113,8 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
         toast.success(`Herramienta reportada como ${breakReason}`);
         setBreakOpen(false);
         setToolToBreak(null);
-        router.refresh();
+        // Trigger refresh sin bloquear - ejecuta en paralelo
+        startTransition(() => router.refresh());
       } else {
         toast.error(res.message);
       }
