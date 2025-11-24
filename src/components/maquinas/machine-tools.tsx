@@ -66,27 +66,33 @@ export function MachineTools({ maquinaId, mountedTools, availableTools }: Machin
   const handleMount = () => {
     if (selectedToolIds.size === 0) return;
     start(async () => {
+      const toolIds = Array.from(selectedToolIds);
+      // Ejecutar montajes en paralelo para reducir tiempo total
+      const results = await Promise.allSettled(toolIds.map(id => mountToolOnMachine(id, maquinaId)));
+
       let mountedCount = 0;
       let errorCount = 0;
 
-      for (const toolId of selectedToolIds) {
-        const res = await mountToolOnMachine(toolId, maquinaId);
-        if (res.ok) {
-          mountedCount++;
+      results.forEach(r => {
+        if (r.status === "fulfilled") {
+          if (r.value.ok) mountedCount++; else errorCount++;
         } else {
           errorCount++;
         }
-      }
+      });
 
       if (mountedCount > 0) {
-        toast.success(`${mountedCount} herramienta${mountedCount !== 1 ? 's' : ''} montada${mountedCount !== 1 ? 's' : ''} correctamente`);
+        toast.success(`${mountedCount} herramienta${mountedCount !== 1 ? 's' : ''} montada${mountedCount !== 1 ? 's' : ''}`);
         setMountOpen(false);
         setSelectedToolIds(new Set());
         // Trigger refresh sin bloquear - ejecuta en paralelo
         startTransition(() => router.refresh());
       }
       if (errorCount > 0) {
-        toast.error(`Error al montar ${errorCount} herramienta${errorCount !== 1 ? 's' : ''}`);
+        toast.error(`${errorCount} error${errorCount !== 1 ? 'es' : ''} al montar`);
+      }
+      if (mountedCount === 0 && errorCount === 0) {
+        toast.error("No se pudo procesar el montaje");
       }
     });
   };
