@@ -13,10 +13,12 @@ export default async function UsersPage() {
   const canRead = await userHasPermission(me.email, "roles.read");
   if (!canRead) redirect("/");
 
-  const [users, roles, canAssign] = await Promise.all([
+  const [users, roles, canAssign, canWriteRoles, canDeleteUsers] = await Promise.all([
     getUsersWithRolesCached(),
     getRolesByNameCached(),
-    userHasPermission(me.email, "users.assignRoles"),
+    userHasPermission(me.email, "users.assignRoles"), // para crear / editar / asignar roles
+    userHasPermission(me.email, "roles.write"),       // alternativamente podría controlar edición
+    userHasPermission(me.email, "users.assignRoles"), // reutilizamos para delete (no existe permiso específico)
   ]);
 
   const shapedUsers = users.map(u => ({
@@ -34,6 +36,8 @@ export default async function UsersPage() {
       initialUsers={shapedUsers}
       roles={roles}
       canAssign={canAssign}
+      canUpdate={canAssign || canWriteRoles}
+      canDelete={canDeleteUsers}
       actions={{ assignRoleToUser, removeUserRole, createUser, updateUser, deleteUser }}
     />
   );

@@ -82,8 +82,9 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
       passwordHash?: string;
     } = {
       email: parsed.data.email,
-      // ⚠️ Evita IDs "pending-*"; deja integraciones externas sincronizar el ID real
-      stackUserId: "",
+      // Generamos un ID único local para evitar violaciones de unicidad en stackUserId.
+      // Más adelante una integración externa podrá actualizar este campo.
+      stackUserId: `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,
       displayName: parsed.data.displayName ?? null,
     };
 
@@ -100,7 +101,8 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
     return { ok: true, message: "Usuario creado", user: { id: created.id, email: created.email, displayName: created.displayName } };
   } catch (e: unknown) {
     if (typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === "P2002") {
-      return { ok: false, message: "Ya existe un usuario con ese email" };
+      // Puede ser por email o por stackUserId; intentamos discriminar con mensaje genérico.
+      return { ok: false, message: "Ya existe un usuario con ese email o ID externo" };
     }
     return { ok: false, message: "No se pudo crear el usuario" };
   }
