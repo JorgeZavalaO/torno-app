@@ -15,7 +15,15 @@ import { toast } from "sonner";
 import { Users, UserPlus, Search, Shield, X, Trash2, Edit } from "lucide-react";
 
 type Role = { id: string; name: string; description?: string | null };
-type User = { id: string; email: string; displayName?: string | null; roles: { id: string; name: string }[] };
+type User = { 
+  id: string; 
+  email: string; 
+  displayName?: string | null; 
+  stackUserId?: string; 
+  createdAt?: string; 
+  updatedAt?: string; 
+  roles: { id: string; name: string }[] 
+};
 type Actions = {
   assignRoleToUser: (fd: FormData) => Promise<{ ok: boolean; message?: string; user?: { id: string; email: string; displayName: string | null } }>;
   removeUserRole: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
@@ -39,6 +47,7 @@ export default function UsersClient({ initialUsers, roles, actions, canAssign, c
   const [roleFilter, setRoleFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [current, setCurrent] = useState<User | null>(null);
   const [isPending, startTransition] = useTransition();
   
@@ -123,7 +132,8 @@ export default function UsersClient({ initialUsers, roles, actions, canAssign, c
   // Actualizar usuario
   const handleUpdateUser = (formData: FormData) => {
     if (!actions.updateUser || !current) return;
-    formData.set("userId", current.id);
+    // El server action espera el campo "id" (no "userId"). Corregido.
+    formData.set("id", current.id);
     startTransition(async () => {
       const result = await actions.updateUser!(formData);
       if (result.ok) {
@@ -245,6 +255,15 @@ export default function UsersClient({ initialUsers, roles, actions, canAssign, c
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setCurrent(user); setProfileOpen(true); }}
+                      className="h-8 w-8 p-0"
+                      title="Ver perfil"
+                    >
+                      <Users className="h-4 w-4" />
+                    </Button>
                     {canUpdate && (
                       <Button
                         variant="ghost"
@@ -332,6 +351,12 @@ export default function UsersClient({ initialUsers, roles, actions, canAssign, c
         isPending={isPending} 
       />
       
+      <UserProfileDialog
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        user={current}
+      />
+
       <EditUserModal 
         open={editOpen} 
         onOpenChange={setEditOpen} 
@@ -442,6 +467,92 @@ function CreateUserModal({
 }
 
 // Modal para editar usuario
+function UserProfileDialog({
+  open,
+  onOpenChange,
+  user,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  user: User | null;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Perfil del usuario</DialogTitle>
+          <DialogDescription>
+            Información detallada del usuario y sus roles.
+          </DialogDescription>
+        </DialogHeader>
+        {user ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-12 w-12">
+                <AvatarFallback className="text-sm bg-primary/10">
+                  {user.displayName?.[0]?.toUpperCase() || user.email[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="text-lg font-semibold">{user.displayName || user.email}</div>
+                {user.displayName && <div className="text-sm text-muted-foreground">{user.email}</div>}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">Email</Label>
+                <div>{user.email}</div>
+              </div>
+              {user.displayName && (
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Nombre</Label>
+                  <div>{user.displayName}</div>
+                </div>
+              )}
+              {user.stackUserId && (
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Stack User ID</Label>
+                  <div className="font-mono text-xs bg-muted rounded px-2 py-1 inline-block">{user.stackUserId}</div>
+                </div>
+              )}
+              {user.createdAt && (
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Creado</Label>
+                  <div>{new Date(user.createdAt).toLocaleString()}</div>
+                </div>
+              )}
+              {user.updatedAt && (
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Actualizado</Label>
+                  <div>{new Date(user.updatedAt).toLocaleString()}</div>
+                </div>
+              )}
+              <div className="md:col-span-2">
+                <Label className="text-xs uppercase text-muted-foreground">Roles</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {user.roles.length > 0 ? user.roles.map(r => (
+                    <Badge key={r.id} variant="secondary" className="text-xs">
+                      <Shield className="mr-1 h-3 w-3" />{r.name}
+                    </Badge>
+                  )) : <span className="text-muted-foreground text-xs">Sin roles</span>}
+                </div>
+              </div>
+            </div>
+            <div className="bg-muted/40 rounded p-3 text-xs text-muted-foreground leading-relaxed">
+              Los cambios a la contraseña o datos personales se realizan desde el diálogo de edición.
+            </div>
+          </div>
+        ) : (
+          <div className="text-center text-muted-foreground py-8">No hay datos de usuario</div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EditUserModal({ 
   open, 
   onOpenChange, 

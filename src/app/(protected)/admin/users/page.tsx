@@ -23,6 +23,9 @@ export default async function UsersPage() {
     id: u.id,
     email: u.email,
     displayName: u.displayName,
+    stackUserId: u.stackUserId,
+    createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
     roles: u.roles.map(r => ({ id: r.role.id, name: r.role.name })),
   }));
 
