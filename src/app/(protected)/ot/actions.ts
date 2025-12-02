@@ -305,6 +305,10 @@ export async function createOT(fd: FormData): Promise<R> {
     return { sku: skuOk ? p.sku : undefined, descripcion, qty: p.qty };
   });
 
+  // Obtener moneda del sistema
+  const config = await getCostingValues();
+  const currency = String(config.currency || "PEN");
+
   const created = await prisma.$transaction(async (tx) => {
     const codigo = await nextOTCode(tx);
     const ot = await tx.ordenTrabajo.create({
@@ -316,6 +320,7 @@ export async function createOT(fd: FormData): Promise<R> {
   fechaLimite: payload.fechaLimite ? new Date(payload.fechaLimite) : null,
         estado: "OPEN",
         codigo,
+        currency,
       },
       select: { id: true, codigo: true }
     });
@@ -532,6 +537,10 @@ export async function createManualSCForOT(payload: z.infer<typeof ManualSCSchema
 
   const { otId, nota } = parsed.data;
 
+  // Obtener moneda del sistema
+  const config = await getCostingValues();
+  const currency = String(config.currency || "PEN");
+
   // Protección: si ya existe una SolicitudCompra relacionada a esta OT, evitar duplicados
   const existingSC = await prisma.solicitudCompra.findFirst({ where: { otId } });
   if (existingSC) {
@@ -571,6 +580,7 @@ export async function createManualSCForOT(payload: z.infer<typeof ManualSCSchema
         otId,
         estado: "PENDING_ADMIN",
         notas: nota?.trim() || null,
+        currency,
       },
       select: { id: true }
     });

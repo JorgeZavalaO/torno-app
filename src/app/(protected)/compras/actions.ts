@@ -8,6 +8,7 @@ import { cacheTags } from "@/app/lib/cache-tags";
 import { assertCanWritePurchases } from "@/app/lib/guards";
 import { getCurrentUser } from "@/app/lib/auth";
 import { recomputeOTCosts } from "@/app/(protected)/ot/actions";
+import { getCostingValues } from "@/app/server/queries/costing-params";
 
 type Result = { ok: true; message?: string; id?: string; codigo?: string } | { ok: false; message: string };
 const D = (n: number | string) => new Prisma.Decimal(n ?? 0);
@@ -76,7 +77,8 @@ const ProviderSchema = z.object({
 });
 
 async function validateCurrency(code: string | undefined | null): Promise<string> {
-  const fallback = "PEN";
+  const config = await getCostingValues();
+  const fallback = String(config.currency || "PEN");
   if (!code) return fallback;
   const normalized = code.toUpperCase();
   // Validar contra catálogo MONEDA si existe
