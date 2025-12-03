@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getQuoteById } from "@/app/server/queries/quotes";
+import { getEmpresaCached } from "@/app/server/queries/empresa";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 
@@ -20,7 +21,11 @@ export async function GET(
       return NextResponse.json({ error: "Sin permisos" }, { status: 403 });
     }
 
-    const quote = await getQuoteById(id);
+    const [quote, empresa] = await Promise.all([
+      getQuoteById(id),
+      getEmpresaCached(),
+    ]);
+
     if (!quote) {
       return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 });
     }
@@ -30,7 +35,13 @@ export async function GET(
     }
 
     // Generar HTML del PDF
-    const html = generateQuotePDFHTML(quote as typeof quote & { cliente: NonNullable<typeof quote.cliente> });
+    const html = generateQuotePDFHTML(
+      quote as typeof quote & { 
+        cliente: NonNullable<typeof quote.cliente>;
+        tipoTrabajo?: { id: string; nombre: string; descripcion: string | null } | null;
+      },
+      empresa
+    );
 
     // Usar API externa para convertir HTML a PDF (ejemplo con html-pdf-node o similar)
     // Por ahora devolvemos HTML que el navegador puede imprimir
@@ -48,33 +59,45 @@ export async function GET(
   }
 }
 
-function generateQuotePDFHTML(quote: {
-  id: string;
-  codigo?: string | null;
-  createdAt: Date | string;
-  status: string;
-  currency: string;
-  qty: number;
-  materials: unknown;
-  hours: unknown;
-  validUntil?: Date | string | null;
-  notes?: string | null;
-  pedidoReferencia?: string | null;
-  giPct: unknown;
-  marginPct: unknown;
-  hourlyRate: unknown;
-  kwhRate: unknown;
-  deprPerHour: unknown;
-  toolingPerPc: unknown;
-  rentPerHour: unknown;
-  breakdown: unknown;
-  cliente: {
+function generateQuotePDFHTML(
+  quote: {
     id: string;
+    codigo?: string | null;
+    createdAt: Date | string;
+    status: string;
+    currency: string;
+    qty: number;
+    materials: unknown;
+    hours: unknown;
+    validUntil?: Date | string | null;
+    notes?: string | null;
+    pedidoReferencia?: string | null;
+    giPct: unknown;
+    marginPct: unknown;
+    hourlyRate: unknown;
+    kwhRate: unknown;
+    deprPerHour: unknown;
+    toolingPerPc: unknown;
+    rentPerHour: unknown;
+    breakdown: unknown;
+    cliente: {
+      id: string;
+      nombre: string;
+      ruc: string;
+      email?: string | null;
+    };
+    tipoTrabajo?: { id: string; nombre: string; descripcion: string | null } | null;
+  },
+  empresa: {
     nombre: string;
-    ruc: string;
-    email?: string | null;
-  };
-}): string {
+    ruc: string | null;
+    direccion: string | null;
+    telefono: string | null;
+    email: string | null;
+    web: string | null;
+    logoUrl: string | null;
+  }
+): string {
   const formatCurrency = (amount: number, currency: string) =>
     new Intl.NumberFormat("es-PE", {
       style: "currency",
@@ -88,37 +111,20 @@ function generateQuotePDFHTML(quote: {
       day: "numeric",
     });
 
-  const toNum = (v: unknown) => (v == null ? 0 : Number(v?.toString?.() ?? v));
-
   // Extraer breakdown
   const breakdown = (quote.breakdown as { costs?: { 
-    materials?: number;
-    labor?: number;
-    energy?: number;
-    depreciation?: number;
-    tooling?: number;
-    rent?: number;
-    direct?: number;
-    giAmount?: number;
-    subtotal?: number;
-    marginAmount?: number;
     total?: number;
     unitPrice?: number;
   } }) || {};
   const costs = breakdown.costs || {};
 
-  const materials = costs.materials ?? toNum(quote.materials);
-  const labor = costs.labor ?? 0;
-  const energy = costs.energy ?? 0;
-  const depreciation = costs.depreciation ?? 0;
-  const tooling = costs.tooling ?? 0;
-  const rent = costs.rent ?? 0;
-  const direct = costs.direct ?? materials;
-  const giAmount = costs.giAmount ?? 0;
-  const subtotal = costs.subtotal ?? direct;
-  const marginAmount = costs.marginAmount ?? 0;
-  const total = costs.total ?? subtotal;
+  // Calcular valores finales
+  const total = costs.total ?? 0;
   const unitPrice = costs.unitPrice ?? (quote.qty > 0 ? total / quote.qty : 0);
+  
+  // Descripción del servicio
+  const mainTitle = quote.tipoTrabajo?.nombre || "Servicio de Mecanizado / Fabricación";
+  const description = quote.notes || quote.tipoTrabajo?.descripcion || "Fabricación de piezas según especificaciones técnicas.";
 
   return `
 <!DOCTYPE html>
@@ -128,311 +134,308 @@ function generateQuotePDFHTML(quote: {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cotización ${quote.codigo || quote.id}</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Inter', sans-serif;
       padding: 40px;
-      color: #333;
+      color: #1f2937;
       background: white;
+      max-width: 1000px;
+      margin: 0 auto;
+      line-height: 1.5;
     }
+    
+    /* Header */
     .header {
       display: flex;
       justify-content: space-between;
-      align-items: start;
-      margin-bottom: 30px;
+      margin-bottom: 40px;
       padding-bottom: 20px;
-      border-bottom: 3px solid #2563eb;
+      border-bottom: 2px solid #e5e7eb;
     }
-    .company-info h1 {
-      font-size: 24px;
-      color: #2563eb;
-      margin-bottom: 5px;
-    }
-    .company-info p {
-      font-size: 12px;
-      color: #666;
-    }
-    .quote-info {
-      text-align: right;
-    }
-    .quote-info h2 {
+    .company-logo {
       font-size: 28px;
-      color: #1e40af;
-      margin-bottom: 10px;
-    }
-    .quote-info p {
-      font-size: 13px;
-      color: #555;
-      margin: 3px 0;
-    }
-    .status-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-top: 8px;
-    }
-    .status-draft { background: #e0e7ff; color: #3730a3; }
-    .status-sent { background: #dbeafe; color: #1e40af; }
-    .status-approved { background: #d1fae5; color: #065f46; }
-    .status-rejected { background: #fee2e2; color: #991b1b; }
-    .client-section {
-      background: #f8fafc;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 30px;
-    }
-    .client-section h3 {
-      font-size: 14px;
-      color: #64748b;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-      letter-spacing: 0.5px;
-    }
-    .client-section p {
-      font-size: 15px;
-      margin: 5px 0;
-    }
-    .client-section strong {
-      color: #1e293b;
-    }
-    .breakdown-section {
-      margin: 30px 0;
-    }
-    .breakdown-section h3 {
-      font-size: 18px;
-      color: #1e293b;
-      margin-bottom: 15px;
-      padding-bottom: 8px;
-      border-bottom: 2px solid #e2e8f0;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-    }
-    th {
-      background: #f1f5f9;
-      padding: 12px;
-      text-align: left;
-      font-size: 13px;
-      font-weight: 600;
-      color: #475569;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-    td {
-      padding: 12px;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 14px;
-    }
-    tr:last-child td {
-      border-bottom: none;
-    }
-    .text-right {
-      text-align: right;
-    }
-    .totals-section {
-      margin-top: 30px;
-      padding: 20px;
-      background: #fafafa;
-      border-radius: 8px;
-    }
-    .totals-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      font-size: 15px;
-    }
-    .totals-row.subtotal {
-      border-top: 1px solid #cbd5e1;
-      padding-top: 12px;
-      margin-top: 8px;
-    }
-    .totals-row.total {
-      border-top: 2px solid #2563eb;
-      padding-top: 15px;
-      margin-top: 12px;
-      font-size: 18px;
-      font-weight: 700;
-      color: #1e40af;
-    }
-    .notes-section {
-      margin-top: 30px;
-      padding: 20px;
-      background: #fffbeb;
-      border-left: 4px solid #f59e0b;
-      border-radius: 4px;
-    }
-    .notes-section h4 {
-      font-size: 14px;
-      color: #92400e;
+      font-weight: 800;
+      color: #2563eb;
+      letter-spacing: -0.5px;
       margin-bottom: 8px;
     }
-    .notes-section p {
+    .company-logo img {
+      max-height: 60px;
+      max-width: 200px;
+      object-fit: contain;
+    }
+    .company-details {
       font-size: 13px;
-      color: #78350f;
+      color: #6b7280;
       line-height: 1.6;
     }
-    .footer {
-      margin-top: 50px;
-      padding-top: 20px;
-      border-top: 1px solid #e2e8f0;
-      text-align: center;
-      font-size: 11px;
-      color: #94a3b8;
+    .quote-meta {
+      text-align: right;
     }
+    .quote-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+    .quote-subtitle {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 8px 24px;
+      text-align: left;
+      font-size: 13px;
+    }
+    .meta-label {
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .meta-value {
+      color: #111827;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    /* Client Info */
+    .client-section {
+      margin-bottom: 40px;
+      padding: 24px;
+      background: #f9fafb;
+      border-radius: 12px;
+      border: 1px solid #f3f4f6;
+    }
+    .section-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #9ca3af;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .client-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+    .client-detail {
+      font-size: 14px;
+      color: #4b5563;
+    }
+
+    /* Table */
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+    .items-table th {
+      text-align: left;
+      padding: 16px;
+      background: #f3f4f6;
+      color: #374151;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .items-table td {
+      padding: 20px 16px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    .item-desc-title {
+      font-weight: 600;
+      color: #111827;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .item-desc-text {
+      font-size: 13px;
+      color: #6b7280;
+      white-space: pre-line;
+    }
+    .col-qty, .col-price, .col-total {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .col-qty { width: 100px; }
+    .col-price { width: 150px; }
+    .col-total { width: 150px; font-weight: 600; }
+
+    /* Totals */
+    .totals-container {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 40px;
+    }
+    .totals-box {
+      width: 300px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      font-size: 14px;
+      color: #4b5563;
+    }
+    .total-row.final {
+      border-top: 2px solid #e5e7eb;
+      margin-top: 10px;
+      padding-top: 16px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #111827;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 60px;
+      padding-top: 30px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .terms {
+      font-size: 11px;
+      color: #9ca3af;
+      max-width: 60%;
+    }
+    .terms h4 {
+      color: #6b7280;
+      margin-bottom: 4px;
+      font-size: 11px;
+    }
+    .signature-box {
+      text-align: center;
+      width: 200px;
+    }
+    .signature-line {
+      border-top: 1px solid #d1d5db;
+      margin-bottom: 8px;
+    }
+    .signature-text {
+      font-size: 12px;
+      color: #6b7280;
+      font-weight: 500;
+    }
+
     @media print {
-      body { padding: 20px; }
+      body { padding: 0; }
       .no-print { display: none; }
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="company-info">
-      <h1>Tu Empresa</h1>
-      <p>Taller de Torneado y Mecanizado</p>
-      <p>RUC: 20XXXXXXXXX</p>
-      <p>Dirección completa</p>
+    <div>
+      <div class="company-logo">
+        ${empresa.logoUrl ? `<img src="${empresa.logoUrl}" alt="${empresa.nombre}" />` : empresa.nombre}
+      </div>
+      <div class="company-details">
+        <p>${empresa.direccion || ""}</p>
+        ${empresa.ruc ? `<p>RUC: ${empresa.ruc}</p>` : ""}
+        <p>
+          ${[empresa.email, empresa.telefono, empresa.web].filter(Boolean).join(" | ")}
+        </p>
+      </div>
     </div>
-    <div class="quote-info">
-      <h2>${quote.codigo || `#${quote.id.slice(0, 8)}`}</h2>
-      <p><strong>Fecha:</strong> ${formatDate(quote.createdAt)}</p>
-      ${quote.validUntil ? `<p><strong>Válida hasta:</strong> ${formatDate(quote.validUntil)}</p>` : ''}
-      ${quote.pedidoReferencia ? `<p><strong>Ref. Pedido:</strong> ${quote.pedidoReferencia}</p>` : ''}
-      <span class="status-badge status-${quote.status.toLowerCase()}">${quote.status}</span>
+    <div class="quote-meta">
+      <div class="quote-title">COTIZACIÓN</div>
+      <div class="quote-subtitle">${quote.codigo || `#${quote.id.slice(0, 8)}`}</div>
+      
+      <div class="meta-grid">
+        <span class="meta-label">Fecha de emisión:</span>
+        <span class="meta-value">${formatDate(quote.createdAt)}</span>
+        
+        ${quote.validUntil ? `
+        <span class="meta-label">Válido hasta:</span>
+        <span class="meta-value">${formatDate(quote.validUntil)}</span>
+        ` : ''}
+        
+        ${quote.pedidoReferencia ? `
+        <span class="meta-label">Referencia:</span>
+        <span class="meta-value">${quote.pedidoReferencia}</span>
+        ` : ''}
+      </div>
     </div>
   </div>
 
   <div class="client-section">
-    <h3>Cliente</h3>
-    <p><strong>${quote.cliente.nombre}</strong></p>
-    <p>RUC: ${quote.cliente.ruc}</p>
-    ${quote.cliente.email ? `<p>Email: ${quote.cliente.email}</p>` : ''}
+    <div class="section-label">Cliente</div>
+    <div class="client-name">${quote.cliente.nombre}</div>
+    <div class="client-detail">RUC: ${quote.cliente.ruc}</div>
+    ${quote.cliente.email ? `<div class="client-detail">${quote.cliente.email}</div>` : ''}
   </div>
 
-  <!-- Resumen rápido -->
-  <div style="margin-bottom: 20px; font-size: 14px; color: #475569;">
-    <p><strong>Cantidad solicitada:</strong> ${quote.qty} unidades</p>
-    <p><strong>Moneda:</strong> ${quote.currency}</p>
-  </div>
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Descripción</th>
+        <th class="col-qty">Cantidad</th>
+        <th class="col-price">Precio Unit.</th>
+        <th class="col-total">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          <div class="item-desc-title">${mainTitle}</div>
+          <div class="item-desc-text">${description}</div>
+        </td>
+        <td class="col-qty">${quote.qty}</td>
+        <td class="col-price">${formatCurrency(unitPrice, quote.currency)}</td>
+        <td class="col-total">${formatCurrency(total, quote.currency)}</td>
+      </tr>
+    </tbody>
+  </table>
 
-  <div class="breakdown-section">
-    <h3>Desglose de Costos</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Concepto</th>
-          <th class="text-right">Cantidad</th>
-          <th class="text-right">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Materiales</td>
-          <td class="text-right">—</td>
-          <td class="text-right">${formatCurrency(materials, quote.currency)}</td>
-        </tr>
-        <tr>
-          <td>Mano de Obra</td>
-          <td class="text-right">${toNum(quote.hours)} hrs</td>
-          <td class="text-right">${formatCurrency(labor, quote.currency)}</td>
-        </tr>
-        <tr>
-          <td>Energía</td>
-          <td class="text-right">—</td>
-          <td class="text-right">${formatCurrency(energy, quote.currency)}</td>
-        </tr>
-        <tr>
-          <td>Depreciación</td>
-          <td class="text-right">—</td>
-          <td class="text-right">${formatCurrency(depreciation, quote.currency)}</td>
-        </tr>
-        <tr>
-          <td>Herramientas</td>
-          <td class="text-right">${quote.qty} pzas</td>
-          <td class="text-right">${formatCurrency(tooling, quote.currency)}</td>
-        </tr>
-        <tr>
-          <td>Alquiler</td>
-          <td class="text-right">—</td>
-          <td class="text-right">${formatCurrency(rent, quote.currency)}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="totals-section">
-    <div class="totals-row">
-      <span>Costo Directo:</span>
-      <strong>${formatCurrency(direct, quote.currency)}</strong>
+  <div class="totals-container">
+    <div class="totals-box">
+      <div class="total-row">
+        <span>Subtotal</span>
+        <span>${formatCurrency(total, quote.currency)}</span>
+      </div>
+      <!-- 
+      <div class="total-row">
+        <span>IGV (18%)</span>
+        <span>$0.00</span>
+      </div>
+      -->
+      <div class="total-row final">
+        <span>TOTAL</span>
+        <span>${formatCurrency(total, quote.currency)}</span>
+      </div>
     </div>
-    <div class="totals-row">
-      <span>Gastos Indirectos (${(toNum(quote.giPct) * 100).toFixed(1)}%):</span>
-      <strong>${formatCurrency(giAmount, quote.currency)}</strong>
-    </div>
-    <div class="totals-row subtotal">
-      <span>Subtotal:</span>
-      <strong>${formatCurrency(subtotal, quote.currency)}</strong>
-    </div>
-    <div class="totals-row">
-      <span>Margen (${(toNum(quote.marginPct) * 100).toFixed(1)}%):</span>
-      <strong>${formatCurrency(marginAmount, quote.currency)}</strong>
-    </div>
-    <div class="totals-row total">
-      <span>TOTAL:</span>
-      <strong>${formatCurrency(total, quote.currency)}</strong>
-    </div>
-    <div class="totals-row" style="margin-top: 10px; font-size: 16px; color: #475569;">
-      <span>Precio Unitario:</span>
-      <strong>${formatCurrency(unitPrice, quote.currency)}</strong>
-    </div>
-  </div>
-
-  ${quote.notes ? `
-  <div class="notes-section">
-    <h4>Notas Adicionales</h4>
-    <p>${quote.notes}</p>
-  </div>
-  ` : ''}
-
-  <!-- Firma y condiciones -->
-  <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px; color: #475569;">
-    <div style="width: 45%; text-align: center;">
-      <p>_______________________________</p>
-      <p>Representante de la Empresa</p>
-    </div>
-    <div style="width: 45%; text-align: center;">
-      <p>_______________________________</p>
-      <p>Cliente</p>
-    </div>
-  </div>
-
-  <div style="margin-top: 20px; font-size: 11px; color: #6b7280; line-height: 1.5;">
-    <p><strong>Condiciones:</strong></p>
-    <ul style="margin-top: 4px; padding-left: 18px;">
-      <li>Los precios no incluyen IGV salvo que se indique lo contrario.</li>
-      <li>Plazo de entrega sujeto a disponibilidad de materia prima y carga de trabajo.</li>
-      <li>Validez de la cotización según fecha indicada en este documento.</li>
-    </ul>
   </div>
 
   <div class="footer">
-    <p>Este documento es una cotización formal. Condiciones y términos sujetos a aceptación.</p>
-    <p>Generado el ${formatDate(new Date())}</p>
+    <div class="terms">
+      <h4>Términos y Condiciones</h4>
+      <p>1. Los precios expresados no incluyen IGV salvo indicación contraria.</p>
+      <p>2. La validez de esta oferta es de 15 días calendario.</p>
+      <p>3. El tiempo de entrega corre a partir de la recepción de la Orden de Compra y/o adelanto.</p>
+      <p>4. Forma de pago: 50% adelanto, 50% contra entrega.</p>
+    </div>
   </div>
 
   <script>
-    // Auto-print cuando se abre en nueva ventana
     if (window.location.search.includes('print=true')) {
-      window.print();
+      setTimeout(() => window.print(), 500);
     }
   </script>
 </body>

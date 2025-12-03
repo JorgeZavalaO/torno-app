@@ -20,6 +20,7 @@ const allNavItems: (NavItem & { requiredPerm?: string; group?: string })[] = [
   { href: "/admin", label: "Administración", icon: "Shield", group: "system", description: "Panel de administración central" },
   { href: "/admin/parametros", label: "Parámetros", icon: "Settings", requiredPerm: "settings.costing.read", group: "system", description: "Configuración y parámetros del sistema" },
   { href: "/admin/catalogos", label: "Catálogos", icon: "List", requiredPerm: "settings.catalogos.read", group: "system", description: "Listados configurables del sistema" },
+  { href: "/admin/empresa", label: "Empresa", icon: "Building2", requiredPerm: "settings.catalogos.read", group: "system", description: "Identidad y datos de la empresa" },
 ];
 
 async function getItemBadges(item: NavItem & { requiredPerm?: string; group?: string }) {
