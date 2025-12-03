@@ -122,9 +122,43 @@ function generateQuotePDFHTML(
   const total = costs.total ?? 0;
   const unitPrice = costs.unitPrice ?? (quote.qty > 0 ? total / quote.qty : 0);
   
-  // Descripción del servicio
-  const mainTitle = quote.tipoTrabajo?.nombre || "Servicio de Mecanizado / Fabricación";
-  const description = quote.notes || quote.tipoTrabajo?.descripcion || "Fabricación de piezas según especificaciones técnicas.";
+  // Nombre y descripción del item a fabricar (tomamos de varias posibles fuentes)
+  const anyQuote = quote as unknown as {
+    itemNombre?: string | null;
+    itemName?: string | null;
+    productoNombre?: string | null;
+    itemDescripcion?: string | null;
+    descripcionItem?: string | null;
+    productoDescripcion?: string | null;
+  };
+
+  // Intentar obtener título/descripcion desde breakdown si no existen campos directos
+  type BreakdownShape = {
+    inputs?: {
+      piezasLines?: Array<{ productoId?: string; descripcion?: string; qty?: number }>;
+    };
+  };
+  const bd = (quote.breakdown as BreakdownShape) || {};
+  const firstPiece = Array.isArray(bd.inputs?.piezasLines) && bd.inputs!.piezasLines!.length > 0
+    ? bd.inputs!.piezasLines![0]
+    : undefined;
+
+  const mainTitle =
+    anyQuote.itemNombre?.trim() ||
+    anyQuote.itemName?.trim() ||
+    anyQuote.productoNombre?.trim() ||
+    (firstPiece?.descripcion?.trim() || firstPiece?.productoId) ||
+    quote.tipoTrabajo?.nombre ||
+    "Servicio de Mecanizado / Fabricación";
+
+  const description =
+    anyQuote.itemDescripcion?.trim() ||
+    anyQuote.descripcionItem?.trim() ||
+    anyQuote.productoDescripcion?.trim() ||
+    (firstPiece ? `Fabricación de ${quote.qty} pieza${quote.qty === 1 ? '' : 's'}` : undefined) ||
+    (typeof quote.notes === "string" ? quote.notes.trim() : undefined) ||
+    quote.tipoTrabajo?.descripcion ||
+    "Fabricación de piezas según especificaciones técnicas.";
 
   return `
 <!DOCTYPE html>

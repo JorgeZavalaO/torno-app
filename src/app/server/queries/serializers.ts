@@ -4,6 +4,8 @@ export type PlainQuote = {
   clienteId: string;
   version: number;
   currency: string;
+  itemNombre?: string | null;
+  itemDescripcion?: string | null;
   giPct: number;
   marginPct: number;
   hourlyRate: number;
@@ -42,6 +44,8 @@ type PrismaLikeQuote = {
   clienteId: string;
   version: number;
   currency: string;
+  itemNombre?: string | null;
+  itemDescripcion?: string | null;
   giPct: unknown; marginPct: unknown; hourlyRate: unknown; kwhRate: unknown;
   deprPerHour: unknown; toolingPerPc: unknown; rentPerHour: unknown;
   qty: number; materials: unknown; hours: unknown; kwh: unknown;
@@ -61,6 +65,8 @@ export function serializeQuote(q: PrismaLikeQuote, withClient = true): PlainQuot
     clienteId: q.clienteId,
     version: q.version,
     currency: q.currency,
+    itemNombre: q.itemNombre ?? null,
+    itemDescripcion: q.itemDescripcion ?? null,
     giPct: toNum(q.giPct),
     marginPct: toNum(q.marginPct),
     hourlyRate: toNum(q.hourlyRate),

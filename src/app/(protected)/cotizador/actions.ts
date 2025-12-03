@@ -229,6 +229,20 @@ export async function createQuote(fd: FormData): Promise<Result> {
     },
   };
 
+  // Determinar nombre/descripcion principal del ítem a fabricar (para PDFs/resúmenes)
+  let itemNombre: string | null = null;
+  let itemDescripcion: string | null = null;
+  if (piezasLines.length > 0) {
+    const main = piezasLines[0];
+    if (main.descripcion && String(main.descripcion).trim().length > 0) {
+      itemNombre = String(main.descripcion).trim();
+    } else if (main.productoId) {
+      const prod = await prisma.producto.findUnique({ where: { sku: main.productoId }, select: { nombre: true } });
+      itemNombre = prod?.nombre ?? main.productoId;
+    }
+    itemDescripcion = `Fabricación de ${aggregatedQty} pieza${aggregatedQty === 1 ? "" : "s"}`;
+  }
+
   // Obtener machineCategoryId si se proporcionó
   let machineCategoryId: string | null = null;
   if (machineCategory) {
@@ -274,6 +288,9 @@ export async function createQuote(fd: FormData): Promise<Result> {
           giAmount, subtotal, marginAmount, total, unitPrice,
           breakdown,
 
+          itemNombre,
+          itemDescripcion,
+
           machineCategoryId, // Guardar la categoría seleccionada
 
           validUntil: input.validUntil ? new Date(input.validUntil) : null,
@@ -306,6 +323,9 @@ export async function createQuote(fd: FormData): Promise<Result> {
         costDirect: direct,
         giAmount, subtotal, marginAmount, total, unitPrice,
         breakdown,
+
+        itemNombre,
+        itemDescripcion,
 
         machineCategoryId,
         validUntil: input.validUntil ? new Date(input.validUntil) : null,
@@ -497,6 +517,20 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
       },
     };
 
+    // Determinar nombre/descripcion del ítem y machineCategoryId
+    let itemNombre: string | null = null;
+    let itemDescripcion: string | null = null;
+    if (piezasLines.length > 0) {
+      const main = piezasLines[0];
+      if (main.descripcion && String(main.descripcion).trim().length > 0) {
+        itemNombre = String(main.descripcion).trim();
+      } else if (main.productoId) {
+        const prod = await prisma.producto.findUnique({ where: { sku: main.productoId }, select: { nombre: true } });
+        itemNombre = prod?.nombre ?? main.productoId;
+      }
+      itemDescripcion = `Fabricación de ${input.qty} pieza${input.qty === 1 ? "" : "s"}`;
+    }
+
     // Obtener machineCategoryId si se proporcionó
     let machineCategoryId: string | null = null;
     if (machineCategory) {
@@ -522,6 +556,9 @@ export async function updateQuote(quoteId: string, fd: FormData): Promise<Result
         costDirect: direct,
         giAmount, subtotal, marginAmount, total, unitPrice,
         breakdown,
+
+        itemNombre,
+        itemDescripcion,
 
         machineCategoryId, // Actualizar categoría
 
