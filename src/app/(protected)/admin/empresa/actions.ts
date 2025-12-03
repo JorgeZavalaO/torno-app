@@ -38,7 +38,6 @@ export async function updateEmpresa(fd: FormData) {
   const data = parsed.data;
 
   try {
-    // @ts-expect-error El cliente Prisma puede no reflejar el modelo en tiempo de tipo en este entorno, pero existe en runtime
     await prisma.empresa.upsert({
       where: { id: "main" },
       update: {
