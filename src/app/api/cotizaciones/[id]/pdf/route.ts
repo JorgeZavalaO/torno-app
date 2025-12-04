@@ -4,6 +4,28 @@ import { getEmpresaCached } from "@/app/server/queries/empresa";
 import { getCurrentUser } from "@/app/lib/auth";
 import { userHasPermission } from "@/app/lib/rbac";
 
+// Convertir URLs de Google Drive a enlaces directos de imagen
+function convertGoogleDriveUrl(url: string): string {
+  if (!url.includes("drive.google.com")) {
+    return url;
+  }
+  
+  const patterns = [
+    /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+    /drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      // Usar formato lh3.googleusercontent que es más confiable
+      return `https://lh3.googleusercontent.com/d/${match[1]}=w1000`;
+    }
+  }
+  return url;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -378,7 +400,7 @@ function generateQuotePDFHTML(
   <div class="header">
     <div>
       <div class="company-logo">
-        ${empresa.logoUrl ? `<img src="${empresa.logoUrl}" alt="${empresa.nombre}" />` : empresa.nombre}
+        ${empresa.logoUrl ? `<img src="${convertGoogleDriveUrl(empresa.logoUrl)}" alt="${empresa.nombre}" />` : empresa.nombre}
       </div>
       <div class="company-details">
         <p>${empresa.direccion || ""}</p>
