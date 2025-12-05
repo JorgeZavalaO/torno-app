@@ -21,9 +21,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
   
   // Optimizaciones de compilación
   compiler: {
